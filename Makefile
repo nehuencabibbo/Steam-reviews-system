@@ -1,0 +1,20 @@
+SHELL := /bin/bash
+
+all:
+
+docker-image:
+
+.PHONY: docker-image
+
+docker-run: docker-image
+	docker compose -f docker-compose-dev.yaml up -d --build
+.PHONY: docker-up
+
+docker-down:
+	docker compose -f docker-compose-dev.yaml stop -t 5
+	docker compose -f docker-compose-dev.yaml down
+.PHONY: docker-down
+
+docker-logs:
+	docker compose -f docker-compose-dev.yaml logs -f
+.PHONY: docker-compose-logs
