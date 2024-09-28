@@ -10,8 +10,13 @@ services:
       - net
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-    logging: #para que no logge rabbitmq
+    logging: #para que no loggee rabbitmq
       driver: none
+    healthcheck: 
+      test: rabbitmq-diagnostics -q ping
+      interval: 3s
+      timeout: 10s
+      retries: 5
 
 volumes:
   rabbitmq_data:
