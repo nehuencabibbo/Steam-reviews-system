@@ -1,3 +1,0 @@
-#client data only keep folder
-data/*
-!data/.gitkeep
