@@ -11,7 +11,7 @@ docker-run: docker-image
 .PHONY: docker-up
 
 docker-down:
-	docker compose -f docker-compose-dev.yaml stop -t 5
+	docker compose -f docker-compose-dev.yaml stop -t 10
 	docker compose -f docker-compose-dev.yaml down
 .PHONY: docker-down
 

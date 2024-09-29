@@ -4,17 +4,16 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - 5672:5672
       - 15672:15672
     networks:
       - net
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-    logging: #para que no loggee rabbitmq
+    logging:
       driver: none
     healthcheck: 
       test: rabbitmq-diagnostics -q ping
-      interval: 3s
+      interval: 5s
       timeout: 10s
       retries: 5
 
