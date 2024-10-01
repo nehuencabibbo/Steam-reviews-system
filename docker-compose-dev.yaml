@@ -17,14 +17,14 @@ services:
       timeout: 10s
       retries: 5
 
-  filter_columns:
-    image: filter_columns:latest
-    container_name: filter_columns
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - net
+  # filter_columns:
+  #   image: filter_columns:latest
+  #   container_name: filter_columns
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   networks:
+  #     - net
 
 volumes:
   rabbitmq_data:

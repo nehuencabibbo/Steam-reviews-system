@@ -20,22 +20,29 @@ class FilterColumns():
 
         games_callback = self._middleware.__class__.generate_callback(
             self.__handle_message, 
-            self._config['CLIENT_GAMES_QUEUE_NAME'], 
+            'games',
             self._config['NULL_DROP_GAMES_QUEUE_NAME']
         )
-        self._middleware.attach_callback('games', games_callback)
+        self._middleware.attach_callback(self._config['CLIENT_GAMES_QUEUE_NAME'], games_callback)
 
         reviews_callback = self._middleware.__class__.generate_callback(
             self.__handle_message, 
-            self._config['CLIENT_REVIEWS_QUEUE_NAME'], 
+            'reviews',
             self._config['NULL_DROP_REVIEWS_QUEUE_NAME']
         )
-        self._middleware.attach_callback('reviews', reviews_callback)
+        self._middleware.attach_callback(self._config['CLIENT_REVIEWS_QUEUE_NAME'], reviews_callback)
 
         self._middleware.start_consuming()
 
     def __handle_message(self, delivery_tag, body, message_type, forwarding_queue_name):
-        body = body.decode('utf-8').split(',')
+        body = body.decode('utf-8')
+        if body == 'END':
+            self._middleware.publish(body, forwarding_queue_name, '')
+            self._middleware.ack(delivery_tag)
+
+            return
+        
+        body = body.split(',')
         body = [value.strip() for value in body]
         logging.debug(f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived {message_type}: {body}")
 
