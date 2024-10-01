@@ -11,9 +11,18 @@ def get_config():
     try:
         config_params["CLIENT_ID"] = os.getenv("CLI_ID")
 
+        # sender queues
         config_params["GAMES_QUEUE"] = os.getenv("GAMES_QUEUE", config["DEFAULT"]["GAMES_QUEUE"])
         config_params["REVIEWS_QUEUE"] = os.getenv("REVIEWS_QUEUE", config["DEFAULT"]["REVIEWS_QUEUE"])
+
+        # queues for query results
+        config_params["Q1_RESULT_QUEUE"] = os.getenv("Q1_RESULT_QUEUE", config["DEFAULT"]["Q1_RESULT_QUEUE"])
+        config_params["Q2_RESULT_QUEUE"] = os.getenv("Q2_RESULT_QUEUE", config["DEFAULT"]["Q2_RESULT_QUEUE"])
+        config_params["Q3_RESULT_QUEUE"] = os.getenv("Q3_RESULT_QUEUE", config["DEFAULT"]["Q3_RESULT_QUEUE"])
+        config_params["Q4_RESULT_QUEUE"] = os.getenv("Q4_RESULT_QUEUE", config["DEFAULT"]["Q4_RESULT_QUEUE"])
+        config_params["Q5_RESULT_QUEUE"] = os.getenv("Q5_RESULT_QUEUE", config["DEFAULT"]["Q5_RESULT_QUEUE"])
         
+        # file path
         config_params["GAME_FILE_PATH"] = os.getenv("GAME_FILE_PATH", config["DEFAULT"]["GAME_FILE_PATH"])
         config_params["REVIEWS_FILE_PATH"] = os.getenv("REVIEWS_FILE_PATH", config["DEFAULT"]["REVIEWS_FILE_PATH"])
         
@@ -27,6 +36,7 @@ def get_config():
 
     return config_params
 
+
 def init_logger(logging_level):
 
     logging.getLogger("pika").setLevel(logging.WARNING)
@@ -36,13 +46,15 @@ def init_logger(logging_level):
         level=logging_level,
     )
 
+
 def main():
     
     config = get_config()
+
     init_logger(config["LOGGING_LEVEL"])
+    config.pop("LOGGING_LEVEL")
 
     client = Client(config)
-
     client.run()
 
 
