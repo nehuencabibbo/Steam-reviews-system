@@ -1,10 +1,9 @@
 import pika
 
-class RabbitConnection:
+class Middleware:
     
-    def __init__(self):
-
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
+    def __init__(self, broker_ip):
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(broker_ip))
         self.channel = self.connection.channel()
         self.channel.basic_qos(prefetch_count=1)
 

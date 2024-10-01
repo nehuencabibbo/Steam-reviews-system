@@ -2,6 +2,7 @@ import os
 from client import Client
 from configparser import ConfigParser
 import logging
+from common.middleware import *
 
 def get_config():
     config_params = {}
@@ -9,7 +10,6 @@ def get_config():
     config = ConfigParser(os.environ)
     config.read("config.ini")
     try:
-        config_params["CLIENT_ID"] = os.getenv("CLI_ID")
 
         # sender queues
         config_params["GAMES_QUEUE"] = os.getenv("GAMES_QUEUE", config["DEFAULT"]["GAMES_QUEUE"])
@@ -28,6 +28,8 @@ def get_config():
         
         config_params["LOGGING_LEVEL"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
         config_params["SENDING_WAIT_TIME"] = int(os.getenv('SENDING_WAIT_TIME', config["DEFAULT"]["SENDING_WAIT_TIME"]))
+
+        config_params["RABBIT_IP"] = os.getenv('RABBIT_IP', config["DEFAULT"]["RABBIT_IP"])
 
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
@@ -48,13 +50,15 @@ def init_logger(logging_level):
 
 
 def main():
-    
     config = get_config()
 
-    init_logger(config["LOGGING_LEVEL"])
-    config.pop("LOGGING_LEVEL")
+    logging_level = config.pop("LOGGING_LEVEL")
+    init_logger(logging_level)
+    
+    broker_ip = config.pop("RABBIT_IP")
+    rabbit_connection = Middleware(broker_ip)
 
-    client = Client(config)
+    client = Client(config, rabbit_connection)
     client.run()
 
 

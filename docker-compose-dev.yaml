@@ -21,8 +21,6 @@ services:
     container_name: client1
     image: client:latest
     entrypoint: python3 /main.py 
-    environment:
-      - CLI_ID=1 
     volumes:
       - ./data/:/data 
     networks:
