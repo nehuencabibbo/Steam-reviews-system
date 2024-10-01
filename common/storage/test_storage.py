@@ -6,23 +6,26 @@ import os
 
 class TestStorage(unittest.TestCase):
     def setUp(self):
-        [f.unlink() for f in Path(storage.DIR).glob("*") if f.is_file()]
+        self._dir = "/tmp"
+        self._range = 10
+
+        [f.unlink() for f in Path(self._dir).glob("*") if f.is_file()]
 
     def tearDown(self):
-        [f.unlink() for f in Path(storage.DIR).glob("*") if f.is_file()]
+        [f.unlink() for f in Path(self._dir).glob("*") if f.is_file()]
 
     def test_partition_is_set(self):
         app_id = 5
         record = f"{app_id},test"
 
-        storage.write_by_range(record)
+        storage.write_by_range(self._dir, self._range, record)
 
-        self.assertTrue(os.path.exists(os.path.join(os.getcwd(), storage.DIR)))
+        self.assertTrue(os.path.exists(os.path.join(os.getcwd(), self._dir)))
         self.assertTrue(
             os.path.exists(
                 os.path.join(
-                    os.path.join(os.getcwd(), storage.DIR),
-                    f"partition_{app_id // storage.RANGE}.csv",
+                    os.path.join(os.getcwd(), self._dir),
+                    f"partition_{app_id // self._range}.csv",
                 )
             )
         )
@@ -31,8 +34,8 @@ class TestStorage(unittest.TestCase):
         app_id = 5
         original_record = f"{app_id},test"
 
-        storage.write_by_range(original_record)
-        read_record = next(storage.read_by_range(app_id))[0]
+        storage.write_by_range(self._dir, self._range, original_record)
+        read_record = next(storage.read_by_range(self._dir, self._range, app_id))[0]
 
         self.assertEqual(original_record, read_record)
 
@@ -42,9 +45,9 @@ class TestStorage(unittest.TestCase):
         original_record_1 = f"{app_id_1},test"
         original_record_2 = f"{app_id_2},test"
 
-        storage.write_by_range(original_record_1)
-        storage.write_by_range(original_record_2)
-        records = [r for r in storage.read_by_range(app_id_1)]
+        storage.write_by_range(self._dir, self._range, original_record_1)
+        storage.write_by_range(self._dir, self._range, original_record_2)
+        records = [r for r in storage.read_by_range(self._dir, self._range, app_id_1)]
 
         self.assertEqual(len(records), 2)
         self.assertEqual(records[0][0], original_record_1)
@@ -54,14 +57,14 @@ class TestStorage(unittest.TestCase):
         app_id = 10
         record = f"{app_id},test"
 
-        storage.write_by_range(record)
+        storage.write_by_range(self._dir, self._range, record)
 
-        self.assertTrue(os.path.exists(os.path.join(os.getcwd(), storage.DIR)))
+        self.assertTrue(os.path.exists(os.path.join(os.getcwd(), self._dir)))
         self.assertTrue(
             os.path.exists(
                 os.path.join(
-                    os.path.join(os.getcwd(), storage.DIR),
-                    f"partition_{app_id // storage.RANGE}.csv",
+                    os.path.join(os.getcwd(), self._dir),
+                    f"partition_{app_id // self._range}.csv",
                 )
             )
         )
@@ -72,23 +75,23 @@ class TestStorage(unittest.TestCase):
         record_1 = f"{app_id_1},test"
         record_2 = f"{app_id_2},test"
 
-        storage.write_by_range(record_1)
-        storage.write_by_range(record_2)
+        storage.write_by_range(self._dir, self._range, record_1)
+        storage.write_by_range(self._dir, self._range, record_2)
 
-        self.assertTrue(os.path.exists(os.path.join(os.getcwd(), storage.DIR)))
+        self.assertTrue(os.path.exists(os.path.join(os.getcwd(), self._dir)))
         self.assertTrue(
             os.path.exists(
                 os.path.join(
-                    os.path.join(os.getcwd(), storage.DIR),
-                    f"partition_{app_id_1 // storage.RANGE}.csv",
+                    os.path.join(os.getcwd(), self._dir),
+                    f"partition_{app_id_1 // self._range}.csv",
                 )
             )
         )
         self.assertTrue(
             os.path.exists(
                 os.path.join(
-                    os.path.join(os.getcwd(), storage.DIR),
-                    f"partition_{app_id_2 // storage.RANGE}.csv",
+                    os.path.join(os.getcwd(), self._dir),
+                    f"partition_{app_id_2 // self._range}.csv",
                 )
             )
         )
@@ -96,7 +99,7 @@ class TestStorage(unittest.TestCase):
     def test_if_no_record_is_registered_for_some_key_an_empty_generator_is_returned(
         self,
     ):
-        records = [r for r in storage.read_by_range(5)]
+        records = [r for r in storage.read_by_range(self._dir, self._range, 5)]
         self.assertEqual(len(records), 0)
 
 
