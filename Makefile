@@ -3,7 +3,7 @@ SHELL := /bin/bash
 all:
 
 docker-image:
-
+	docker build -f ./client/Dockerfile -t "client:latest" .
 .PHONY: docker-image
 
 docker-run: docker-image
