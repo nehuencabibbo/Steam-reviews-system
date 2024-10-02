@@ -3,44 +3,41 @@ import time
 import signal
 import logging
 from common.middleware import *
-from pika.exceptions import ChannelWrongStateError
 
 FILE_END_MSG = "END"
+AMMOUNT_OF_QUERIES = 5
 
 class Client:
 
-    def __init__(self, config, middleware:Middleware):
+    def __init__(self, config:dict, middleware:Middleware):
         self.config = config
         self.middleware = middleware
-        self.__declare_queues()
+        self.__create_queues()
         self.got_sigterm = False
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
 
-    def __declare_queues(self):
+    def __create_queues(self):
 
         #declare queues for sending data
-        self.middleware.declare_queue(self.config["GAMES_QUEUE"])
-        self.middleware.declare_queue(self.config["REVIEWS_QUEUE"])
+        self.middleware.create_queue(self.config["GAMES_QUEUE"])
+        self.middleware.create_queue(self.config["REVIEWS_QUEUE"])
 
         # declare consumer queues
-        self.middleware.declare_queue(self.config["Q1_RESULT_QUEUE"])
-        self.middleware.declare_queue(self.config["Q2_RESULT_QUEUE"])
-        self.middleware.declare_queue(self.config["Q3_RESULT_QUEUE"])
-        self.middleware.declare_queue(self.config["Q4_RESULT_QUEUE"])
-        self.middleware.declare_queue(self.config["Q5_RESULT_QUEUE"])
+        for i in range(1, AMMOUNT_OF_QUERIES + 1):
+            queue_name = f"Q{i}_RESULT_QUEUE"
+            self.middleware.create_queue(self.config[queue_name])
 
 
     def run(self):
 
         self.__send_file(self.config["GAMES_QUEUE"], self.config["GAME_FILE_PATH"])
-
         self.__send_file(self.config["REVIEWS_QUEUE"], self.config["REVIEWS_FILE_PATH"])
 
         self.__get_results()
 
         if not self.got_sigterm:
-            self.middleware.close()
+            self.middleware.shutdown()
 
 
     def __send_file(self, queue_name, file_path):
@@ -55,25 +52,27 @@ class Client:
                 logging.debug(f"Sending appID {row[0]} to {queue_name}") 
                 msg = ','.join(row) 
 
-                self.middleware.send(queue_name, msg)
+                self.middleware.publish(msg, queue_name=queue_name)
                 time.sleep(self.config["SENDING_WAIT_TIME"])
         
         logging.debug("Sending file end")
-        self.middleware.send(queue_name, FILE_END_MSG)
+        self.middleware.publish(FILE_END_MSG, queue_name=queue_name)
 
 
     def __get_results(self):
 
-        logging.debug("Waiting for results")
-        try: 
-            self.middleware.consume_from_queue(self.config["Q1_RESULT_QUEUE"], self.__handle_query_result)
-            self.middleware.consume_from_queue(self.config["Q2_RESULT_QUEUE"], self.__handle_query_result)
-            self.middleware.consume_from_queue(self.config["Q3_RESULT_QUEUE"], self.__handle_query_result)
-            self.middleware.consume_from_queue(self.config["Q4_RESULT_QUEUE"], self.__handle_query_result)
-            self.middleware.consume_from_queue(self.config["Q5_RESULT_QUEUE"], self.__handle_query_result)
-        except (OSError, ChannelWrongStateError) as _:
-            if not self.got_sigterm:
-                raise
+        for number_of_query in range(1, AMMOUNT_OF_QUERIES + 1):
+            if self.got_sigterm:
+                return
+            logging.debug(f"Waiting for results of query {number_of_query}")
+
+            queue_name = self.config[f"Q{number_of_query}_RESULT_QUEUE"]
+
+            self.middleware.attach_callback(queue_name, self.__handle_query_result)
+            try:
+                self.middleware.start_consuming()
+            except OSError as _:
+                if not self.got_sigterm: raise
 
 
     def __handle_query_result(self, ch, method, properties, body):
@@ -84,11 +83,11 @@ class Client:
         if msg == FILE_END_MSG:
             self.middleware.stop_consuming()
             return
-
+        
         logging.info(f"{method.routing_key} result: {msg}")
         
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
         self.got_sigterm = True
-        self.middleware.close()
+        self.middleware.shutdown()
