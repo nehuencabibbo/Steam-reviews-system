@@ -1,9 +1,17 @@
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from typing import *
+from middleware.middleware import Middleware
 import signal 
 import logging
 
+GAMES_MESSAGE_TYPE = 'games'
+REVIEWS_MESSAGE_TYPE = 'reviews'
+END_TRANMISSION_MESSAGE = 'END' 
 
 class FilterColumns(): 
-    def __init__(self, middleware, config):
+    def __init__(self, middleware: Middleware, config: Dict[str, Union[str, int]]):
         self._middleware = middleware
         self._config = config
 
@@ -20,23 +28,23 @@ class FilterColumns():
 
         games_callback = self._middleware.__class__.generate_callback(
             self.__handle_message, 
-            'games',
+            GAMES_MESSAGE_TYPE,
             self._config['NULL_DROP_GAMES_QUEUE_NAME']
         )
         self._middleware.attach_callback(self._config['CLIENT_GAMES_QUEUE_NAME'], games_callback)
 
         reviews_callback = self._middleware.__class__.generate_callback(
             self.__handle_message, 
-            'reviews',
+            REVIEWS_MESSAGE_TYPE,
             self._config['NULL_DROP_REVIEWS_QUEUE_NAME']
         )
         self._middleware.attach_callback(self._config['CLIENT_REVIEWS_QUEUE_NAME'], reviews_callback)
 
         self._middleware.start_consuming()
 
-    def __handle_message(self, delivery_tag, body, message_type, forwarding_queue_name):
+    def __handle_message(self, delivery_tag: int, body: bytes, message_type: str, forwarding_queue_name: str):
         body = body.decode('utf-8')
-        if body == 'END':
+        if body == END_TRANMISSION_MESSAGE:
             self._middleware.publish(body, forwarding_queue_name, '')
             self._middleware.ack(delivery_tag)
 
@@ -47,9 +55,9 @@ class FilterColumns():
         logging.debug(f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived {message_type}: {body}")
 
         columns_to_keep = []
-        if message_type == 'games':
+        if message_type == GAMES_MESSAGE_TYPE:
             columns_to_keep = self._config['GAMES_COLUMNS_TO_KEEP']
-        elif message_type == 'reviews':
+        elif message_type == REVIEWS_MESSAGE_TYPE:
             columns_to_keep = self._config['REVIEWS_COLUMNS_TO_KEEP']
         else: 
             # Message type was not set properly, unrecoverable error 
@@ -63,7 +71,7 @@ class FilterColumns():
 
         self._middleware.ack(delivery_tag)
 
-    def __filter_columns(self, columns_to_keep, data):
+    def __filter_columns(self, columns_to_keep: List[int], data: List[str]):
         return [data[i] for i in columns_to_keep]
 
     def __signal_handler(self, sig, frame):
