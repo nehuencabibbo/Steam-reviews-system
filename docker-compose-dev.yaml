@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   rabbitmq:
     image: rabbitmq:3-management
@@ -17,14 +16,41 @@ services:
       timeout: 10s
       retries: 5
 
-  filter_columns:
-    image: filter_columns:latest
-    container_name: filter_columns
+  # filter_columns:
+  #   image: filter_columns:latest
+  #   container_name: filter_columns
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   networks:
+  #     - net
+
+  client1:
+    container_name: client
+    image: client:latest
+    # entrypoint: python3 /main.py 
+    volumes:
+      - ./data/:/data 
+    networks:
+      - net 
     depends_on:
       rabbitmq:
         condition: service_healthy
+    restart: on-failure
+
+  join:
+    container_name: join
+    image: join:latest
+    # entrypoint: python3 /main.py 
+    # volumes:
+      # - ./data/:/data 
     networks:
-      - net
+      - net 
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
 
 volumes:
   rabbitmq_data:
