@@ -1,3 +1,5 @@
 __pycache__/
 tmp/
-
+data
+rabbit.sh
+testing_basic_publish
