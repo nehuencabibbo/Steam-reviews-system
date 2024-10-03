@@ -5,9 +5,9 @@ from common.storage.storage import read_by_range, write_by_range
 
 
 class Join:
-    def __init__(self, middleware: Middleware):
+    def __init__(self, middleware: Middleware, config: dict[str, str]):
         self.__middleware = middleware
-        self.__games_dataset_is_finished = False
+        self.__config = config
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -17,21 +17,19 @@ class Join:
         self.__middleware.shutdown()
 
     def start(self):
-        self.__middleware.create_queue("input_games")
-        # self.__middleware.create_queue("input_reviews")
-        self.__middleware.create_queue("output_join")
+        self.__middleware.create_queue(self.__config["INPUT_GAMES_QUEUE_NAME"])
+        self.__middleware.create_queue(self.__config["OUTPUT_QUEUE_NAME"])
+
         # callback, inputq, outputq
         games_callback = self.__middleware.generate_callback(
-            self.__games_callback, "input_games", "output_join"
+            self.__games_callback,
+            self.__config["INPUT_GAMES_QUEUE_NAME"],
+            self.__config["OUTPUT_QUEUE_NAME"],
         )
 
-        self.__middleware.attach_callback("input_games", games_callback)
-
-        # reviews_callback = self.__middleware.generate_callback(
-        #     self.__reviews_callback, "input_reviews", "output_join"
-        # )
-
-        # self.__middleware.attach_callback("input_reviews", reviews_callback)
+        self.__middleware.attach_callback(
+            self.__config["INPUT_GAMES_QUEUE_NAME"], games_callback
+        )
 
         self.__middleware.start_consuming()
 
@@ -44,16 +42,19 @@ class Join:
         if body[0] == "END":
             logging.debug("END of games received")
             reviews_callback = self.__middleware.generate_callback(
-                self.__reviews_callback, "input_reviews", "output_join"
+                self.__reviews_callback,
+                self.__config["INPUT_REVIEWS_QUEUE_NAME"],
+                self.__config["OUTPUT_QUEUE_NAME"],
             )
 
-            self.__middleware.attach_callback("input_reviews", reviews_callback)
+            self.__middleware.attach_callback(
+                self.__config["INPUT_REVIEWS_QUEUE_NAME"], reviews_callback
+            )
             self.__middleware.ack(delivery_tag)
 
             return
 
-        #  10 is a hardocded value, it must be obtained from config.ini as it is the range for the partitions
-        write_by_range("tmp/", 10, ",".join(body))
+        write_by_range("tmp/", int(self.__config["PARTITION_RANGE"]), ",".join(body))
 
         self.__middleware.ack(delivery_tag)
 
@@ -73,7 +74,9 @@ class Join:
 
         # TODO: handle conversion error
         app_id = int(body[0])
-        for record in read_by_range("tmp/", 10, app_id):
+        for record in read_by_range(
+            "tmp/", int(self.__config["PARTITION_RANGE"]), app_id
+        ):
             record_app_id = int(record[0].split(",", maxsplit=1)[0])
             if app_id == record_app_id:
                 # Get rid of the app_id from the review and append it to the original game record

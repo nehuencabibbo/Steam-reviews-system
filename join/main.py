@@ -14,31 +14,24 @@ def get_config():
     config = ConfigParser(os.environ)
     config.read("./join/config.ini")
     try:
-        # config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])
-
-        # config_params["CLIENT_GAMES_QUEUE_NAME"] = os.getenv("CLIENT_GAMES_QUEUE_NAME", config["DEFAULT"]["CLIENT_GAMES_QUEUE_NAME"])
-        # config_params["CLIENT_REVIEWS_QUEUE_NAME"] = os.getenv("CLIENT_REVIEWS_QUEUE_NAME", config["DEFAULT"]["CLIENT_REVIEWS_QUEUE_NAME"])
-
-        # config_params["NULL_DROP_GAMES_QUEUE_NAME"] = os.getenv("NULL_DROP_GAMES_QUEUE_NAME", config["DEFAULT"]["NULL_DROP_GAMES_QUEUE_NAME"])
-        # config_params["NULL_DROP_REVIEWS_QUEUE_NAME"] = os.getenv("NULL_DROP_REVIEWS_QUEUE_NAME", config["DEFAULT"]["NULL_DROP_REVIEWS_QUEUE_NAME"])
-
-        # games_columns_to_keep = os.getenv(
-        #     "GAMES_COLUMNS_TO_KEEP", config["DEFAULT"]["GAMES_COLUMNS_TO_KEEP"]
-        # ).split(",")
-        # games_columns_to_keep = [int(column) for column in games_columns_to_keep]
-        # config_params["GAMES_COLUMNS_TO_KEEP"] = games_columns_to_keep
-
-        # reviews_columns_to_keep = os.getenv(
-        #     "REVIEWS_COLUMNS_TO_KEEP", config["DEFAULT"]["REVIEWS_COLUMNS_TO_KEEP"]
-        # ).split(",")
-        # reviews_columns_to_keep = [int(column) for column in reviews_columns_to_keep]
-        # config_params["REVIEWS_COLUMNS_TO_KEEP"] = reviews_columns_to_keep
-
         config_params["LOGGING_LEVEL"] = os.getenv(
             "LOGGING_LEVEL", config["DEFAULT"]["LOGGING_LEVEL"]
         )
         config_params["RABBIT_IP"] = os.getenv(
             "RABBIT_IP", config["DEFAULT"]["RABBIT_IP"]
+        )
+        config_params["INPUT_GAMES_QUEUE_NAME"] = os.getenv(
+            "INPUT_GAMES_QUEUE_NAME", config["DEFAULT"]["INPUT_GAMES_QUEUE_NAME"]
+        )
+        config_params["INPUT_REVIEWS_QUEUE_NAME"] = os.getenv(
+            "INPUT_REVIEWS_QUEUE_NAME", config["DEFAULT"]["INPUT_REVIEWS_QUEUE_NAME"]
+        )
+        config_params["OUTPUT_QUEUE_NAME"] = os.getenv(
+            "OUTPUT_QUEUE_NAME", config["DEFAULT"]["OUTPUT_QUEUE_NAME"]
+        )
+
+        config_params["PARTITION_RANGE"] = os.getenv(
+            "PARTITION_RANGE", config["DEFAULT"]["PARTITION_RANGE"]
         )
 
     except KeyError as e:
@@ -67,7 +60,7 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    join = Join(middleware)
+    join = Join(middleware, config)
     join.start()
 
 
