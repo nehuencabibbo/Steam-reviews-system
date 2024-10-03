@@ -4,7 +4,7 @@ all:
 
 docker-image:
 	docker build -f ./join/Dockerfile -t "join:latest" .	
-	docker build -f ./Dockerfile -t "client:latest" .	
+	# docker build -f ./Dockerfile -t "client:latest" .	
 .PHONY: docker-image
 
 docker-run: docker-image
