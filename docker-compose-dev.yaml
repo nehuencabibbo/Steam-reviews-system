@@ -17,18 +17,18 @@ services:
       timeout: 10s
       retries: 5
 
-  client1:
-    container_name: client1
-    image: client:latest
-    entrypoint: python3 /main.py 
-    volumes:
-      - ./data/:/data 
-    networks:
-      - net 
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: on-failure
+  # client1:
+  #   container_name: client1
+  #   image: client:latest
+  #   entrypoint: python3 /main.py 
+  #   volumes:
+  #     - ./data/:/data 
+  #   networks:
+  #     - net 
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   restart: on-failure
     
   # filter_columns:
   #   image: filter_columns:latest
