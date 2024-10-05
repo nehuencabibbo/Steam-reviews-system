@@ -9,7 +9,7 @@ import logging
 
 GAMES_MESSAGE_TYPE = 'games'
 REVIEWS_MESSAGE_TYPE = 'reviews'
-END_TRANMISSION_MESSAGE = 'END' 
+END_TRANSMISSION_MESSAGE = 'END' 
 
 class FilterColumns(): 
     def __init__(self, protocol: Protocol, middleware: Middleware, config: Dict[str, Union[str, int]]):
@@ -48,8 +48,10 @@ class FilterColumns():
         body = self._protocol.decode(body)
         body = [value.strip() for value in body]
 
-        if len(body) == 1 and body[0] == END_TRANMISSION_MESSAGE:
-            self._middleware.publish(body, forwarding_queue_name, '')
+        if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
+
+            encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+            self._middleware.publish(encoded_message, forwarding_queue_name, '')
             self._middleware.ack(delivery_tag)
 
             return
@@ -80,4 +82,4 @@ class FilterColumns():
 
     def __signal_handler(self, sig, frame):
         logging.debug(f"[FILTER COLUMNS {self._config['NODE_ID']}] Gracefully shutting down...")
-        self.middleware.shutdown()
+        self._middleware.shutdown()

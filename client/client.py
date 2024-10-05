@@ -34,7 +34,7 @@ class Client:
     def run(self):
 
         self.__send_file(self.config["GAMES_QUEUE"], self.config["GAME_FILE_PATH"])
-        self.__send_file(self.config["REVIEWS_QUEUE"], self.config["REVIEWS_FILE_PATH"])
+        # self.__send_file(self.config["REVIEWS_QUEUE"], self.config["REVIEWS_FILE_PATH"])
 
         self.__get_results()
 
@@ -58,7 +58,8 @@ class Client:
                 time.sleep(self.config["SENDING_WAIT_TIME"])
         
         logging.debug("Sending file end")
-        self.middleware.publish(FILE_END_MSG, queue_name=queue_name)
+        encoded_message = self.protocol.encode([FILE_END_MSG])
+        self.middleware.publish(encoded_message, queue_name=queue_name)
 
 
     def __get_results(self):

@@ -4,6 +4,8 @@ all:
 
 docker-image:
 	docker build -f ./client/Dockerfile -t "client:latest" .
+	docker build -f ./filter_columns/Dockerfile -t "filter_columns:latest" .
+	docker build -f ./drop_nulls/Dockerfile -t "drop_nulls:latest" .
 	docker build -f ./counter/Dockerfile -t "counter:latest" .
 .PHONY: docker-image
 
