@@ -102,6 +102,7 @@ class TestStorage(unittest.TestCase):
         records = [r for r in storage.read_by_range(self._dir, self._range, 5)]
         self.assertEqual(len(records), 0)
 
+
     def test_sum_to_record_creates_partition_file_if_not_found(self):
         app_id = 5
         record = f"{app_id},10"

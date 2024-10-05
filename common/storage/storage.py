@@ -1,11 +1,12 @@
 import os
 import csv
-
+import logging
 # TODO: use threads for all functions or some parallelization tool (maybe)
 
 
 # Record is a string which format is csv. It must contain in its first value a numerical type, as it must be
 # assigned to a partition of the storage (range based storage is being used)
+
 def write_by_range(dir: str, range: int, record: str):
     try:
         key = int(record.split(",", maxsplit=1)[0])
@@ -33,7 +34,6 @@ def read_by_range(dir: str, range: int, key: int):
         reader = csv.reader(f)
         for line in reader:
             yield line
-
 
 # TODO: this could receive a batch of records
 def sum_to_record(dir: str, range: int, record: str):

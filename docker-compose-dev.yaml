@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   rabbitmq:
     image: rabbitmq:3-management
@@ -16,6 +15,16 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
+
+  join:
+    container_name: join
+    image: join:latest
+    networks:
+      - net 
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
 
   client1:
     container_name: client1

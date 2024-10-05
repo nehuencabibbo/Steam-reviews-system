@@ -2,4 +2,6 @@ __pycache__/
 tmp/
 data
 rabbit.sh
+.venv/
 testing_basic_publish
+

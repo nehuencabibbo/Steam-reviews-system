@@ -3,6 +3,7 @@ SHELL := /bin/bash
 all:
 
 docker-image:
+	docker build -f ./join/Dockerfile -t "join:latest" .	
 	docker build -f ./client/Dockerfile -t "client:latest" .
 	docker build -f ./filter_columns/Dockerfile -t "filter_columns:latest" .
 	docker build -f ./drop_nulls/Dockerfile -t "drop_nulls:latest" .
