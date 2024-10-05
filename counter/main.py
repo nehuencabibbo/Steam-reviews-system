@@ -2,7 +2,7 @@ import os
 from counter import Counter
 from configparser import ConfigParser
 import logging
-from common.middleware import *
+from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
 def get_config():
     config_params = {}

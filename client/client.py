@@ -2,7 +2,7 @@ import csv
 import time
 import signal
 import logging
-from common.middleware import *
+from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
 
 FILE_END_MSG = "END"

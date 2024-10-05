@@ -1,6 +1,6 @@
 import signal
 import logging
-from common.middleware import *
+from common.middleware.middleware import Middleware
 from common.storage.storage import *
 from common.protocol.protocol import Protocol
 
