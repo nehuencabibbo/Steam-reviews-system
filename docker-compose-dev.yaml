@@ -78,6 +78,16 @@ services:
       - net
     restart: on-failure
 
+  top_k:
+      image: top_k:latest
+      container_name: top_k
+      depends_on:
+        rabbitmq:
+          condition: service_healthy
+      networks:
+        - net
+      restart: on-failure
+
 volumes:
   rabbitmq_data:
 

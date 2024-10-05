@@ -86,7 +86,7 @@ def sum_to_record(dir: str, range: int, record: str):
 def add_to_top(dir: str, record: str, k: int):
     if k <= 0:
         logging.error("Error, K must be > 0. Got: {k}")
-
+        return
     # TODO: modify if necessary (some records may not be a key,value pair)
     key, value = record.split(",", maxsplit=1)
 
@@ -150,7 +150,28 @@ def add_to_top(dir: str, record: str, k: int):
         if top_length < k:
             logging.debug(f"Record {top_cantidate_record} was appended")
             writer.writerow([top_cantidate_record])
+    file_path = os.path.join(dir, f"top_{k}.csv")
 
-        # No minor element found, and top is not complete, append
+    os.makedirs(dir, exist_ok=True)
+
+    # No minor element found, and top is not complete, append
 
     os.replace(temp_file, file_path)
+
+
+def read_top(dir: str, k: int):
+    if k <= 0:
+        logging.error("Error, K must be > 0. Got: {k}")
+        return
+
+    file_path = os.path.join(dir, f"top_{k}.csv")
+
+    os.makedirs(dir, exist_ok=True)
+
+    if not os.path.exists(file_path):
+        return []  # No records``
+
+    with open(file_path, "r") as f:
+        reader = csv.reader(f)
+        for line in reader:
+            yield line

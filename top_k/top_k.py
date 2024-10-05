@@ -1,7 +1,7 @@
 import logging
 import signal
 from middleware.middleware import Middleware
-from common.storage.storage import read_by_range, write_by_range
+from common.storage.storage import add_to_top, read_top
 from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
@@ -48,15 +48,14 @@ class TopK:
         if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of games received")
             # TODO: Aca manda el topk
+            self.__send_top(forwarding_queue_name)
             encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
             self.__middleware.publish(encoded_message, forwarding_queue_name, "")
             self.__middleware.ack(delivery_tag)
             return
 
         try:
-            write_by_range(
-                "tmp/", int(self.__config["PARTITION_RANGE"]), ",".join(body)
-            )
+            add_to_top("/tmp", ",".join(body), int(self.__config["K"]))
         except ValueError as e:
             logging.error(
                 f"An error has occurred. {e}",
@@ -64,6 +63,9 @@ class TopK:
 
         self.__middleware.ack(delivery_tag)
 
-    def __get_top_k(self):
-        pass
-        # records = read_by_range
+    def __send_top(self, forwarding_queue_name):
+        for record in read_top("tmp/", int(self.__config["K"])):
+            encoded_message = self.__protocol.encode(record)
+            self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+
+        logging.debug(f"Top sent to queue: {forwarding_queue_name}")

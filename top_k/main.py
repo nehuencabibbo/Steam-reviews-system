@@ -1,19 +1,20 @@
 # Parent directory is included in the search path for modules
 import os
 
-from join.join import Join
 from middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
 
 from configparser import ConfigParser
 import logging
 
+from top_k.top_k import TopK
+
 
 def get_config():
     config_params = {}
     print("CWD: ", os.getcwd())
     config = ConfigParser(os.environ)
-    config.read("./join/config.ini")
+    config.read("./top_k/config.ini")
     try:
         config_params["LOGGING_LEVEL"] = os.getenv(
             "LOGGING_LEVEL", config["DEFAULT"]["LOGGING_LEVEL"]
@@ -63,8 +64,8 @@ def main():
 
     protocol = Protocol()
 
-    join = Join(protocol, middleware, config)
-    join.start()
+    top_k = TopK(protocol, middleware, config)
+    top_k.start()
 
 
 if __name__ == "__main__":
