@@ -36,7 +36,7 @@ class Counter:
         body = self.protocol.decode(body)
         body = [value.strip() for value in body]
 
-        logging.info(f"GOT MSG: {body}")
+        logging.debug(f"GOT MSG: {body}")
 
         if len(body) == 1 and body[0] == "END":
             self.send_results()

@@ -3,13 +3,15 @@ import time
 import signal
 import logging
 from common.middleware import *
+from common.protocol.protocol import Protocol
 
 FILE_END_MSG = "END"
 AMMOUNT_OF_QUERIES = 5
 
 class Client:
 
-    def __init__(self, config:dict, middleware:Middleware):
+    def __init__(self, config:dict, middleware:Middleware, protocol:Protocol):
+        self.protocol = protocol
         self.config = config
         self.middleware = middleware
         self.__create_queues()
@@ -43,16 +45,16 @@ class Client:
     def __send_file(self, queue_name, file_path):
 
         with open(file_path, 'r') as file:
-            reader = csv.reader(file) #using csv reader for logging
+            reader = csv.reader(file)
             next(reader, None)  #skip header
             for row in reader:
 
                 if self.got_sigterm:
                     return
                 logging.debug(f"Sending appID {row[0]} to {queue_name}") 
-                msg = ','.join(row) 
+                encoded_message = self.protocol.encode(row)
 
-                self.middleware.publish(msg, queue_name=queue_name)
+                self.middleware.publish(encoded_message, queue_name=queue_name)
                 time.sleep(self.config["SENDING_WAIT_TIME"])
         
         logging.debug("Sending file end")
@@ -77,14 +79,16 @@ class Client:
 
     def __handle_query_result(self, ch, method, properties, body):
 
-        msg = body.decode('utf-8').strip()
+        body = Protocol.decode(body)
+        body = [value.strip() for value in body]
+
         self.middleware.ack(method.delivery_tag)
 
-        if msg == FILE_END_MSG:
+        if len(body) == 1 and body[0] == FILE_END_MSG:
             self.middleware.stop_consuming()
             return
         
-        logging.info(f"{method.routing_key} result: {msg}")
+        logging.info(f"{method.routing_key} result: {body}")
         
 
     def __sigterm_handler(self, signal, frame):

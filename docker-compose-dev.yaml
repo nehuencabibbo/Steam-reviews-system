@@ -39,20 +39,20 @@ services:
   #   networks:
   #     - net
 
-  counter1:
-    container_name: counter1
-    image: counter:latest
-    entrypoint: python3 /main.py
-    environment:
-      - NODE_ID=1
-      - CONSUME_QUEUE_SUFIX=q1_platform
-      - PUBLISH_QUEUE=Q1
-    networks:
-      - net 
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: on-failure
+  # counter1:
+  #   container_name: counter1
+  #   image: counter:latest
+  #   entrypoint: python3 /main.py
+  #   environment:
+  #     - NODE_ID=1
+  #     - CONSUME_QUEUE_SUFIX=q1_platform
+  #     - PUBLISH_QUEUE=Q1
+  #   networks:
+  #     - net 
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   restart: on-failure
 
 volumes:
   rabbitmq_data:
