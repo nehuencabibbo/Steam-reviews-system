@@ -45,9 +45,6 @@ class Join:
         # body = body.decode("utf-8").split(",")
         body = self.__protocol.decode(body)
         body = [value.strip() for value in body]
-        logging.debug(
-            f"body: {body}",
-        )
 
         if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of games received")

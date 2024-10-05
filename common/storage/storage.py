@@ -81,3 +81,76 @@ def sum_to_record(dir: str, range: int, record: str):
             writer.writerow([record])
 
     os.replace(temp_file, file_path)
+
+
+def add_to_top(dir: str, record: str, k: int):
+    if k <= 0:
+        logging.error("Error, K must be > 0. Got: {k}")
+
+    # TODO: modify if necessary (some records may not be a key,value pair)
+    key, value = record.split(",", maxsplit=1)
+
+    file_path = os.path.join(dir, f"top_{k}.csv")
+
+    os.makedirs(dir, exist_ok=True)
+
+    if not os.path.exists(file_path):
+        # No existe el archivo
+        # -> Crearlo y apppendear
+        with open(file_path, "w") as f:
+            writer = csv.writer(f)
+            writer.writerow([record])
+        return
+
+    temp_file = f"temp_{k}.csv"
+    top_cantidate_val = int(value)
+    top_cantidate_record = record
+    top_replaced = False
+    top_length = 0
+
+    with open(file_path, mode="r") as infile, open(
+        temp_file, mode="w", newline=""
+    ) as outfile:
+        reader = csv.reader(infile)
+        writer = csv.writer(outfile)
+
+        # Itearte over elements of the actual top
+        # The first value of the top_candidate_val is the value received as parameter
+        # If it's greater than a record from the top, then replace it, set the top_replaced flag to True
+        # and continue. The new top_candidate_record will be the value that was replaced.
+        # The top_replaced flag is to optimize the number of operations made
+        for line in reader:
+            if top_length == k:
+                break
+
+            # TODO: modify if necessary (some records may not be a key,value pair)
+            if top_replaced:
+                logging.debug(f"Shifting {line[0]} with {top_cantidate_record}")
+                writer.writerow([top_cantidate_record])
+                top_cantidate_record = line[0]
+                top_length += 1
+                continue
+
+            read_value = int(line[0].split(",", maxsplit=1)[1])
+
+            if read_value < top_cantidate_val:
+                logging.debug(
+                    f"Record: {top_cantidate_record} replaced the value: {line}"
+                )
+                writer.writerow([top_cantidate_record])
+                top_cantidate_val = read_value
+                top_cantidate_record = line[0]
+                top_replaced = True
+                top_length += 1
+                continue
+
+            writer.writerow(line)
+            top_length += 1
+
+        if top_length < k:
+            logging.debug(f"Record {top_cantidate_record} was appended")
+            writer.writerow([top_cantidate_record])
+
+        # No minor element found, and top is not complete, append
+
+    os.replace(temp_file, file_path)
