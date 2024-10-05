@@ -2,7 +2,8 @@ import os
 from client import Client
 from configparser import ConfigParser
 import logging
-from common.middleware import *
+from common.middleware.middleware import Middleware
+from common.protocol.protocol import Protocol
 
 def get_config():
     config_params = {}
@@ -56,9 +57,10 @@ def main():
     init_logger(logging_level)
     
     broker_ip = config.pop("RABBIT_IP")
-    rabbit_connection = Middleware(broker_ip)
+    middleware = Middleware(broker_ip)
+    protocol = Protocol()
 
-    client = Client(config, rabbit_connection)
+    client = Client(config, middleware, protocol)
     client.run()
 
 

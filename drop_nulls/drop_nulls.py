@@ -54,12 +54,12 @@ class DropNulls():
         for platform in PLATFORMS:
             # TODO: Cambiar '1' por client id cuando haya
             node_id = node_id_to_send_to('1', platform, self._config["COUNT_BY_PLATFORM_NODES"])
-            encoded_message = self._protocol.encode(END_TRANSMISSION_MESSAGE)
+            encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
             self._middleware.publish(encoded_message, f"{node_id}_{self._config['Q1_PLATFORM']}")
 
         # Q2, Q3, Q4, Q5
         for i in range(2, 6):
-            encoded_message = self._protocol.encode(END_TRANSMISSION_MESSAGE)
+            encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
             self._middleware.publish(encoded_message, self._config[f"Q{i}_GAMES"])
     
     def __handle_games(self, delivery_tag: int, body: bytes):
@@ -115,10 +115,10 @@ class DropNulls():
     def __handle_reviews(self, delivery_tag: int, body: bytes):
         body = self._protocol.decode(body)
         body = [value.strip() for value in body]
-        if body == END_TRANSMISSION_MESSAGE:
+        if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
             logging.debug(f"[NULL DROP {self._config['NODE_ID']}] Recived reviews END")
             for i in range(3, 6):
-                encoded_message = self._protocol.encode(END_TRANSMISSION_MESSAGE)
+                encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
                 self._middleware.publish(encoded_message, self._config[f"Q{i}_REVIEWS"])
             
             self._middleware.ack(delivery_tag)
@@ -146,4 +146,4 @@ class DropNulls():
 
     def __signal_handler(self, sig, frame):
         logging.debug(f"[NULL DROP {self._config['NODE_ID']}] Gracefully shutting down...")
-        self.middleware.shutdown()
+        self._middleware.shutdown()

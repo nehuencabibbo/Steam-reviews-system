@@ -10,7 +10,7 @@ class Middleware:
         return pika.BlockingConnection(pika.ConnectionParameters(host=ip))
 
     def create_queue(self, queue):
-        self._channel.queue_declare(queue=queue, durable=True)
+        self._channel.queue_declare(queue=queue)
 
     def attach_callback(self, queue_name, callback):
         self._channel.basic_consume(

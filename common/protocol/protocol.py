@@ -25,7 +25,6 @@ class Protocol:
 
             field = message[:field_length]
             field = field.decode('utf-8')
-            print("PROTOCOL: ", field)
             result.append(field)
             message = message[field_length:]
 
