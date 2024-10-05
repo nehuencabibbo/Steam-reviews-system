@@ -16,28 +16,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # filter_columns:
-  #   image: filter_columns:latest
-  #   container_name: filter_columns
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   networks:
-  #     - net
-
-  # client1:
-  #   container_name: client
-  #   image: client:latest
-  #   # entrypoint: python3 /main.py 
-  #   volumes:
-  #     - ./data/:/data 
-  #   networks:
-  #     - net 
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   restart: on-failure
-
   join:
     container_name: join
     image: join:latest
@@ -48,6 +26,58 @@ services:
         condition: service_healthy
     restart: on-failure
 
+  client1:
+    container_name: client1
+    image: client:latest
+    entrypoint: python3 /main.py 
+    volumes:
+      - ./data/:/data 
+    networks:
+      - net 
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+    
+  filter_columns:
+    image: filter_columns:latest
+    container_name: filter_columns
+    environment:
+      - NODE_ID=1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  counter1:
+    container_name: counter1
+    image: counter:latest
+    entrypoint: python3 /main.py
+    environment:
+      - NODE_ID=1
+      - CONSUME_QUEUE_SUFIX=q1_platform
+      - PUBLISH_QUEUE=Q1
+    networks:
+      - net 
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  drop_nulls:
+    image: drop_nulls:latest
+    container_name: drop_nulls
+    environment:
+      - NODE_ID=1
+      - COUNT_BY_PLATFORM_NODES=1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
 
 volumes:
   rabbitmq_data:

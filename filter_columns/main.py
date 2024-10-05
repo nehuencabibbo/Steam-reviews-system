@@ -4,6 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from middleware.middleware import Middleware
 from filter_columns import FilterColumns
+from common.protocol.protocol import Protocol
 
 from configparser import ConfigParser
 import logging
@@ -57,7 +58,9 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    filter_columns = FilterColumns(middleware, config)
+    protocol = Protocol()
+
+    filter_columns = FilterColumns(protocol, middleware, config)
     filter_columns.start()
 
 

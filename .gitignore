@@ -1,6 +1,7 @@
-data
-rabbit.sh
-testing_basic_publish
 __pycache__/
 tmp/
+data
+rabbit.sh
 .venv/
+testing_basic_publish
+
