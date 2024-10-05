@@ -3,6 +3,7 @@ import os
 
 from join.join import Join
 from middleware.middleware import Middleware
+from common.protocol.protocol import Protocol
 
 from configparser import ConfigParser
 import logging
@@ -60,7 +61,9 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    join = Join(middleware, config)
+    protocol = Protocol()
+
+    join = Join(protocol, middleware, config)
     join.start()
 
 
