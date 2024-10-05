@@ -1,3 +1,4 @@
+import sys
 import csv
 import time
 import signal
@@ -16,8 +17,23 @@ class Client:
         self.middleware = middleware
         self.__create_queues()
         self.got_sigterm = False
+
+        self.__find_and_set_csv_field_size_limit()
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
+    @staticmethod
+    def __find_and_set_csv_field_size_limit():
+        '''
+        Taken from:
+        https://stackoverflow.com/questions/15063936/csv-error-field-larger-than-field-limit-131072
+        '''
+        max_int = 4294967296 # 2^32 - 1 -> Max size supported by our protocol
+        while True:
+            try:
+                csv.field_size_limit(max_int)  
+                break  
+            except OverflowError:
+                max_int = int(max_int / 10) 
 
     def __create_queues(self):
 
@@ -43,7 +59,6 @@ class Client:
 
 
     def __send_file(self, queue_name, file_path):
-
         with open(file_path, 'r') as file:
             reader = csv.reader(file)
             next(reader, None)  #skip header

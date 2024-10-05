@@ -4,4 +4,5 @@ data
 rabbit.sh
 .venv/
 testing_basic_publish
+run_client.sh
 

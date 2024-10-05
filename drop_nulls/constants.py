@@ -5,9 +5,9 @@ GAMES_APP_ID = 0
 GAMES_NAME = 1
 GAMES_RELEASE_DATE = 2
 PLATFORMS = {
-    'MAC': 3, 
-    'LINUX': 4, 
-    'WINDOWS': 5
+    'WINDOWS': 3, 
+    'MAC': 4, 
+    'LINUX': 5
 }
 GAMES_AVG_PLAYTIME_FOREVER = 6
 GAMES_GENRE = 7 

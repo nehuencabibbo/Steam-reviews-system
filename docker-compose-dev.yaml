@@ -37,7 +37,6 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-    restart: on-failure
     
   filter_columns:
     image: filter_columns:latest
