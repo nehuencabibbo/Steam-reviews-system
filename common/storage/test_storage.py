@@ -102,6 +102,47 @@ class TestStorage(unittest.TestCase):
         records = [r for r in storage.read_by_range(self._dir, self._range, 5)]
         self.assertEqual(len(records), 0)
 
+    def test_sum_to_record_creates_partition_file_if_not_found(self):
+        app_id = 5
+        record = f"{app_id},10"
+
+        storage.sum_to_record(self._dir, self._range, record)
+
+        partition_path = os.path.join(
+            self._dir, f"partition_{app_id // self._range}.csv"
+        )
+        self.assertTrue(os.path.exists(partition_path))
+
+        read_record = next(storage.read_by_range(self._dir, self._range, app_id))[0]
+        self.assertEqual(record, read_record)
+
+    def test_sum_to_record_appends_if_key_not_found_in_existing_partition(self):
+        app_id_1 = 5
+        app_id_2 = 6
+        record_1 = f"{app_id_1},1"
+        record_2 = f"{app_id_2},1"
+
+        storage.write_by_range(self._dir, self._range, record_1)
+        storage.sum_to_record(self._dir, self._range, record_2)
+
+        records = [
+            r[0] for r in storage.read_by_range(self._dir, self._range, app_id_1)
+        ]
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0], record_1)
+        self.assertEqual(records[1], record_2)
+
+    def test_sum_to_record_updates_existing_record(self):
+        app_id = 5
+        initial_record = f"{app_id},1"
+
+        storage.sum_to_record(self._dir, self._range, initial_record)
+        storage.sum_to_record(self._dir, self._range, initial_record)
+
+        records = [r[0] for r in storage.read_by_range(self._dir, self._range, app_id)]
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0], f"{app_id},2")
+
 
 if __name__ == "__main__":
     unittest.main()
