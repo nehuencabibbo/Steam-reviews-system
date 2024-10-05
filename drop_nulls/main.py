@@ -3,6 +3,7 @@ import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from middleware.middleware import Middleware
+from common.protocol.protocol import Protocol
 from drop_nulls import DropNulls
 
 from configparser import ConfigParser
@@ -60,11 +61,12 @@ def main():
     logging.debug("Logging configuration:")
     [logging.debug(f"{key}: {value}") for key, value in config.items()]
 
+    protocol = Protocol()
     middleware = Middleware(config["RABBIT_IP"])
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    drop_nulls = DropNulls(middleware, config)
+    drop_nulls = DropNulls(protocol, middleware, config)
     drop_nulls.start()
 
 

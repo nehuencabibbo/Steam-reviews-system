@@ -3,6 +3,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import *
 from middleware.middleware import Middleware
+from common.protocol.protocol import Protocol
 import signal 
 import logging
 
@@ -11,7 +12,8 @@ REVIEWS_MESSAGE_TYPE = 'reviews'
 END_TRANMISSION_MESSAGE = 'END' 
 
 class FilterColumns(): 
-    def __init__(self, middleware: Middleware, config: Dict[str, Union[str, int]]):
+    def __init__(self, protocol: Protocol, middleware: Middleware, config: Dict[str, Union[str, int]]):
+        self._protocol = protocol
         self._middleware = middleware
         self._config = config
 
@@ -43,15 +45,15 @@ class FilterColumns():
         self._middleware.start_consuming()
 
     def __handle_message(self, delivery_tag: int, body: bytes, message_type: str, forwarding_queue_name: str):
-        body = body.decode('utf-8')
-        if body == END_TRANMISSION_MESSAGE:
+        body = self._protocol.decode(body)
+        body = [value.strip() for value in body]
+
+        if len(body) == 1 and body[0] == END_TRANMISSION_MESSAGE:
             self._middleware.publish(body, forwarding_queue_name, '')
             self._middleware.ack(delivery_tag)
 
             return
         
-        body = body.split(',')
-        body = [value.strip() for value in body]
         logging.debug(f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived {message_type}: {body}")
 
         columns_to_keep = []
@@ -64,7 +66,7 @@ class FilterColumns():
             raise Exception(f'[ERROR] Unkown message type {message_type}') 
 
         filtered_body = self.__filter_columns(columns_to_keep, body)
-        filtered_body = ','.join(filtered_body)
+        filtered_body = self._protocol.encode(filtered_body)
         logging.debug(f"[FILTER COLUMNS {self._config['NODE_ID']}] Sending {message_type}: {body}")
     
         self._middleware.publish(filtered_body, forwarding_queue_name, '')
@@ -72,6 +74,8 @@ class FilterColumns():
         self._middleware.ack(delivery_tag)
 
     def __filter_columns(self, columns_to_keep: List[int], data: List[str]):
+        print(columns_to_keep)
+        print(len(data))
         return [data[i] for i in columns_to_keep]
 
     def __signal_handler(self, sig, frame):

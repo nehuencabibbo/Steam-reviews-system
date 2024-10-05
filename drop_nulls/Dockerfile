@@ -5,6 +5,7 @@ RUN pip install pika
 COPY /drop_nulls /drop_nulls
 COPY /middleware /middleware
 COPY /utils /utils
+COPY /common /common
 
 WORKDIR /drop_nulls
 
