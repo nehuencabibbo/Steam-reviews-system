@@ -2,12 +2,14 @@ import signal
 import logging
 from common.middleware import *
 from common.storage.storage import *
+from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = 'END' 
 
 class Counter:
 
-    def __init__(self, config, middleware:Middleware):
+    def __init__(self, config, middleware:Middleware, protocol: Protocol):
+        self.protocol = protocol
         self.config = config
         self.middleware = middleware
         self.got_sigterm = False
@@ -31,16 +33,17 @@ class Counter:
     
     def handle_message(self, ch, method, properties, body):
 
-        msg = body.decode('utf-8').strip()
+        body = self.protocol.decode(body)
+        body = [value.strip() for value in body]
 
-        logging.info(f"GOT MSG: {msg}")
+        logging.info(f"GOT MSG: {body}")
 
-        if msg == "END":
+        if len(body) == 1 and body[0] == "END":
             self.send_results()
             self.middleware.ack(method.delivery_tag)
             return
 
-        field_to_count = msg.split(",")[0]
+        field_to_count = body[0]
         self.count(field_to_count)
 
         self.middleware.ack(method.delivery_tag)
@@ -53,10 +56,11 @@ class Counter:
             if self.got_sigterm:
                 return
 
-            msg = ",".join([key,str(value)])
-            self.middleware.publish(msg, queue_name=self.config["PUBLISH_QUEUE"])
+            encoded_msg = self.protocol.encode([key,str(value)])
+            self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
 
-        self.middleware.publish(END_TRANSMISSION_MESSAGE, queue_name=self.config["PUBLISH_QUEUE"])
+        encoded_msg = self.protocol.encode([END_TRANSMISSION_MESSAGE])
+        self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
     
     def count(self, field_to_count):
         # TODO: SAVE AND UPDATE ON STORAGE

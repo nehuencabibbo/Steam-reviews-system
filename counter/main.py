@@ -3,7 +3,7 @@ from counter import Counter
 from configparser import ConfigParser
 import logging
 from common.middleware import *
-
+from common.protocol.protocol import Protocol
 def get_config():
     config_params = {}
 
@@ -54,8 +54,9 @@ def main():
     
     broker_ip = config.pop("RABBIT_IP")
     middleware = Middleware(broker_ip)
+    protocol = Protocol()
     
-    counter = Counter(config, middleware)
+    counter = Counter(config, middleware, protocol)
     logging.info("RUNNING COUNTER")
     counter.run()
 
