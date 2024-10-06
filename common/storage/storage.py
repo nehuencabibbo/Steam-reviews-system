@@ -177,12 +177,59 @@ def read_top(dir: str, k: int):
             yield line
 
 
-#TODO: Implement shifting to sort the data when saving the batch
-def save_data_batch(dir:str, file_name:str, batch:list[list[str]]):
-    file_path = os.path.join(dir, file_name)
+def add_to_sorted_file(dir: str, record: str):
+    #Add record to the file while sorting the data ascending
+
+    _, record_value = record.split(",", maxsplit=1)
+    new_record_value = int(record_value)
+
+    file_path = os.path.join(dir, f"sorted_file.csv")
     os.makedirs(dir, exist_ok=True)
 
-    with open(file_path, "a+", newline="") as f:
-        writer = csv.writer(f)
-        for row in batch:
-            writer.writerow(row)
+    if not os.path.exists(file_path):
+        with open(file_path, "w") as f:
+            writer = csv.writer(f)
+            writer.writerow([record])
+        return
+
+    temp_file = f"temp_sorted.csv"
+    new_record_appended = False
+    with open(file_path, mode="r") as infile, open(temp_file, mode="w", newline="") as outfile:
+        reader = csv.reader(infile)
+        writer = csv.writer(outfile)
+
+        # Itearte over elements of the file
+        # It will sort the data while reading the file
+        for line in reader:
+
+            read_value = int(line[0].split(",", maxsplit=1)[1])
+
+            if new_record_value > read_value:
+                writer.writerow(line)
+
+                continue
+            
+            logging.debug(f"Shifting new value: {record} with {line[0]}")
+            writer.writerow([record])
+            writer.writerow(line)
+            new_record_appended = True
+
+        if not new_record_appended:
+            writer.writerow([record])
+
+    os.makedirs(dir, exist_ok=True)
+    os.replace(temp_file, file_path)
+
+def read_sorted_file(dir:str):
+
+    file_path = os.path.join(dir, "sorted_file.csv")
+    os.makedirs(dir, exist_ok=True)
+
+    if not os.path.exists(file_path):
+        return []  # No records
+
+    with open(file_path, "r") as f:
+        reader = csv.reader(f)
+        for line in reader:
+            yield line
+

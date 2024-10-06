@@ -262,5 +262,37 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(top_after_add, expected_top)
 
 
+    def test_add_to_sorted_file_creates_file(self):
+        record = "5,10"
+        top_path = os.path.join(self._dir, f"sorted_file.csv")
+
+        storage.add_to_sorted_file(self._dir, record)
+        self.assertTrue(os.path.exists(top_path))
+
+    def test_add_to_sorted_file(self):
+        record = "5,10"
+
+        storage.add_to_sorted_file(self._dir, record)
+
+        reader = storage.read_sorted_file(self._dir)
+        read_records = [row[0] for row in reader]
+
+        self.assertEqual(len(read_records), 1)
+        self.assertEqual(read_records[0], record)
+
+    def test_add_to_sorted_file_with_multiple_records(self):
+        records = ["5,10", "5,50", "5,20"]
+
+        for record in records:
+            storage.add_to_sorted_file(self._dir, record)
+
+        reader = storage.read_sorted_file(self._dir)
+        read_records = [row[0] for row in reader]
+
+        self.assertEqual(len(read_records), 3)
+        self.assertEqual(read_records[0], records[0])
+        self.assertEqual(read_records[2], records[1])
+        self.assertEqual(read_records[1], records[2])
+
 if __name__ == "__main__":
     unittest.main()
