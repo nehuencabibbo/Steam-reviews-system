@@ -176,6 +176,24 @@ def read_top(dir: str, k: int):
         for line in reader:
             yield line
 
+def read_all_files(dir: str):
+
+    if not os.path.exists(dir):
+        return []  # No partitions on this dir.
+
+    file_name_prefix = f"partition_"
+
+    for filename in os.listdir(dir):
+        if not file_name_prefix in filename:
+            continue 
+
+        file_path = os.path.join(dir, filename)
+
+        with open(file_path, "r") as f:
+            reader = csv.reader(f)
+            for line in reader:
+                yield line
+
 
 def add_to_sorted_file(dir: str, record: str):
     #TODO: add parameter for ascending or descending order. Current order is ascending order
