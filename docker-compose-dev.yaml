@@ -28,7 +28,7 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: on-failure
-    
+  # ---------------------------------------- Query 1 ---------------------------------------------
   filter_columns:
     image: filter_columns:latest
     container_name: filter_columns
@@ -68,6 +68,7 @@ services:
     networks:
       - net
     restart: on-failure
+  # ---------------------------------------- Query 2 ---------------------------------------------
 
   q2_top_k:
       image: top_k:latest
@@ -78,6 +79,7 @@ services:
       environment:
         - INPUT_TOP_K_QUEUE_NAME=1_q2_indie_games_from_last_decade
         - OUTPUT_TOP_K_QUEUE_NAME=Q2
+        - K=10
       networks:
         - net
       restart: on-failure
@@ -119,6 +121,7 @@ services:
     networks:
       - net
     restart: on-failure
+  # ---------------------------------------- Query 3 ---------------------------------------------
 
   q3_filter_indie_games:
     image: filter_by_column_value:latest
@@ -167,6 +170,7 @@ services:
     environment:
       - INPUT_TOP_K_QUEUE_NAME=1_q3_join_by_app_id_result
       - OUTPUT_TOP_K_QUEUE_NAME=Q3
+      - K=5
     networks:
       - net
     restart: on-failure
@@ -195,6 +199,111 @@ services:
       - INPUT_GAMES_QUEUE_NAME=1_q3_indie_games
       - INPUT_REVIEWS_QUEUE_NAME=q3_positive_review_count
       - OUTPUT_QUEUE_NAME=1_q3_join_by_app_id_result
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+  # ---------------------------------------- Query 4 ---------------------------------------------
+  q4_filter_shooter_games:
+    image: filter_by_column_value:latest
+    container_name: q4_filter_action_games
+    environment:
+      - RECIVING_QUEUE_NAME=q4_games
+      - FORWARDING_QUEUE_NAME=q4_shooter_games
+      - AMOUNT_OF_FORWARDING_QUEUES=1
+      - LOGGING_LEVEL=DEBUG
+      - COLUMN_NUMBER_TO_USE=2 # Genre
+      - VALUE_TO_FILTER_BY=action
+      - CRITERIA=CONTAINS
+      - COLUMNS_TO_KEEP=0,1 # app_id, name
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  q4_filter_positive:
+    image: filter_by_column_value:latest
+    container_name: q4_filter_positive
+    environment:
+      - RECIVING_QUEUE_NAME=q4_reviews
+      - FORWARDING_QUEUE_NAME=q4_positive_reviews
+      - AMOUNT_OF_FORWARDING_QUEUES=1
+      - LOGGING_LEVEL=DEBUG
+      - COLUMN_NUMBER_TO_USE=2 # review_score
+      - VALUE_TO_FILTER_BY=1.0 # positive review
+      - CRITERIA=EQUAL
+      - COLUMNS_TO_KEEP=0,1,2 # app_id, review_score, review
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  q4_filter_by_english:
+    image: filter_by_column_value:latest
+    container_name: q4_filter_by_english
+    environment:
+      - RECIVING_QUEUE_NAME=1_q4_positive_reviews
+      - FORWARDING_QUEUE_NAME=q4_english_reviews
+      - AMOUNT_OF_FORWARDING_QUEUES=1
+      - LOGGING_LEVEL=DEBUG
+      - COLUMN_NUMBER_TO_USE=2 # review
+      - VALUE_TO_FILTER_BY=EN # english
+      - CRITERIA=LANGUAGE
+      - COLUMNS_TO_KEEP=0,1 # app_id, review_score
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+    
+  q4_counter:
+    container_name: q4_counter
+    image: counter:latest
+    entrypoint: python3 /main.py
+    environment:
+      - NODE_ID=1
+      - CONSUME_QUEUE_SUFIX=q4_english_reviews
+      - PUBLISH_QUEUE=q4_english_review_count
+    networks:
+      - net 
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  q4_filter_more_than_5000:
+    image: filter_by_column_value:latest
+    container_name: q4_filter_more_than_5000
+    environment:
+      - RECIVING_QUEUE_NAME=q4_english_review_count
+      - FORWARDING_QUEUE_NAME=q4_filter_more_than_5000_reviews
+      - AMOUNT_OF_FORWARDING_QUEUES=1
+      - LOGGING_LEVEL=DEBUG
+      - COLUMN_NUMBER_TO_USE=1 # positive_review_count
+      - VALUE_TO_FILTER_BY=5000  
+      - CRITERIA=GREATER_THAN
+      - COLUMNS_TO_KEEP=0,1 # app_id, positive_review_count
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  q4_join:
+    container_name: q4_join
+    image: join:latest
+    networks:
+      - net 
+    environment:
+      - INPUT_GAMES_QUEUE_NAME=1_q4_shooter_games
+      - INPUT_REVIEWS_QUEUE_NAME=1_q4_filter_more_than_5000_reviews
+      - OUTPUT_QUEUE_NAME=Q4
     depends_on:
       rabbitmq:
         condition: service_healthy
