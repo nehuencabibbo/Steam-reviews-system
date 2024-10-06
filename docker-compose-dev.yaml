@@ -16,16 +16,6 @@ services:
       timeout: 10s
       retries: 5
 
-  join:
-    container_name: join
-    image: join:latest
-    networks:
-      - net 
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: on-failure
-
   client1:
     container_name: client1
     image: client:latest
@@ -51,8 +41,8 @@ services:
       - net
     restart: on-failure
 
-  counter1:
-    container_name: counter1
+  q1_counter:
+    container_name: q1_counter
     image: counter:latest
     entrypoint: python3 /main.py
     environment:
@@ -79,12 +69,15 @@ services:
       - net
     restart: on-failure
 
-  top_k:
+  q2_top_k:
       image: top_k:latest
-      container_name: top_k
+      container_name: q2_top_k
       depends_on:
         rabbitmq:
           condition: service_healthy
+      environment:
+        - INPUT_TOP_K_QUEUE_NAME=1_q2_indie_games_from_last_decade
+        - OUTPUT_TOP_K_QUEUE_NAME=Q2
       networks:
         - net
       restart: on-failure
@@ -97,10 +90,10 @@ services:
       - FORWARDING_QUEUE_NAME=q2_indie_games
       - AMOUNT_OF_FORWARDING_QUEUES=1
       - LOGGING_LEVEL=DEBUG
-      - COLUMN_NUMBER_TO_USE=4
+      - COLUMN_NUMBER_TO_USE=4 # genre
       - VALUE_TO_FILTER_BY=indie
       - CRITERIA=CONTAINS
-      - COLUMNS_TO_KEEP=0,1,2,3
+      - COLUMNS_TO_KEEP=0,1,2,3 # app_id, name, release_date, avg_forever
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -116,10 +109,10 @@ services:
       - FORWARDING_QUEUE_NAME=q2_indie_games_from_last_decade
       - AMOUNT_OF_FORWARDING_QUEUES=1
       - LOGGING_LEVEL=DEBUG
-      - COLUMN_NUMBER_TO_USE=2
+      - COLUMN_NUMBER_TO_USE=2 # release date
       - VALUE_TO_FILTER_BY=201
       - CRITERIA=CONTAINS
-      - COLUMNS_TO_KEEP=1,3
+      - COLUMNS_TO_KEEP=1,3 # name, avg_forever
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -127,24 +120,85 @@ services:
       - net
     restart: on-failure
 
-  # q3_filter_indie_games:
-  #   image: filter_by_column_value:latest
-  #   container_name: q2_filter_indie_games
-  #   environment:
-  #     - RECIVING_QUEUE_NAME=q2_games
-  #     - FORWARDING_QUEUE_NAME=q2_indie_games
-  #     - AMOUNT_OF_FORWARDING_QUEUES=1
-  #     - LOGGING_LEVEL=DEBUG
-  #     - COLUMN_NUMBER_TO_USE=4
-  #     - VALUE_TO_FILTER_BY=indie
-  #     - CRITERIA=CONTAINS
-  #     - COLUMNS_TO_KEEP=0,1,2,3
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   networks:
-  #     - net
-  #   restart: on-failure
+  q3_filter_indie_games:
+    image: filter_by_column_value:latest
+    container_name: q3_filter_indie_games
+    environment:
+      - RECIVING_QUEUE_NAME=q3_games
+      - FORWARDING_QUEUE_NAME=q3_indie_games
+      - AMOUNT_OF_FORWARDING_QUEUES=1
+      - LOGGING_LEVEL=DEBUG
+      - COLUMN_NUMBER_TO_USE=2 # Genre
+      - VALUE_TO_FILTER_BY=indie
+      - CRITERIA=CONTAINS
+      - COLUMNS_TO_KEEP=0,1 # app_id, name
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  q3_filter_positive:
+    image: filter_by_column_value:latest
+    container_name: q3_filter_positive
+    environment:
+      - RECIVING_QUEUE_NAME=q3_reviews
+      - FORWARDING_QUEUE_NAME=q3_positive_reviews
+      - AMOUNT_OF_FORWARDING_QUEUES=1
+      - LOGGING_LEVEL=DEBUG
+      - COLUMN_NUMBER_TO_USE=1 # review_score
+      - VALUE_TO_FILTER_BY=1.0 # positive review
+      - CRITERIA=EQUAL
+      - COLUMNS_TO_KEEP=0 # app_id
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  q3_top_k:
+    image: top_k:latest
+    container_name: q3_top_k
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - INPUT_TOP_K_QUEUE_NAME=1_q3_join_by_app_id_result
+      - OUTPUT_TOP_K_QUEUE_NAME=Q3
+    networks:
+      - net
+    restart: on-failure
+
+  q3_counter:
+    container_name: q3_counter
+    image: counter:latest
+    entrypoint: python3 /main.py
+    environment:
+      - NODE_ID=1
+      - CONSUME_QUEUE_SUFIX=q3_positive_reviews
+      - PUBLISH_QUEUE=q3_positive_review_count
+    networks:
+      - net 
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  q3_join:
+    container_name: q3_join
+    image: join:latest
+    networks:
+      - net 
+    environment:
+      - INPUT_GAMES_QUEUE_NAME=1_q3_indie_games
+      - INPUT_REVIEWS_QUEUE_NAME=1_q3_positive_reviews
+      - OUTPUT_QUEUE_NAME=1_q3_join_by_app_id_result
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
 
 volumes:
   rabbitmq_data:

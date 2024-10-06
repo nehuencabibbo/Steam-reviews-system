@@ -100,6 +100,7 @@ class Join:
             record_app_id, record_info = record[0].split(",", maxsplit=1)
             if app_id == int(record_app_id):
                 # Get rid of the app_id from the review and append it to the original game record
+                logging.debug(message)
                 joined_message = record_info + "," + message.split(",", maxsplit=1)[1]
 
                 encoded_message = self.__protocol.encode([joined_message])
