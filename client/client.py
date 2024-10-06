@@ -50,7 +50,7 @@ class Client:
     def run(self):
 
         self.__send_file(self.config["GAMES_QUEUE"], self.config["GAME_FILE_PATH"])
-        # self.__send_file(self.config["REVIEWS_QUEUE"], self.config["REVIEWS_FILE_PATH"])
+        self.__send_file(self.config["REVIEWS_QUEUE"], self.config["REVIEWS_FILE_PATH"])
 
         self.__get_results()
 

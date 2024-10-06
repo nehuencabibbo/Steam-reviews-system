@@ -40,14 +40,12 @@ class Join:
         self.__middleware.start_consuming()
 
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
-        logging.debug(f"[INPUT GAMES] received: {body}")
+        # logging.debug(f"[INPUT GAMES] received: {body}")
 
         # body = body.decode("utf-8").split(",")
         body = self.__protocol.decode(body)
         body = [value.strip() for value in body]
-        logging.debug(
-            f"body: {body}",
-        )
+        logging.debug(f"Recived game: {body}")
 
         if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of games received")
@@ -78,12 +76,13 @@ class Join:
     def __reviews_callback(
         self, delivery_tag, body, message_type, forwarding_queue_name
     ):
-        logging.debug(f"[INPUT REVIEWS] received: {body}")
+        # logging.debug(f"[INPUT REVIEWS] received: {body}")
 
         # message = body.decode("utf-8")
-        message = self.__protocol.decode(body)[0]
+        body = self.__protocol.decode(body)
 
-        body = [value.strip() for value in message.split(",")]
+        body = [value.strip() for value in body]
+        logging.debug(f"Recived review: {body}")
 
         if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of reviews received")
@@ -100,10 +99,11 @@ class Join:
         for record in read_by_range(
             "tmp/", int(self.__config["PARTITION_RANGE"]), app_id
         ):
-            record_app_id = int(record[0].split(",", maxsplit=1)[0])
-            if app_id == record_app_id:
+            record_app_id, record_info = record[0].split(",", maxsplit=1)
+            if app_id == int(record_app_id):
                 # Get rid of the app_id from the review and append it to the original game record
-                joined_message = record[0] + "," + message.split(",", maxsplit=1)[1]
+                joined_message = record_info + "," + body[1]
+
                 encoded_message = self.__protocol.encode([joined_message])
                 self.__middleware.publish(encoded_message, forwarding_queue_name, "")
 

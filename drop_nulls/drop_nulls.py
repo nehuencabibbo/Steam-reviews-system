@@ -92,10 +92,11 @@ class DropNulls():
                 encoded_message = self._protocol.encode([platform])
                 self._middleware.publish(encoded_message, f"{node_id}_{self._config['Q1_PLATFORM']}")
         
-        # Q2 Games: name, release date, genre, avg playtime forever
+        # Q2 Games: app_id, name, release date, genre, avg playtime forever
         encoded_message = self._protocol.encode([
             body[GAMES_APP_ID],
             body[GAMES_NAME],
+            body[GAMES_RELEASE_DATE],
             body[GAMES_AVG_PLAYTIME_FOREVER],
             body[GAMES_GENRE]
         ])
@@ -103,8 +104,8 @@ class DropNulls():
 
         # Q3, Q4, Q5 Games: app_id, name, genre
         encoded_message = self._protocol.encode([
+            body[GAMES_APP_ID],
             body[GAMES_NAME],
-            body[GAMES_RELEASE_DATE],
             body[GAMES_GENRE]
         ])
         for i in range(3, 6):
@@ -129,8 +130,8 @@ class DropNulls():
         # Q3, Q5 Reviews: app_id, review_score
         for i in ['3', '5']: 
             encoded_message = self._protocol.encode([
-                {body[REVIEW_APP_ID]},
-                {body[REVIEW_SCORE]}
+                body[REVIEW_APP_ID],
+                body[REVIEW_SCORE]
             ])
             self._middleware.publish(encoded_message, self._config[f"Q{i}_REVIEWS"])
 
