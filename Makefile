@@ -9,6 +9,7 @@ docker-image:
 	docker build -f ./drop_nulls/Dockerfile -t "drop_nulls:latest" .
 	docker build -f ./counter/Dockerfile -t "counter:latest" .
 	docker build -f ./top_k/Dockerfile -t "top_k:latest" .
+	docker build -f ./filter_by_column_value/Dockerfile -t "filter_by_column_value:latest" .
 .PHONY: docker-image
 
 docker-run: docker-image

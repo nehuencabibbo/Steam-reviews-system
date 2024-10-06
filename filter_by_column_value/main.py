@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
-from filter_by_column_value.filter_by_column_value import FilterColumnByValue
+from filter_by_column_value import FilterColumnByValue
 
 from configparser import ConfigParser
 import logging
@@ -25,6 +25,10 @@ def get_config():
         config_params["VALUE_TO_FILTER_BY"] = os.getenv("VALUE_TO_FILTER_BY", config["DEFAULT"]["VALUE_TO_FILTER_BY"])
         config_params["CRITERIA"] = os.getenv("CRITERIA", config["DEFAULT"]["CRITERIA"])
 
+        columns_to_keep = os.getenv("COLUMNS_TO_KEEP", config["DEFAULT"]["COLUMNS_TO_KEEP"]).split(',')
+        columns_to_keep = [int(column) for column in columns_to_keep]
+        config_params["COLUMNS_TO_KEEP"] = columns_to_keep
+        
         # Reciving queues 
         config_params["RECIVING_QUEUE_NAME"] = os.getenv("RECIVING_QUEUE_NAME", config["DEFAULT"]["RECIVING_QUEUE_NAME"])
 

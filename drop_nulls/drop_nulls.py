@@ -92,10 +92,11 @@ class DropNulls():
                 encoded_message = self._protocol.encode([platform])
                 self._middleware.publish(encoded_message, f"{node_id}_{self._config['Q1_PLATFORM']}")
         
-        # Q2 Games: name, release date, genre, avg playtime forever
+        # Q2 Games: app_id, name, release date, genre, avg playtime forever
         encoded_message = self._protocol.encode([
             body[GAMES_APP_ID],
             body[GAMES_NAME],
+            body[GAMES_RELEASE_DATE],
             body[GAMES_AVG_PLAYTIME_FOREVER],
             body[GAMES_GENRE]
         ])

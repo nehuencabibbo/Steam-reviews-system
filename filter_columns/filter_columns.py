@@ -66,7 +66,7 @@ class FilterColumns:
         body = [value.strip() for value in body]
 
         if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
-
+            logging.debug("Recived END")
             encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
             self._middleware.publish(encoded_message, forwarding_queue_name, "")
             self._middleware.ack(delivery_tag)
@@ -97,8 +97,6 @@ class FilterColumns:
         self._middleware.ack(delivery_tag)
 
     def __filter_columns(self, columns_to_keep: List[int], data: List[str]):
-        print(columns_to_keep)
-        print(len(data))
         return [data[i] for i in columns_to_keep]
 
     def __signal_handler(self, sig, frame):

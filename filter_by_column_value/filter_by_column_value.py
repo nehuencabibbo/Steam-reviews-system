@@ -41,7 +41,7 @@ class FilterColumnByValue():
 
     def __handle_end_transmission(self):
         encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-        if self._conifg["AMOUNT_OF_FORWARDING_QUEUES"] == 1:
+        if self._config["AMOUNT_OF_FORWARDING_QUEUES"] == 1:
             self._middleware.publish(
                 encoded_message, 
                 self._config["FORWARDING_QUEUE_NAME"]
@@ -56,15 +56,17 @@ class FilterColumnByValue():
     def __handle_message(self, delivery_tag: int, body: bytes):
         body = self._protocol.decode(body)
         body = [value.strip() for value in body]
+        logging.debug(f"Recived message: {body}")
         # Handle END message 
         if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
+            logging.debug("Recived END")
             self.__handle_end_transmission()
 
             self._middleware.ack(delivery_tag)
 
             return
         
-        self.__filter_according_to_criteria()
+        self.__filter_according_to_criteria(body)
 
         self._middleware.ack(delivery_tag)
 
@@ -81,7 +83,7 @@ class FilterColumnByValue():
                 self.__send_message(body)
 
         elif criteria == CONTAINS_CRITERIA_KEYWORD: 
-            if column_to_use.contains(self._config["VALUE_TO_FILTER_BY"]):
+            if self._config["VALUE_TO_FILTER_BY"] in column_to_use.lower():
                 self.__send_message(body)
 
         elif criteria == LANGUAGE_CRITERIA_KEYWORD:
@@ -90,11 +92,23 @@ class FilterColumnByValue():
                 self.__send_message(body)
         else:
             raise Exception(f'Unkown cirteria: {criteria}')
+        
+    def __filter_columns(self, columns_to_keep: List[int], data: List[str]):
+        # No filter needed
+        if len(columns_to_keep) == 1 and columns_to_keep[0] == -1:
+            return data
+        
+        return [data[i] for i in columns_to_keep]
 
     def __send_message(self, message: List[str]):
         '''
         Do not use to send END message as it is handled differently.
         '''
+        message = self.__filter_columns(
+            self._config["COLUMNS_TO_KEEP"],
+            message
+        )
+        logging.debug(f"Sending message: {message}")
         encoded_message = self._protocol.encode(message)
         if self._config["AMOUNT_OF_FORWARDING_QUEUES"] == 1:
             self._middleware.publish(
