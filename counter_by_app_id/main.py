@@ -1,5 +1,5 @@
 import os
-from counter_by_appid import CounterByAppId
+from counter_by_app_id import CounterByAppId
 from configparser import ConfigParser
 import logging
 from common.middleware.middleware import Middleware
