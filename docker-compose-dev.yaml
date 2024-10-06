@@ -193,7 +193,7 @@ services:
       - net 
     environment:
       - INPUT_GAMES_QUEUE_NAME=1_q3_indie_games
-      - INPUT_REVIEWS_QUEUE_NAME=1_q3_positive_reviews
+      - INPUT_REVIEWS_QUEUE_NAME=q3_positive_review_count
       - OUTPUT_QUEUE_NAME=1_q3_join_by_app_id_result
     depends_on:
       rabbitmq:

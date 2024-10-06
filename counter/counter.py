@@ -56,6 +56,7 @@ class Counter:
             if self.got_sigterm:
                 return
 
+            logging.debug(f"Sending: {[key,str(value)]}")
             encoded_msg = self.protocol.encode([key,str(value)])
             self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
 
