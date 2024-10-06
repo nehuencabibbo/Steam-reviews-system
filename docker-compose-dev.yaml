@@ -112,7 +112,7 @@ services:
     image: filter_by_column_value:latest
     container_name: q2_filter_indie_games_from_last_decade
     environment:
-      - RECIVING_QUEUE_NAME=q2_indie_games
+      - RECIVING_QUEUE_NAME=1_q2_indie_games
       - FORWARDING_QUEUE_NAME=q2_indie_games_from_last_decade
       - AMOUNT_OF_FORWARDING_QUEUES=1
       - LOGGING_LEVEL=DEBUG
@@ -126,6 +126,25 @@ services:
     networks:
       - net
     restart: on-failure
+
+  # q3_filter_indie_games:
+  #   image: filter_by_column_value:latest
+  #   container_name: q2_filter_indie_games
+  #   environment:
+  #     - RECIVING_QUEUE_NAME=q2_games
+  #     - FORWARDING_QUEUE_NAME=q2_indie_games
+  #     - AMOUNT_OF_FORWARDING_QUEUES=1
+  #     - LOGGING_LEVEL=DEBUG
+  #     - COLUMN_NUMBER_TO_USE=4
+  #     - VALUE_TO_FILTER_BY=indie
+  #     - CRITERIA=CONTAINS
+  #     - COLUMNS_TO_KEEP=0,1,2,3
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   networks:
+  #     - net
+  #   restart: on-failure
 
 volumes:
   rabbitmq_data:

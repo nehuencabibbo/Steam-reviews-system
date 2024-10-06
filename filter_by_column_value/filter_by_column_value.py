@@ -25,11 +25,8 @@ class FilterColumnByValue():
         self._middleware.create_queue(self._config['RECIVING_QUEUE_NAME'])
         
         # Forwarding queues
-        if self._config["AMOUNT_OF_FORWARDING_QUEUES"] == 1:
-            self._middleware.create_queue(self._config['FORWARDING_QUEUE_NAME'])  
-        else: 
-            for i in range(1, self._config["AMOUNT_OF_FORWARDING_QUEUES"] + 1):
-                self._middleware.create_queue(f"{i}_{self._config['FORWARDING_QUEUE_NAME']}")  
+        for i in range(1, self._config["AMOUNT_OF_FORWARDING_QUEUES"] + 1):
+            self._middleware.create_queue(f"{i}_{self._config['FORWARDING_QUEUE_NAME']}")  
 
         # Attaching callback functions 
         callback = self._middleware.__class__.generate_callback(
@@ -41,17 +38,11 @@ class FilterColumnByValue():
 
     def __handle_end_transmission(self):
         encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-        if self._config["AMOUNT_OF_FORWARDING_QUEUES"] == 1:
+        for i in range(1, self._config["AMOUNT_OF_FORWARDING_QUEUES"] + 1):
             self._middleware.publish(
                 encoded_message, 
-                self._config["FORWARDING_QUEUE_NAME"]
+                f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
             )
-        else: 
-            for i in range(1, self._config["AMOUNT_OF_FORWARDING_QUEUES"] + 1):
-                self._middleware.publish(
-                    encoded_message, 
-                    f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
-                )
 
     def __handle_message(self, delivery_tag: int, body: bytes):
         body = self._protocol.decode(body)
@@ -72,23 +63,24 @@ class FilterColumnByValue():
 
     def __filter_according_to_criteria(self, body: List[str]):
         column_to_use = body[self._config["COLUMN_NUMBER_TO_USE"]]
+        value_to_filter_by = self._config["VALUE_TO_FILTER_BY"]
         criteria = self._config["CRITERIA"]
 
         if criteria == EQUAL_CRITERIA_KEYWORD:
-            if column_to_use == self._config["VALUE_TO_FILTER_BY"]:
+            if column_to_use == value_to_filter_by:
                 self.__send_message(body)
 
         elif criteria == GRATER_THAN_CRITERIA_KEYWORD:
-            if int(column_to_use) > self._config["VALUE_TO_FILTER_BY"]:
+            if int(column_to_use) > value_to_filter_by:
                 self.__send_message(body)
 
         elif criteria == CONTAINS_CRITERIA_KEYWORD: 
-            if self._config["VALUE_TO_FILTER_BY"] in column_to_use.lower():
+            if value_to_filter_by in column_to_use.lower():
                 self.__send_message(body)
 
         elif criteria == LANGUAGE_CRITERIA_KEYWORD:
             detected_language, _ = langid.classify(column_to_use)
-            if detected_language == self._config["VALUE_TO_FILTER_BY"].lower():
+            if detected_language == value_to_filter_by.lower():
                 self.__send_message(body)
         else:
             raise Exception(f'Unkown cirteria: {criteria}')
@@ -104,29 +96,24 @@ class FilterColumnByValue():
         '''
         Do not use to send END message as it is handled differently.
         '''
+        node_id = node_id_to_send_to(
+            '1', 
+            message[APP_ID], 
+            self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+        )
+        
         message = self.__filter_columns(
             self._config["COLUMNS_TO_KEEP"],
             message
         )
         logging.debug(f"Sending message: {message}")
         encoded_message = self._protocol.encode(message)
-        if self._config["AMOUNT_OF_FORWARDING_QUEUES"] == 1:
-            self._middleware.publish(
-                encoded_message, 
-                self._config["FORWARDING_QUEUE_NAME"]
-            )
-        else: 
-            # TODO: Change with app id when available 
-            node_id = node_id_to_send_to(
-                '1', 
-                message[APP_ID], 
-                self._config["AMOUNT_OF_FORWARDING_QUEUES"]
-            )
-        
-            self._middleware.publish(
-                encoded_message, 
-                f"{node_id}_{self._config['FORWARDING_QUEUE_NAME']}"
-            )
+        # TODO: Change with app id when available 
+    
+        self._middleware.publish(
+            encoded_message, 
+            f"{node_id}_{self._config['FORWARDING_QUEUE_NAME']}"
+        )
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
