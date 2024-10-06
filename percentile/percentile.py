@@ -17,7 +17,7 @@ class Percentile:
         self.config = config
         self.middleware = middleware
         self.got_sigterm = False
-        self.tmp_list = []
+        self.tmp_record_list = []
         self.amount_msg_received = 0
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -42,11 +42,12 @@ class Percentile:
 
         if len(body) == 1 and body[0] == "END":
             self.persist_data() #persist data that was not saved
-            self.send_results()
+            self.handle_end_message()
             self.middleware.ack(method.delivery_tag)
             return
         
-        self.tmp_list.append(body)
+        body = ",".join(body)
+        self.tmp_record_list.append(body)
 
         self.amount_msg_received += 1
         if (self.amount_msg_received % self.config["SAVE_AFTER_MESSAGES"]) == 0:
@@ -57,46 +58,44 @@ class Percentile:
 
     def persist_data(self):
 
-        storage.save_data_batch(self.config["STORAGE_DIR"], FILE_NAME, self.tmp_list)
-        self.tmp_list = [] 
+        for record in  self.tmp_record_list:
+            storage.add_to_sorted_file(self.config["STORAGE_DIR"], record)
+        self.tmp_record_list = [] 
 
-    def send_results(self):
+    def handle_end_message(self):
         
-        k = (self.config["PERCENTILE"] / 100) * self.amount_msg_received
-        
-        k = round(k)
-        if k == 0:
-            encoded_message = self.protocol.encode(END_TRANSMISSION_MESSAGE)
-            self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
-            return
+        rank = (self.config["PERCENTILE"] / 100) * self.amount_msg_received
+        rank = round(rank) # instead of interpolating, round the number
 
-        self.amount_msg_received = 0
+        logging.debug(f"Ordinal rank is {rank}")
 
-        file_path = os.path.join(self.config["STORAGE_DIR"], FILE_NAME)
-        with open(file_path, 'r') as file:
-            reader = csv.reader(file)
-            for line in reader:
-                record = ','.join(line) 
-                storage.add_to_top(self.config["STORAGE_DIR"], record, k)
+        percentile = self.get_percentile()
 
-        #if percentile is x, i need the top (100-x)% of the apps
-        # read the file and use a max heap of k elements
-        # the top k, are the items in the asked percentile
-        
-        #TODO: replace top_k with saving sorted data
-        top_reader = storage.read_top(self.config["STORAGE_DIR"], k)
-        for line in top_reader:
-
-            message = line[0].split(",")
-            logging.debug(f"LEO LINEA: {message}")
-            encoded_message = self.protocol.encode(message)
-            self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
+        reader = storage.read_sorted_file(self.config["STORAGE_DIR"])
+        for row in reader:
+            record = row[0].split(",")
+            record_value = int(record[1])
+            if record_value >= percentile:
+                logging.debug(f"Sending: {record}")
+                encoded_message = self.protocol.encode(record)
+                self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
 
         encoded_message = self.protocol.encode(END_TRANSMISSION_MESSAGE)
         self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
 
         self.amount_msg_received = 0
 
+    def get_percentile(self):
+        rank = (self.config["PERCENTILE"] / 100) * self.amount_msg_received
+        rank = round(rank)
+
+        logging.debug(f"Ordinal rank is {rank}")
+
+        reader = storage.read_sorted_file(self.config["STORAGE_DIR"])
+        for i, row in enumerate(reader):
+            if i == rank:
+                _, value = row[0].split(",")
+                return int(value)
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")

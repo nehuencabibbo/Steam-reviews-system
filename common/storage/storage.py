@@ -178,7 +178,8 @@ def read_top(dir: str, k: int):
 
 
 def add_to_sorted_file(dir: str, record: str):
-    #Add record to the file while sorting the data ascending
+    #TODO: add parameter for ascending or descending order. Current order is ascending order
+    #TODO: batch processing
 
     _, record_value = record.split(",", maxsplit=1)
     new_record_value = int(record_value)
@@ -198,18 +199,13 @@ def add_to_sorted_file(dir: str, record: str):
         reader = csv.reader(infile)
         writer = csv.writer(outfile)
 
-        # Itearte over elements of the file
-        # It will sort the data while reading the file
         for line in reader:
-
             read_value = int(line[0].split(",", maxsplit=1)[1])
 
             if new_record_value > read_value:
                 writer.writerow(line)
-
                 continue
             
-            logging.debug(f"Shifting new value: {record} with {line[0]}")
             writer.writerow([record])
             writer.writerow(line)
             new_record_appended = True
