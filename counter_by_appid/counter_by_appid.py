@@ -7,7 +7,7 @@ from common.storage import storage
 
 END_TRANSMISSION_MESSAGE = 'END' 
 
-class Counter:
+class CounterByAppId:
 
     def __init__(self, config, middleware:Middleware, protocol: Protocol):
         self.protocol = protocol
