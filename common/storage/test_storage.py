@@ -261,6 +261,20 @@ class TestStorage(unittest.TestCase):
         ]
         self.assertEqual(top_after_add, expected_top)
 
+    def test_read_from_all_partitions(self):
+        app_id_1 = 5
+        app_id_2 = 10
+        original_record_1 = f"{app_id_1},test"
+        original_record_2 = f"{app_id_2},test"
+
+        storage.write_by_range(self._dir, self._range, original_record_1)
+        storage.write_by_range(self._dir, self._range, original_record_2)
+        records = [r for r in storage.read_all_files(self._dir)]
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0][0], original_record_2)
+        self.assertEqual(records[1][0], original_record_1)
+
 
 if __name__ == "__main__":
     unittest.main()

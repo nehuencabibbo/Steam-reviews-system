@@ -43,7 +43,7 @@ services:
 
   q1_counter:
     container_name: q1_counter
-    image: counter:latest
+    image: counter_by_platform:latest
     entrypoint: python3 /main.py
     environment:
       - NODE_ID=1
@@ -177,7 +177,7 @@ services:
 
   q3_counter:
     container_name: q3_counter
-    image: counter:latest
+    image: counter_by_app_id:latest
     entrypoint: python3 /main.py
     environment:
       - NODE_ID=1
