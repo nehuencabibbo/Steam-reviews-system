@@ -8,6 +8,7 @@ docker-image:
 	docker build -f ./filter_columns/Dockerfile -t "filter_columns:latest" .
 	docker build -f ./drop_nulls/Dockerfile -t "drop_nulls:latest" .
 	docker build -f ./counter/Dockerfile -t "counter:latest" .
+	docker build -f ./percentile/Dockerfile -t "percentile:latest" .
 .PHONY: docker-image
 
 docker-run: docker-image
