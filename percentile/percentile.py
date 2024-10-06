@@ -6,9 +6,9 @@ from common.protocol.protocol import Protocol
 
 import os
 import csv
-import heapq
 
 END_TRANSMISSION_MESSAGE = ['END'] 
+FILE_NAME = "percentile_data.csv"
 
 class Percentile:
 
@@ -46,8 +46,7 @@ class Percentile:
             self.middleware.ack(method.delivery_tag)
             return
         
-        record = ",".join(body)
-        self.tmp_list.append(record)
+        self.tmp_list.append(body)
 
         self.amount_msg_received += 1
         if (self.amount_msg_received % self.config["SAVE_AFTER_MESSAGES"]) == 0:
@@ -58,29 +57,45 @@ class Percentile:
 
     def persist_data(self):
 
-        for record in self.tmp_list:
-            storage.write_by_range( 
-                self.config["STORAGE_DIR"], 
-                self.config["RANGE_FOR_PARTITION"],
-                record)    
-            
-        self.tmp_list = []
+        storage.save_data_batch(self.config["STORAGE_DIR"], FILE_NAME, self.tmp_list)
+        self.tmp_list = [] 
 
     def send_results(self):
         
-        reader = storage.read_by_range(self.config["STORAGE_DIR"], 1, 0)
-        k = (100 - self.config["PERCENTIL"]) * self.amount_msg_received
-        #if percentile is 90, i need the top 10% of the app_ids
-        #read the file and use a max heap of k elements
-        # the top k, are the items in the asked percentile
+        k = (self.config["PERCENTILE"] / 100) * self.amount_msg_received
+        
+        k = round(k)
+        if k == 0:
+            encoded_message = self.protocol.encode(END_TRANSMISSION_MESSAGE)
+            self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
+            return
 
-        for line in reader:
-            logging.debug(f"LEO LINEA: {line}")
-            encoded_message = self.protocol.encode(line)
+        self.amount_msg_received = 0
+
+        file_path = os.path.join(self.config["STORAGE_DIR"], FILE_NAME)
+        with open(file_path, 'r') as file:
+            reader = csv.reader(file)
+            for line in reader:
+                record = ','.join(line) 
+                storage.add_to_top(self.config["STORAGE_DIR"], record, k)
+
+        #if percentile is x, i need the top (100-x)% of the apps
+        # read the file and use a max heap of k elements
+        # the top k, are the items in the asked percentile
+        
+        #TODO: replace top_k with saving sorted data
+        top_reader = storage.read_top(self.config["STORAGE_DIR"], k)
+        for line in top_reader:
+
+            message = line[0].split(",")
+            logging.debug(f"LEO LINEA: {message}")
+            encoded_message = self.protocol.encode(message)
             self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
 
         encoded_message = self.protocol.encode(END_TRANSMISSION_MESSAGE)
         self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
+
+        self.amount_msg_received = 0
 
 
     def __sigterm_handler(self, signal, frame):

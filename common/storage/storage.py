@@ -175,3 +175,14 @@ def read_top(dir: str, k: int):
         reader = csv.reader(f)
         for line in reader:
             yield line
+
+
+#TODO: Implement shifting to sort the data when saving the batch
+def save_data_batch(dir:str, file_name:str, batch:list[list[str]]):
+    file_path = os.path.join(dir, file_name)
+    os.makedirs(dir, exist_ok=True)
+
+    with open(file_path, "a+", newline="") as f:
+        writer = csv.writer(f)
+        for row in batch:
+            writer.writerow(row)

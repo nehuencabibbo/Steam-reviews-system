@@ -200,20 +200,20 @@ services:
         condition: service_healthy
     restart: on-failure
 
-  percentile:
-    container_name: percentile
-    image: percentile:latest
-    entrypoint: python3 /main.py
-    environment:
-      - NODE_ID=1
-      - CONSUME_QUEUE=percentile_queue
-      - PUBLISH_QUEUE=Q1
-    networks:
-      - net 
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: on-failure
+  # percentile:
+  #   container_name: percentile
+  #   image: percentile:latest
+  #   entrypoint: python3 /main.py
+  #   environment:
+  #     - NODE_ID=1
+  #     - CONSUME_QUEUE=percentile_queue
+  #     - PUBLISH_QUEUE=Q1
+  #   networks:
+  #     - net 
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   restart: on-failure
 
 volumes:
   rabbitmq_data:
