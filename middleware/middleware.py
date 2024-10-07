@@ -1,3 +1,4 @@
+import logging
 import pika
 
 
@@ -35,6 +36,12 @@ class Middleware:
     def shutdown(self):
         self._channel.stop_consuming()
         self.connection.close()
+
+    def broadcast(self, encoded_message, amount_of_nodes, queue_sufix):
+        for i in range(1, amount_of_nodes + 1):
+            queue = f"{i}_{queue_sufix}"
+            logging.info(f"Sent END to queue: {queue}")
+            self.publish(encoded_message, queue_name=queue, exchange_name="")
 
     # Callback should be a function that recives:
     # - delivery_tag: so that it can ack the corresponding message

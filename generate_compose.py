@@ -3,6 +3,9 @@ import yaml
 from typing import *
 
 
+Q2_FORWARD_NODES = 2
+
+
 def create_file(output, file_name):
     with open(file_name, "w") as output_file:
         yaml.safe_dump(output, output_file, sort_keys=False, default_flow_style=False)
@@ -34,7 +37,11 @@ def add_drop_nulls(output: Dict, num: int):
     output["services"][f"drop_columns{num}"] = {
         "image": "drop_nulls:latest",
         "container_name": f"drop_nulls{num}",
-        "environment": [f"NODE_ID={num}", "COUNT_BY_PLATFORM_NODES=1"],
+        "environment": [
+            f"NODE_ID={num}",
+            "COUNT_BY_PLATFORM_NODES=1",
+            f"Q2_FORWARD_NODES={Q2_FORWARD_NODES}",
+        ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
         "restart": "on-failure",
@@ -193,6 +200,17 @@ def add_client(output: Dict):
     }
 
 
+def generate_filters_by_value(
+    amount_of_filters: int,
+    **kwargs,
+):
+    input_queue_name = kwargs.pop("input_queue_name")
+    for i in range(1, amount_of_filters + 1):
+        actual_input_queue_name = f"{i}_{input_queue_name}"
+        print(actual_input_queue_name)
+        add_filter_by_value(**kwargs, input_queue_name=actual_input_queue_name, num=i)
+
+
 def generate_output():
     output = {}
 
@@ -223,20 +241,34 @@ def generate_output():
         k=10,
     )
 
-    add_filter_by_value(
-        output=output,
-        query="q2",
-        num=1,
-        filter_name="indie_games",
-        input_queue_name="q2_games",
-        output_queue_name="q2_indie_games",
-        amount_of_forwarding_queues=1,
-        logging_level="DEBUG",
-        column_number_to_use=4,  # genre
-        value_to_filter_by="indie",
-        criteria="CONTAINS",
-        columns_to_keep="0,1,2,3",  # app_id, name, release_date, avg_forever
-    )
+    q2_indie_filter_args = {
+        "output": output,
+        "query": "q2",
+        "filter_name": "indie_games",
+        "input_queue_name": "q2_games",
+        "output_queue_name": "q2_indie_games",
+        "amount_of_forwarding_queues": 1,
+        "logging_level": "DEBUG",
+        "column_number_to_use": 4,  # genre
+        "value_to_filter_by": "indie",
+        "criteria": "CONTAINS",
+        "columns_to_keep": "0,1,2,3",
+    }
+    generate_filters_by_value(2, **q2_indie_filter_args)
+    # add_filter_by_value(
+    #     output=output,
+    #     query="q2",
+    #     num=1,
+    #     filter_name="indie_games",
+    #     input_queue_name="q2_games",
+    #     output_queue_name="q2_indie_games",
+    #     amount_of_forwarding_queues=1,
+    #     logging_level="DEBUG",
+    #     column_number_to_use=4,  # genre
+    #     value_to_filter_by="indie",
+    #     criteria="CONTAINS",
+    #     columns_to_keep="0,1,2,3",  # app_id, name, release_date, avg_forever
+    # )
 
     add_filter_by_value(
         output=output,

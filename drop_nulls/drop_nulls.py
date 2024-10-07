@@ -63,19 +63,27 @@ class DropNulls:
 
     def __handle_games_end_transmission(self):
         # Q1
+        encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
         for platform in PLATFORMS:
             # TODO: Cambiar '1' por client id cuando haya
             node_id = node_id_to_send_to(
                 "1", platform, self._config["COUNT_BY_PLATFORM_NODES"]
             )
-            encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
             self._middleware.publish(
                 encoded_message, f"{node_id}_{self._config['Q1_PLATFORM']}"
             )
 
+        # Q2
+
+        self._middleware.broadcast(
+            encoded_message=encoded_message,
+            amount_of_nodes=self._config["Q2_FORWARD_NODES"],
+            queue_sufix=self._config["Q2_GAMES"],
+        )
+
         # Q2, Q3, Q4, Q5
-        for i in range(2, 5):
-            encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+        for i in range(3, 5):
+            # for i in range(2, 5):
             self._middleware.publish(encoded_message, self._config[f"Q{i}_GAMES"])
 
     def __handle_games(self, delivery_tag: int, body: bytes):
@@ -118,7 +126,13 @@ class DropNulls:
                 body[GAMES_GENRE],
             ]
         )
-        self._middleware.publish(encoded_message, self._config["Q2_GAMES"])
+        self.__dispatch_message_by_key(
+            encoded_message=encoded_message,
+            key=body[GAMES_APP_ID],
+            nodes=self._config["Q2_FORWARD_NODES"],
+            forwarding_queue_name=self._config["Q2_GAMES"],
+        )
+        # self._middleware.publish(encoded_message, self._config["Q2_GAMES"])
 
         # Q3, Q4, Q5 Games: app_id, name, genre
         encoded_message = self._protocol.encode(
@@ -158,6 +172,13 @@ class DropNulls:
         self._middleware.publish(encoded_message, self._config[f"Q4_REVIEWS"])
 
         self._middleware.ack(delivery_tag)
+
+    def __dispatch_message_by_key(
+        self, encoded_message, key, nodes, forwarding_queue_name
+    ):
+        node_id = node_id_to_send_to("1", key, int(nodes))
+        logging.debug(f"Dispatching message to node: {node_id}")
+        self._middleware.publish(encoded_message, f"{node_id}_{forwarding_queue_name}")
 
     def __signal_handler(self, sig, frame):
         logging.debug(

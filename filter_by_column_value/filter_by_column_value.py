@@ -104,18 +104,19 @@ class FilterColumnByValue:
         """
         Do not use to send END message as it is handled differently.
         """
-        node_id = node_id_to_send_to(
-            "1", message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
-        )
+        for i in range(1, self._config["AMOUNT_OF_FORWARDING_QUEUES"] + 1):
+            node_id = node_id_to_send_to(
+                str(i), message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+            )
 
-        message = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], message)
-        logging.debug(f"Sending message: {message}")
-        encoded_message = self._protocol.encode(message)
-        # TODO: Change with app id when available
+            message = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], message)
+            logging.debug(f"Sending message: {message}")
+            encoded_message = self._protocol.encode(message)
+            # TODO: Change with app id when available
 
-        self._middleware.publish(
-            encoded_message, f"{node_id}_{self._config['FORWARDING_QUEUE_NAME']}"
-        )
+            self._middleware.publish(
+                encoded_message, f"{node_id}_{self._config['FORWARDING_QUEUE_NAME']}"
+            )
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
