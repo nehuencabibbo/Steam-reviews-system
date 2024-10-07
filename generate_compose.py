@@ -3,6 +3,8 @@ import yaml
 from typing import *
 
 
+AMOUNT_OF_DROP_FILTER_COLUMNS = 1
+AMOUNT_OF_DROP_NULLS = 1
 Q2_FORWARD_NODES = 2
 Q2_AMOUNT_OF_INDIE_GAMES_FROM_LAST_DECADE_FILTERS = 2
 Q3_FORWARD_NODES = 2
@@ -31,7 +33,9 @@ def add_filter_columns(output: Dict, num: int):
     output["services"][f"filter_columns{num}"] = {
         "image": "filter_columns:latest",
         "container_name": f"filter_columns{num}",
-        "environment": [f"NODE_ID={num}"],
+        "environment": [
+            f"NODE_ID={num}",
+        ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
         "restart": "on-failure",
@@ -132,7 +136,7 @@ def add_filter_by_value(
         "image": "filter_by_column_value:latest",
         "container_name": f"{query}_{filter_name}{num}",
         "environment": [
-            f"RECIVING_QUEUE_NAME={input_queue_name}",
+            f"RECIVING_QUEUE_NAME=1_{input_queue_name}",
             f"FORWARDING_QUEUE_NAME={output_queue_name}",
             f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
             f"LOGGING_LEVEL={logging_level}",
@@ -214,7 +218,7 @@ def generate_filters_by_value(
 ):
     input_queue_name = kwargs.pop("input_queue_name")
     for i in range(1, amount_of_filters + 1):
-        actual_input_queue_name = f"{i}_{input_queue_name}"
+        actual_input_queue_name = f"{input_queue_name}"
         add_filter_by_value(**kwargs, input_queue_name=actual_input_queue_name, num=i)
 
 
@@ -226,8 +230,8 @@ def generate_output():
     output["services"] = {}
     add_rabbit(output)
     add_client(output)
-    generate_drop_nulls(output, 1)
-    generate_drop_columns(output, 1)
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS)
 
     # -------------------------------------------- Q1 -----------------------------------------
     add_counter_by_platform(
@@ -371,82 +375,82 @@ def generate_output():
 
     # -------------------------------------------- Q4 -----------------------------------------
 
-    add_filter_by_value(
-        output=output,
-        query="q4",
-        num=1,
-        filter_name="action_games",
-        input_queue_name="q4_games",
-        output_queue_name="q4_action_games",
-        amount_of_forwarding_queues=1,
-        logging_level="DEBUG",
-        column_number_to_use=2,  # genre
-        value_to_filter_by="action",
-        criteria="CONTAINS",
-        columns_to_keep="0,1",  # app_id, name
-    )
+    # add_filter_by_value(
+    #     output=output,
+    #     query="q4",
+    #     num=1,
+    #     filter_name="action_games",
+    #     input_queue_name="q4_games",
+    #     output_queue_name="q4_action_games",
+    #     amount_of_forwarding_queues=1,
+    #     logging_level="DEBUG",
+    #     column_number_to_use=2,  # genre
+    #     value_to_filter_by="action",
+    #     criteria="CONTAINS",
+    #     columns_to_keep="0,1",  # app_id, name
+    # )
 
-    add_filter_by_value(
-        output=output,
-        query="q4",
-        num=1,
-        filter_name="positive",
-        input_queue_name="q4_reviews",
-        output_queue_name="q4_positive_reviews",
-        amount_of_forwarding_queues=1,
-        logging_level="DEBUG",
-        column_number_to_use=2,  # review_score
-        value_to_filter_by=1.0,
-        criteria="EQUAL",
-        columns_to_keep="0,1,2",  # app_id, review_score, review
-    )
+    # add_filter_by_value(
+    #     output=output,
+    #     query="q4",
+    #     num=1,
+    #     filter_name="positive",
+    #     input_queue_name="q4_reviews",
+    #     output_queue_name="q4_positive_reviews",
+    #     amount_of_forwarding_queues=1,
+    #     logging_level="DEBUG",
+    #     column_number_to_use=2,  # review_score
+    #     value_to_filter_by=1.0,
+    #     criteria="EQUAL",
+    #     columns_to_keep="0,1,2",  # app_id, review_score, review
+    # )
 
-    add_filter_by_value(
-        output=output,
-        query="q4",
-        num=1,
-        filter_name="english",
-        input_queue_name="1_q4_positive_reviews",
-        output_queue_name="q4_english_reviews",
-        amount_of_forwarding_queues=1,
-        logging_level="DEBUG",
-        column_number_to_use=2,  # review_score
-        value_to_filter_by="EN",
-        criteria="LANGUAGE",
-        columns_to_keep="0,1",  # app_id, review_score
-    )
+    # add_filter_by_value(
+    #     output=output,
+    #     query="q4",
+    #     num=1,
+    #     filter_name="english",
+    #     input_queue_name="1_q4_positive_reviews",
+    #     output_queue_name="q4_english_reviews",
+    #     amount_of_forwarding_queues=1,
+    #     logging_level="DEBUG",
+    #     column_number_to_use=2,  # review_score
+    #     value_to_filter_by="EN",
+    #     criteria="LANGUAGE",
+    #     columns_to_keep="0,1",  # app_id, review_score
+    # )
 
-    add_counter_by_app_id(
-        output=output,
-        query="q4",
-        num=1,
-        consume_queue_sufix="q4_english_reviews",
-        publish_queue="q4_english_review_count",
-    )
+    # add_counter_by_app_id(
+    #     output=output,
+    #     query="q4",
+    #     num=1,
+    #     consume_queue_sufix="q4_english_reviews",
+    #     publish_queue="q4_english_review_count",
+    # )
 
-    add_filter_by_value(
-        output=output,
-        query="q4",
-        num=1,
-        filter_name="more_than_5000",
-        input_queue_name="q4_english_review_count",
-        output_queue_name="q4_filter_more_than_5000_reviews",
-        amount_of_forwarding_queues=1,
-        logging_level="DEBUG",
-        column_number_to_use=1,  # positive_review_count
-        value_to_filter_by=5000,
-        criteria="GREATER_THAN",
-        columns_to_keep="0,1",  # app_id, positive_review_count
-    )
+    # add_filter_by_value(
+    #     output=output,
+    #     query="q4",
+    #     num=1,
+    #     filter_name="more_than_5000",
+    #     input_queue_name="q4_english_review_count",
+    #     output_queue_name="q4_filter_more_than_5000_reviews",
+    #     amount_of_forwarding_queues=1,
+    #     logging_level="DEBUG",
+    #     column_number_to_use=1,  # positive_review_count
+    #     value_to_filter_by=5000,
+    #     criteria="GREATER_THAN",
+    #     columns_to_keep="0,1",  # app_id, positive_review_count
+    # )
 
-    add_join(
-        output=output,
-        query="q4",
-        num=1,
-        input_games_queue_name="1_q4_shooter_games",
-        input_reviews_queue_name="1_q4_filter_more_than_5000_reviews",
-        output_queue_name="Q4",
-    )
+    # add_join(
+    #     output=output,
+    #     query="q4",
+    #     num=1,
+    #     input_games_queue_name="1_q4_shooter_games",
+    #     input_reviews_queue_name="1_q4_filter_more_than_5000_reviews",
+    #     output_queue_name="Q4",
+    # )
 
     add_volumes(output=output)
 

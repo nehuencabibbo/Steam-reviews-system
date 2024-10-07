@@ -39,7 +39,7 @@ class Middleware:
 
     def broadcast(self, encoded_message, amount_of_nodes, queue_sufix):
         for i in range(1, amount_of_nodes + 1):
-            queue = f"{i}_{queue_sufix}"
+            queue = f"1_{queue_sufix}"
             logging.info(f"Sent END to queue: {queue}")
             self.publish(encoded_message, queue_name=queue, exchange_name="")
 
