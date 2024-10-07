@@ -4,6 +4,11 @@ from typing import *
 
 
 Q2_FORWARD_NODES = 2
+Q2_AMOUNT_OF_INDIE_GAMES_FROM_LAST_DECADE_FILTERS = 2
+Q3_FORWARD_NODES = 2
+Q3_AMOUNT_OF_POSITIVE_FILTERS = 2
+Q4_FORWARD_NODES = 2
+Q5_FORWARD_NODES = 2
 
 
 def create_file(output, file_name):
@@ -41,6 +46,9 @@ def add_drop_nulls(output: Dict, num: int):
             f"NODE_ID={num}",
             "COUNT_BY_PLATFORM_NODES=1",
             f"Q2_FORWARD_NODES={Q2_FORWARD_NODES}",
+            f"Q3_FORWARD_NODES={Q3_FORWARD_NODES}",
+            f"Q4_FORWARD_NODES={Q4_FORWARD_NODES}",
+            f"Q5_FORWARD_NODES={Q5_FORWARD_NODES}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -207,7 +215,6 @@ def generate_filters_by_value(
     input_queue_name = kwargs.pop("input_queue_name")
     for i in range(1, amount_of_filters + 1):
         actual_input_queue_name = f"{i}_{input_queue_name}"
-        print(actual_input_queue_name)
         add_filter_by_value(**kwargs, input_queue_name=actual_input_queue_name, num=i)
 
 
@@ -247,74 +254,94 @@ def generate_output():
         "filter_name": "indie_games",
         "input_queue_name": "q2_games",
         "output_queue_name": "q2_indie_games",
-        "amount_of_forwarding_queues": 1,
+        "amount_of_forwarding_queues": Q2_AMOUNT_OF_INDIE_GAMES_FROM_LAST_DECADE_FILTERS,
         "logging_level": "DEBUG",
         "column_number_to_use": 4,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
         "columns_to_keep": "0,1,2,3",
     }
-    generate_filters_by_value(2, **q2_indie_filter_args)
-    # add_filter_by_value(
-    #     output=output,
-    #     query="q2",
-    #     num=1,
-    #     filter_name="indie_games",
-    #     input_queue_name="q2_games",
-    #     output_queue_name="q2_indie_games",
-    #     amount_of_forwarding_queues=1,
-    #     logging_level="DEBUG",
-    #     column_number_to_use=4,  # genre
-    #     value_to_filter_by="indie",
-    #     criteria="CONTAINS",
-    #     columns_to_keep="0,1,2,3",  # app_id, name, release_date, avg_forever
-    # )
+    generate_filters_by_value(Q2_FORWARD_NODES, **q2_indie_filter_args)
 
-    add_filter_by_value(
-        output=output,
-        query="q2",
-        num=1,
-        filter_name="indie_games_from_last_decade",
-        input_queue_name="1_q2_indie_games",
-        output_queue_name="q2_indie_games_from_last_decade",
-        amount_of_forwarding_queues=1,
-        logging_level="DEBUG",
-        column_number_to_use=2,  # release date
-        value_to_filter_by=201,
-        criteria="CONTAINS",
-        columns_to_keep="1,3",  # name, avg_forever
+    q2_indie_games_from_last_decade_args = {
+        "output": output,
+        "query": "q2",
+        "filter_name": "indie_games_from_last_decade",
+        "input_queue_name": "q2_indie_games",
+        "output_queue_name": "q2_indie_games_from_last_decade",
+        "amount_of_forwarding_queues": 1,
+        "logging_level": "DEBUG",
+        "column_number_to_use": 2,  # release date
+        "value_to_filter_by": 201,
+        "criteria": "CONTAINS",
+        "columns_to_keep": "1,3",  # name, avg_forever
+    }
+    generate_filters_by_value(
+        Q2_AMOUNT_OF_INDIE_GAMES_FROM_LAST_DECADE_FILTERS,
+        **q2_indie_games_from_last_decade_args,
     )
 
     # -------------------------------------------- Q3 -----------------------------------------
-    add_filter_by_value(
-        output=output,
-        query="q3",
-        num=1,
-        filter_name="indie_games",
-        input_queue_name="q3_games",
-        output_queue_name="q3_indie_games",
-        amount_of_forwarding_queues=1,
-        logging_level="DEBUG",
-        column_number_to_use=2,  # genre
-        value_to_filter_by="indie",
-        criteria="CONTAINS",
-        columns_to_keep="0,1",  # app_id, name
-    )
+    q3_filter_indie_games_args = {
+        "output": output,
+        "query": "q3",
+        "filter_name": "indie_games",
+        "input_queue_name": "q3_games",
+        "output_queue_name": "q3_indie_games",
+        "amount_of_forwarding_queues": 1,
+        "logging_level": "DEBUG",
+        "column_number_to_use": 2,  # genre
+        "value_to_filter_by": "indie",
+        "criteria": "CONTAINS",
+        "columns_to_keep": "0,1",  # app_id, name
+    }
 
-    add_filter_by_value(
-        output=output,
-        query="q3",
-        num=1,
-        filter_name="filter_positive",
-        input_queue_name="q3_reviews",
-        output_queue_name="q3_positive_reviews",
-        amount_of_forwarding_queues=1,
-        logging_level="DEBUG",
-        column_number_to_use=1,  # review_score
-        value_to_filter_by=1.0,  # positive_review
-        criteria="EQUAL",
-        columns_to_keep=0,  # app_id ,
-    )
+    generate_filters_by_value(Q3_FORWARD_NODES, **q3_filter_indie_games_args)
+
+    # add_filter_by_value(
+    #     output=output,
+    #     query="q3",
+    #     num=1,
+    #     filter_name="indie_games",
+    #     input_queue_name="q3_games",
+    #     output_queue_name="q3_indie_games",
+    #     amount_of_forwarding_queues=1,
+    #     logging_level="DEBUG",
+    #     column_number_to_use=2,  # genre
+    #     value_to_filter_by="indie",
+    #     criteria="CONTAINS",
+    #     columns_to_keep="0,1",  # app_id, name
+    # )
+
+    q3_filter_positive_args = {
+        "output": output,
+        "query": "q3",
+        "filter_name": "filter_positive",
+        "input_queue_name": "q3_reviews",
+        "output_queue_name": "q3_positive_reviews",
+        "amount_of_forwarding_queues": 1,
+        "logging_level": "DEBUG",
+        "column_number_to_use": 1,  # review_score
+        "value_to_filter_by": 1.0,  # positive_review
+        "criteria": "EQUAL",
+        "columns_to_keep": 0,  # app_id ,
+    }
+    generate_filters_by_value(Q3_AMOUNT_OF_POSITIVE_FILTERS, **q3_filter_positive_args)
+
+    # add_filter_by_value(
+    #     output=output,
+    #     query="q3",
+    #     num=1,
+    #     filter_name="filter_positive",
+    #     input_queue_name="q3_reviews",
+    #     output_queue_name="q3_positive_reviews",
+    #     amount_of_forwarding_queues=1,
+    #     logging_level="DEBUG",
+    #     column_number_to_use=1,  # review_score
+    #     value_to_filter_by=1.0,  # positive_review
+    #     criteria="EQUAL",
+    #     columns_to_keep=0,  # app_id ,
+    # )
 
     add_counter_by_app_id(
         output=output,

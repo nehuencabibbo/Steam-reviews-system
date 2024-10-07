@@ -47,10 +47,15 @@ class FilterColumnByValue:
 
     def __handle_end_transmission(self):
         encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-        for i in range(1, self._config["AMOUNT_OF_FORWARDING_QUEUES"] + 1):
-            self._middleware.publish(
-                encoded_message, f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
-            )
+        self._middleware.broadcast(
+            encoded_message=encoded_message,
+            amount_of_nodes=self._config["AMOUNT_OF_FORWARDING_QUEUES"],
+            queue_sufix=self._config["FORWARDING_QUEUE_NAME"],
+        )
+        # for i in range(1, self._config["AMOUNT_OF_FORWARDING_QUEUES"] + 1):
+        #     self._middleware.publish(
+        #         encoded_message, f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
+        #     )
 
     def __handle_message(self, delivery_tag: int, body: bytes):
         body = self._protocol.decode(body)
@@ -104,19 +109,21 @@ class FilterColumnByValue:
         """
         Do not use to send END message as it is handled differently.
         """
-        for i in range(1, self._config["AMOUNT_OF_FORWARDING_QUEUES"] + 1):
-            node_id = node_id_to_send_to(
-                str(i), message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
-            )
+        # for i in range(1, self._config["AMOUNT_OF_FORWARDING_QUEUES"] + 1):
+        node_id = node_id_to_send_to(
+            "1", message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+        )
 
-            message = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], message)
-            logging.debug(f"Sending message: {message}")
-            encoded_message = self._protocol.encode(message)
-            # TODO: Change with app id when available
+        message = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], message)
+        logging.debug(
+            f"Sending message: {message} to queue: {node_id}_{self._config['FORWARDING_QUEUE_NAME']}"
+        )
+        encoded_message = self._protocol.encode(message)
+        # TODO: Change with app id when available
 
-            self._middleware.publish(
-                encoded_message, f"{node_id}_{self._config['FORWARDING_QUEUE_NAME']}"
-            )
+        self._middleware.publish(
+            encoded_message, f"{node_id}_{self._config['FORWARDING_QUEUE_NAME']}"
+        )
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")

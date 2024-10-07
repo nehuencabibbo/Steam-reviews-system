@@ -55,15 +55,24 @@ def get_config():
         config_params["Q3_REVIEWS"] = os.getenv(
             "Q3_REVIEWS", config["DEFAULT"]["Q3_REVIEWS"]
         )
+        config_params["Q3_FORWARD_NODES"] = int(
+            os.getenv("Q3_FORWARD_NODES", config["DEFAULT"]["Q3_FORWARD_NODES"])
+        )
         # Q4
         config_params["Q4_GAMES"] = os.getenv("Q4_GAMES", config["DEFAULT"]["Q4_GAMES"])
         config_params["Q4_REVIEWS"] = os.getenv(
             "Q4_REVIEWS", config["DEFAULT"]["Q4_REVIEWS"]
         )
+        config_params["Q4_FORWARD_NODES"] = int(
+            os.getenv("Q4_FORWARD_NODES", config["DEFAULT"]["Q4_FORWARD_NODES"])
+        )
         # Q5
         config_params["Q5_GAMES"] = os.getenv("Q5_GAMES", config["DEFAULT"]["Q5_GAMES"])
         config_params["Q5_REVIEWS"] = os.getenv(
             "Q5_REVIEWS", config["DEFAULT"]["Q5_REVIEWS"]
+        )
+        config_params["Q5_FORWARD_NODES"] = int(
+            os.getenv("Q5_FORWARD_NODES", config["DEFAULT"]["Q5_FORWARD_NODES"])
         )
 
     except KeyError as e:

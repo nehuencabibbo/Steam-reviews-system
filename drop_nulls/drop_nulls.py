@@ -75,16 +75,20 @@ class DropNulls:
 
         # Q2
 
-        self._middleware.broadcast(
-            encoded_message=encoded_message,
-            amount_of_nodes=self._config["Q2_FORWARD_NODES"],
-            queue_sufix=self._config["Q2_GAMES"],
-        )
+        # self._middleware.broadcast(
+        #     encoded_message=encoded_message,
+        #     amount_of_nodes=self._config["Q2_FORWARD_NODES"],
+        #     queue_sufix=self._config["Q2_GAMES"],
+        # )
 
         # Q2, Q3, Q4, Q5
-        for i in range(3, 5):
-            # for i in range(2, 5):
-            self._middleware.publish(encoded_message, self._config[f"Q{i}_GAMES"])
+        for i in range(2, 5):
+            # self._middleware.publish(encoded_message, self._config[f"Q{i}_GAMES"])
+            self._middleware.broadcast(
+                encoded_message=encoded_message,
+                amount_of_nodes=self._config[f"Q{i}_FORWARD_NODES"],
+                queue_sufix=self._config[f"Q{i}_GAMES"],
+            )
 
     def __handle_games(self, delivery_tag: int, body: bytes):
         body = self._protocol.decode(body)
@@ -138,8 +142,15 @@ class DropNulls:
         encoded_message = self._protocol.encode(
             [body[GAMES_APP_ID], body[GAMES_NAME], body[GAMES_GENRE]]
         )
+
         for i in range(3, 6):
-            self._middleware.publish(encoded_message, self._config[f"Q{i}_GAMES"])
+            self.__dispatch_message_by_key(
+                encoded_message=encoded_message,
+                key=body[GAMES_APP_ID],
+                nodes=self._config[f"Q{i}_FORWARD_NODES"],
+                forwarding_queue_name=self._config[f"Q{i}_GAMES"],
+            )
+            # self._middleware.publish(encoded_message, self._config[f"Q{i}_GAMES"])
 
         self._middleware.ack(delivery_tag)
 
@@ -150,7 +161,12 @@ class DropNulls:
             logging.debug(f"[NULL DROP {self._config['NODE_ID']}] Recived reviews END")
             for i in range(3, 6):
                 encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-                self._middleware.publish(encoded_message, self._config[f"Q{i}_REVIEWS"])
+                self._middleware.broadcast(
+                    encoded_message=encoded_message,
+                    amount_of_nodes=self._config[f"Q{i}_FORWARD_NODES"],
+                    queue_sufix=self._config[f"Q{i}_REVIEWS"],
+                )
+                # self._middleware.publish(encoded_message, self._config[f"Q{i}_REVIEWS"])
 
             self._middleware.ack(delivery_tag)
 
@@ -163,7 +179,13 @@ class DropNulls:
             encoded_message = self._protocol.encode(
                 [body[REVIEW_APP_ID], body[REVIEW_SCORE]]
             )
-            self._middleware.publish(encoded_message, self._config[f"Q{i}_REVIEWS"])
+            # self._middleware.publish(encoded_message, self._config[f"Q{i}_REVIEWS"])
+            self.__dispatch_message_by_key(
+                encoded_message=encoded_message,
+                key=body[REVIEW_APP_ID],
+                nodes=self._config[f"Q{i}_FORWARD_NODES"],
+                forwarding_queue_name=self._config[f"Q{i}_REVIEWS"],
+            )
 
         # Q4 Reviews: app_id, review_text, review_score
         encoded_message = self._protocol.encode(
@@ -177,7 +199,9 @@ class DropNulls:
         self, encoded_message, key, nodes, forwarding_queue_name
     ):
         node_id = node_id_to_send_to("1", key, int(nodes))
-        logging.debug(f"Dispatching message to node: {node_id}")
+        logging.debug(
+            f"Dispatching message to queue: {node_id}_{forwarding_queue_name}"
+        )
         self._middleware.publish(encoded_message, f"{node_id}_{forwarding_queue_name}")
 
     def __signal_handler(self, sig, frame):
