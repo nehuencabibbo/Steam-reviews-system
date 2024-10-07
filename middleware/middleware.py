@@ -17,6 +17,10 @@ class Middleware:
             queue=queue_name, on_message_callback=callback, auto_ack=False
         )
 
+    def turn_fair_dispatch(self):
+        # Fairness
+        self._channel.basic_qos(prefetch_count=1)
+
     def publish(self, message, queue_name="", exchange_name=""):
         self._channel.basic_publish(
             exchange=exchange_name, routing_key=queue_name, body=message

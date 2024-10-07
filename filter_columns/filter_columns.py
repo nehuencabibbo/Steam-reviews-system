@@ -53,6 +53,7 @@ class FilterColumns:
             self._config["CLIENT_REVIEWS_QUEUE_NAME"], reviews_callback
         )
 
+        self._middleware.turn_fair_dispatch()
         self._middleware.start_consuming()
 
     def __handle_message(

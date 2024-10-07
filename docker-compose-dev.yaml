@@ -28,10 +28,10 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: on-failure
-  # ---------------------------------------- Query 1 ---------------------------------------------
-  filter_columns:
+
+  filter_columns1:
     image: filter_columns:latest
-    container_name: filter_columns
+    container_name: filter_columns1
     environment:
       - NODE_ID=1
     depends_on:
@@ -41,6 +41,71 @@ services:
       - net
     restart: on-failure
 
+  filter_columns2:
+    image: filter_columns:latest
+    container_name: filter_columns2
+    environment:
+      - NODE_ID=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  filter_columns3:
+    image: filter_columns:latest
+    container_name: filter_columns3
+    environment:
+      - NODE_ID=3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  drop_nulls:
+    image: drop_nulls:latest
+    container_name: drop_nulls
+    environment:
+      - NODE_ID=1
+      - COUNT_BY_PLATFORM_NODES=1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  drop_nulls2:
+    image: drop_nulls:latest
+    container_name: drop_nulls2
+    environment:
+      - NODE_ID=2
+      - COUNT_BY_PLATFORM_NODES=1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+    
+  drop_nulls3:
+    image: drop_nulls:latest
+    container_name: drop_nulls3
+    environment:
+      - NODE_ID=3
+      - COUNT_BY_PLATFORM_NODES=1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+    
+
+  # ---------------------------------------- Query 1 ---------------------------------------------
   q1_counter:
     container_name: q1_counter
     image: counter_by_platform:latest
@@ -56,18 +121,6 @@ services:
         condition: service_healthy
     restart: on-failure
 
-  drop_nulls:
-    image: drop_nulls:latest
-    container_name: drop_nulls
-    environment:
-      - NODE_ID=1
-      - COUNT_BY_PLATFORM_NODES=1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - net
-    restart: on-failure
   # ---------------------------------------- Query 2 ---------------------------------------------
 
   q2_top_k:
