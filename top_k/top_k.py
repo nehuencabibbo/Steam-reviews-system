@@ -19,7 +19,7 @@ class TopK:
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
     def __signal_handler(self, sig, frame):
-        logging.debug(f"[JOIN {self._config['NODE_ID']}] Gracefully shutting down...")
+        logging.debug(f"Gracefully shutting down...")
         self.__middleware.shutdown()
 
     def start(self):
@@ -40,10 +40,10 @@ class TopK:
         self.__middleware.start_consuming()
 
     def __callback(self, delivery_tag, body, message_type, forwarding_queue_name):
-        logging.debug(f"[INPUT GAMES] received: {body}")
 
         body = self.__protocol.decode(body)
         body = [value.strip() for value in body]
+        logging.debug(f"[INPUT GAMES] received: {body}")
 
         if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of games received")

@@ -1,373 +1,510 @@
+name: steam_reviews_system
 services:
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - 15672:15672
+    - 15672:15672
     networks:
-      - net
+    - net
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+    - rabbitmq_data:/var/lib/rabbitmq
     logging:
       driver: none
-    healthcheck: 
+    healthcheck:
       test: rabbitmq-diagnostics -q ping
       interval: 5s
       timeout: 10s
-      retries: 5
-
+      retries: '5'
   client1:
     container_name: client1
     image: client:latest
-    entrypoint: python3 /main.py 
+    entrypoint: python3 /main.py
     volumes:
-      - ./data/:/data 
+    - ./data/:/data
     networks:
-      - net 
+    - net
     depends_on:
       rabbitmq:
         condition: service_healthy
     restart: on-failure
-
+  filter_columns0:
+    image: filter_columns:latest
+    container_name: filter_columns0
+    environment:
+    - NODE_ID=0
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
   filter_columns1:
     image: filter_columns:latest
     container_name: filter_columns1
     environment:
-      - NODE_ID=1
+    - NODE_ID=1
+    - INSTANCES_OF_MYSELF=2
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
-      - net
+    - net
     restart: on-failure
-
-  filter_columns2:
-    image: filter_columns:latest
-    container_name: filter_columns2
-    environment:
-      - NODE_ID=2
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - net
-    restart: on-failure
-
-  filter_columns3:
-    image: filter_columns:latest
-    container_name: filter_columns3
-    environment:
-      - NODE_ID=3
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - net
-    restart: on-failure
-
-  drop_nulls:
+  drop_columns0:
     image: drop_nulls:latest
-    container_name: drop_nulls
+    container_name: drop_nulls0
     environment:
-      - NODE_ID=1
-      - COUNT_BY_PLATFORM_NODES=1
+    - NODE_ID=0
+    - COUNT_BY_PLATFORM_NODES=1
+    - INSTANCES_OF_MYSELF=2
+    - Q2_AMOUNT_OF_INDIE_GAMES_FILTERS=2
+    - Q3_AMOUNT_OF_INDIE_GAMES_FILTERS=2
+    - Q4_AMOUNT_OF_ACTION_GAMES_FILTERS=2
+    - Q5_FORWARD_NODES=2
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
-      - net
+    - net
     restart: on-failure
-
-  drop_nulls2:
+  drop_columns1:
     image: drop_nulls:latest
-    container_name: drop_nulls2
+    container_name: drop_nulls1
     environment:
-      - NODE_ID=2
-      - COUNT_BY_PLATFORM_NODES=1
+    - NODE_ID=1
+    - COUNT_BY_PLATFORM_NODES=1
+    - INSTANCES_OF_MYSELF=2
+    - Q2_AMOUNT_OF_INDIE_GAMES_FILTERS=2
+    - Q3_AMOUNT_OF_INDIE_GAMES_FILTERS=2
+    - Q4_AMOUNT_OF_ACTION_GAMES_FILTERS=2
+    - Q5_FORWARD_NODES=2
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
-      - net
+    - net
     restart: on-failure
-    
-  drop_nulls3:
-    image: drop_nulls:latest
-    container_name: drop_nulls3
-    environment:
-      - NODE_ID=3
-      - COUNT_BY_PLATFORM_NODES=1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - net
-    restart: on-failure
-    
-
-  # ---------------------------------------- Query 1 ---------------------------------------------
-  q1_counter:
-    container_name: q1_counter
+  q1_counter0:
+    container_name: q1_counter0
     image: counter_by_platform:latest
     entrypoint: python3 /main.py
     environment:
-      - NODE_ID=1
-      - CONSUME_QUEUE_SUFIX=q1_platform
-      - PUBLISH_QUEUE=Q1
-    networks:
-      - net 
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: on-failure
-
-  # ---------------------------------------- Query 2 ---------------------------------------------
-
-  q2_top_k:
-      image: top_k:latest
-      container_name: q2_top_k
-      depends_on:
-        rabbitmq:
-          condition: service_healthy
-      environment:
-        - INPUT_TOP_K_QUEUE_NAME=1_q2_indie_games_from_last_decade
-        - OUTPUT_TOP_K_QUEUE_NAME=Q2
-        - K=10
-      networks:
-        - net
-      restart: on-failure
-
-  q2_filter_indie_games:
-    image: filter_by_column_value:latest
-    container_name: q2_filter_indie_games
-    environment:
-      - RECIVING_QUEUE_NAME=q2_games
-      - FORWARDING_QUEUE_NAME=q2_indie_games
-      - AMOUNT_OF_FORWARDING_QUEUES=1
-      - LOGGING_LEVEL=DEBUG
-      - COLUMN_NUMBER_TO_USE=4 # genre
-      - VALUE_TO_FILTER_BY=indie
-      - CRITERIA=CONTAINS
-      - COLUMNS_TO_KEEP=0,1,2,3 # app_id, name, release_date, avg_forever
+    - NODE_ID=0
+    - CONSUME_QUEUE_SUFIX=q1_platform
+    - PUBLISH_QUEUE=Q1
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
-      - net
+    - net
     restart: on-failure
-
-  q2_filter_indie_games_from_last_decade:
-    image: filter_by_column_value:latest
-    container_name: q2_filter_indie_games_from_last_decade
-    environment:
-      - RECIVING_QUEUE_NAME=1_q2_indie_games
-      - FORWARDING_QUEUE_NAME=q2_indie_games_from_last_decade
-      - AMOUNT_OF_FORWARDING_QUEUES=1
-      - LOGGING_LEVEL=DEBUG
-      - COLUMN_NUMBER_TO_USE=2 # release date
-      - VALUE_TO_FILTER_BY=201
-      - CRITERIA=CONTAINS
-      - COLUMNS_TO_KEEP=1,3 # name, avg_forever
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - net
-    restart: on-failure
-  # ---------------------------------------- Query 3 ---------------------------------------------
-
-  q3_filter_indie_games:
-    image: filter_by_column_value:latest
-    container_name: q3_filter_indie_games
-    environment:
-      - RECIVING_QUEUE_NAME=q3_games
-      - FORWARDING_QUEUE_NAME=q3_indie_games
-      - AMOUNT_OF_FORWARDING_QUEUES=1
-      - LOGGING_LEVEL=DEBUG
-      - COLUMN_NUMBER_TO_USE=2 # Genre
-      - VALUE_TO_FILTER_BY=indie
-      - CRITERIA=CONTAINS
-      - COLUMNS_TO_KEEP=0,1 # app_id, name
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - net
-    restart: on-failure
-
-  q3_filter_positive:
-    image: filter_by_column_value:latest
-    container_name: q3_filter_positive
-    environment:
-      - RECIVING_QUEUE_NAME=q3_reviews
-      - FORWARDING_QUEUE_NAME=q3_positive_reviews
-      - AMOUNT_OF_FORWARDING_QUEUES=1
-      - LOGGING_LEVEL=DEBUG
-      - COLUMN_NUMBER_TO_USE=1 # review_score
-      - VALUE_TO_FILTER_BY=1.0 # positive review
-      - CRITERIA=EQUAL
-      - COLUMNS_TO_KEEP=0 # app_id
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - net
-    restart: on-failure
-
-  q3_top_k:
+  q2_top_k0:
     image: top_k:latest
-    container_name: q3_top_k
+    container_name: q2_top_k0
+    environment:
+    - INPUT_TOP_K_QUEUE_NAME=0_q2_indie_games_from_last_decade
+    - OUTPUT_TOP_K_QUEUE_NAME=Q2
+    - K=10
     depends_on:
       rabbitmq:
         condition: service_healthy
-    environment:
-      - INPUT_TOP_K_QUEUE_NAME=1_q3_join_by_app_id_result
-      - OUTPUT_TOP_K_QUEUE_NAME=Q3
-      - K=5
     networks:
-      - net
+    - net
     restart: on-failure
-
-  q3_counter:
-    container_name: q3_counter
+  q2_filter_indie_games0:
+    image: filter_by_column_value:latest
+    container_name: q2_indie_games0
+    environment:
+    - NODE_ID=0
+    - RECIVING_QUEUE_NAME=q2_games
+    - FORWARDING_QUEUE_NAME=q2_indie_games
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=4
+    - VALUE_TO_FILTER_BY=indie
+    - CRITERIA=CONTAINS
+    - COLUMNS_TO_KEEP=0,1,2,3
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q2_filter_indie_games1:
+    image: filter_by_column_value:latest
+    container_name: q2_indie_games1
+    environment:
+    - NODE_ID=1
+    - RECIVING_QUEUE_NAME=q2_games
+    - FORWARDING_QUEUE_NAME=q2_indie_games
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=4
+    - VALUE_TO_FILTER_BY=indie
+    - CRITERIA=CONTAINS
+    - COLUMNS_TO_KEEP=0,1,2,3
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q2_filter_indie_games_from_last_decade0:
+    image: filter_by_column_value:latest
+    container_name: q2_indie_games_from_last_decade0
+    environment:
+    - NODE_ID=0
+    - RECIVING_QUEUE_NAME=0_q2_indie_games
+    - FORWARDING_QUEUE_NAME=q2_indie_games_from_last_decade
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=2
+    - VALUE_TO_FILTER_BY=201
+    - CRITERIA=CONTAINS
+    - COLUMNS_TO_KEEP=1,3
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q2_filter_indie_games_from_last_decade1:
+    image: filter_by_column_value:latest
+    container_name: q2_indie_games_from_last_decade1
+    environment:
+    - NODE_ID=1
+    - RECIVING_QUEUE_NAME=0_q2_indie_games
+    - FORWARDING_QUEUE_NAME=q2_indie_games_from_last_decade
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=2
+    - VALUE_TO_FILTER_BY=201
+    - CRITERIA=CONTAINS
+    - COLUMNS_TO_KEEP=1,3
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q3_filter_indie_games0:
+    image: filter_by_column_value:latest
+    container_name: q3_indie_games0
+    environment:
+    - NODE_ID=0
+    - RECIVING_QUEUE_NAME=q3_games
+    - FORWARDING_QUEUE_NAME=q3_indie_games
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=2
+    - VALUE_TO_FILTER_BY=indie
+    - CRITERIA=CONTAINS
+    - COLUMNS_TO_KEEP=0,1
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q3_filter_indie_games1:
+    image: filter_by_column_value:latest
+    container_name: q3_indie_games1
+    environment:
+    - NODE_ID=1
+    - RECIVING_QUEUE_NAME=q3_games
+    - FORWARDING_QUEUE_NAME=q3_indie_games
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=2
+    - VALUE_TO_FILTER_BY=indie
+    - CRITERIA=CONTAINS
+    - COLUMNS_TO_KEEP=0,1
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q3_filter_filter_positive0:
+    image: filter_by_column_value:latest
+    container_name: q3_filter_positive0
+    environment:
+    - NODE_ID=0
+    - RECIVING_QUEUE_NAME=q3_reviews
+    - FORWARDING_QUEUE_NAME=q3_positive_reviews
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=1
+    - VALUE_TO_FILTER_BY=1.0
+    - CRITERIA=EQUAL
+    - COLUMNS_TO_KEEP=0
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q3_filter_filter_positive1:
+    image: filter_by_column_value:latest
+    container_name: q3_filter_positive1
+    environment:
+    - NODE_ID=1
+    - RECIVING_QUEUE_NAME=q3_reviews
+    - FORWARDING_QUEUE_NAME=q3_positive_reviews
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=1
+    - VALUE_TO_FILTER_BY=1.0
+    - CRITERIA=EQUAL
+    - COLUMNS_TO_KEEP=0
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q3_counter0:
+    container_name: q3_counter0
     image: counter_by_app_id:latest
     entrypoint: python3 /main.py
     environment:
-      - NODE_ID=1
-      - CONSUME_QUEUE_SUFIX=q3_positive_reviews
-      - PUBLISH_QUEUE=q3_positive_review_count
-    networks:
-      - net 
+    - NODE_ID=0
+    - CONSUME_QUEUE_SUFIX=q3_positive_reviews
+    - PUBLISH_QUEUE=q3_positive_review_count
     depends_on:
       rabbitmq:
         condition: service_healthy
+    networks:
+    - net
     restart: on-failure
-
-  q3_join:
-    container_name: q3_join
+  q3_join0:
+    container_name: q3_join0
     image: join:latest
-    networks:
-      - net 
     environment:
-      - INPUT_GAMES_QUEUE_NAME=1_q3_indie_games
-      - INPUT_REVIEWS_QUEUE_NAME=q3_positive_review_count
-      - OUTPUT_QUEUE_NAME=1_q3_join_by_app_id_result
+    - INPUT_GAMES_QUEUE_NAME=0_q3_indie_games
+    - INPUT_REVIEWS_QUEUE_NAME=q3_positive_review_count
+    - OUTPUT_QUEUE_NAME=1_q3_join_by_app_id_result
     depends_on:
       rabbitmq:
         condition: service_healthy
+    networks:
+    - net
     restart: on-failure
-  # ---------------------------------------- Query 4 ---------------------------------------------
-  q4_filter_shooter_games:
+  q3_top_k0:
+    image: top_k:latest
+    container_name: q3_top_k0
+    environment:
+    - INPUT_TOP_K_QUEUE_NAME=1_q3_join_by_app_id_result
+    - OUTPUT_TOP_K_QUEUE_NAME=Q3
+    - K=5
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q4_filter_action_games0:
     image: filter_by_column_value:latest
-    container_name: q4_filter_action_games
+    container_name: q4_action_games0
     environment:
-      - RECIVING_QUEUE_NAME=q4_games
-      - FORWARDING_QUEUE_NAME=q4_shooter_games
-      - AMOUNT_OF_FORWARDING_QUEUES=1
-      - LOGGING_LEVEL=DEBUG
-      - COLUMN_NUMBER_TO_USE=2 # Genre
-      - VALUE_TO_FILTER_BY=action
-      - CRITERIA=CONTAINS
-      - COLUMNS_TO_KEEP=0,1 # app_id, name
+    - NODE_ID=0
+    - RECIVING_QUEUE_NAME=q4_games
+    - FORWARDING_QUEUE_NAME=q4_action_games
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=2
+    - VALUE_TO_FILTER_BY=action
+    - CRITERIA=CONTAINS
+    - COLUMNS_TO_KEEP=0,1
+    - INSTANCES_OF_MYSELF=2
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
-      - net
+    - net
     restart: on-failure
-
-  q4_filter_positive:
+  q4_filter_action_games1:
     image: filter_by_column_value:latest
-    container_name: q4_filter_positive
+    container_name: q4_action_games1
     environment:
-      - RECIVING_QUEUE_NAME=q4_reviews
-      - FORWARDING_QUEUE_NAME=q4_positive_reviews
-      - AMOUNT_OF_FORWARDING_QUEUES=1
-      - LOGGING_LEVEL=DEBUG
-      - COLUMN_NUMBER_TO_USE=2 # review_score
-      - VALUE_TO_FILTER_BY=1.0 # positive review
-      - CRITERIA=EQUAL
-      - COLUMNS_TO_KEEP=0,1,2 # app_id, review_score, review
+    - NODE_ID=1
+    - RECIVING_QUEUE_NAME=q4_games
+    - FORWARDING_QUEUE_NAME=q4_action_games
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=2
+    - VALUE_TO_FILTER_BY=action
+    - CRITERIA=CONTAINS
+    - COLUMNS_TO_KEEP=0,1
+    - INSTANCES_OF_MYSELF=2
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
-      - net
+    - net
     restart: on-failure
-
-  q4_filter_by_english:
+  q4_filter_positive0:
     image: filter_by_column_value:latest
-    container_name: q4_filter_by_english
+    container_name: q4_positive0
     environment:
-      - RECIVING_QUEUE_NAME=1_q4_positive_reviews
-      - FORWARDING_QUEUE_NAME=q4_english_reviews
-      - AMOUNT_OF_FORWARDING_QUEUES=1
-      - LOGGING_LEVEL=DEBUG
-      - COLUMN_NUMBER_TO_USE=2 # review
-      - VALUE_TO_FILTER_BY=EN # english
-      - CRITERIA=LANGUAGE
-      - COLUMNS_TO_KEEP=0,1 # app_id, review_score
+    - NODE_ID=0
+    - RECIVING_QUEUE_NAME=q4_reviews
+    - FORWARDING_QUEUE_NAME=q4_positive_reviews
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=2
+    - VALUE_TO_FILTER_BY=1.0
+    - CRITERIA=EQUAL
+    - COLUMNS_TO_KEEP=0,1,2
+    - INSTANCES_OF_MYSELF=2
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
-      - net
+    - net
     restart: on-failure
-    
-  q4_counter:
-    container_name: q4_counter
-    image: counter:latest
+  q4_filter_positive1:
+    image: filter_by_column_value:latest
+    container_name: q4_positive1
+    environment:
+    - NODE_ID=1
+    - RECIVING_QUEUE_NAME=q4_reviews
+    - FORWARDING_QUEUE_NAME=q4_positive_reviews
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=2
+    - VALUE_TO_FILTER_BY=1.0
+    - CRITERIA=EQUAL
+    - COLUMNS_TO_KEEP=0,1,2
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q4_filter_english0:
+    image: filter_by_column_value:latest
+    container_name: q4_english0
+    environment:
+    - NODE_ID=0
+    - RECIVING_QUEUE_NAME=0_q4_positive_reviews
+    - FORWARDING_QUEUE_NAME=q4_english_reviews
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=2
+    - VALUE_TO_FILTER_BY=EN
+    - CRITERIA=LANGUAGE
+    - COLUMNS_TO_KEEP=0,1
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q4_filter_english1:
+    image: filter_by_column_value:latest
+    container_name: q4_english1
+    environment:
+    - NODE_ID=1
+    - RECIVING_QUEUE_NAME=0_q4_positive_reviews
+    - FORWARDING_QUEUE_NAME=q4_english_reviews
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=2
+    - VALUE_TO_FILTER_BY=EN
+    - CRITERIA=LANGUAGE
+    - COLUMNS_TO_KEEP=0,1
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q4_counter0:
+    container_name: q4_counter0
+    image: counter_by_app_id:latest
     entrypoint: python3 /main.py
     environment:
-      - NODE_ID=1
-      - CONSUME_QUEUE_SUFIX=q4_english_reviews
-      - PUBLISH_QUEUE=q4_english_review_count
-    networks:
-      - net 
+    - NODE_ID=0
+    - CONSUME_QUEUE_SUFIX=q4_english_reviews
+    - PUBLISH_QUEUE=q4_english_review_count
     depends_on:
       rabbitmq:
         condition: service_healthy
+    networks:
+    - net
     restart: on-failure
-
-  q4_filter_more_than_5000:
+  q4_filter_more_than_50000:
     image: filter_by_column_value:latest
-    container_name: q4_filter_more_than_5000
+    container_name: q4_more_than_50000
     environment:
-      - RECIVING_QUEUE_NAME=q4_english_review_count
-      - FORWARDING_QUEUE_NAME=q4_filter_more_than_5000_reviews
-      - AMOUNT_OF_FORWARDING_QUEUES=1
-      - LOGGING_LEVEL=DEBUG
-      - COLUMN_NUMBER_TO_USE=1 # positive_review_count
-      - VALUE_TO_FILTER_BY=5000  
-      - CRITERIA=GREATER_THAN
-      - COLUMNS_TO_KEEP=0,1 # app_id, positive_review_count
+    - NODE_ID=0
+    - RECIVING_QUEUE_NAME=q4_english_review_count
+    - FORWARDING_QUEUE_NAME=q4_filter_more_than_5000_reviews
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=1
+    - VALUE_TO_FILTER_BY=5000
+    - CRITERIA=GREATER_THAN
+    - COLUMNS_TO_KEEP=0,1
+    - INSTANCES_OF_MYSELF=2
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
-      - net
+    - net
     restart: on-failure
-
-  q4_join:
-    container_name: q4_join
+  q4_filter_more_than_50001:
+    image: filter_by_column_value:latest
+    container_name: q4_more_than_50001
+    environment:
+    - NODE_ID=1
+    - RECIVING_QUEUE_NAME=q4_english_review_count
+    - FORWARDING_QUEUE_NAME=q4_filter_more_than_5000_reviews
+    - AMOUNT_OF_FORWARDING_QUEUES=1
+    - LOGGING_LEVEL=DEBUG
+    - COLUMN_NUMBER_TO_USE=1
+    - VALUE_TO_FILTER_BY=5000
+    - CRITERIA=GREATER_THAN
+    - COLUMNS_TO_KEEP=0,1
+    - INSTANCES_OF_MYSELF=2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  q4_join0:
+    container_name: q4_join0
     image: join:latest
-    networks:
-      - net 
     environment:
-      - INPUT_GAMES_QUEUE_NAME=1_q4_shooter_games
-      - INPUT_REVIEWS_QUEUE_NAME=1_q4_filter_more_than_5000_reviews
-      - OUTPUT_QUEUE_NAME=Q4
+    - INPUT_GAMES_QUEUE_NAME=0_q4_action_games
+    - INPUT_REVIEWS_QUEUE_NAME=0_q4_filter_more_than_5000_reviews
+    - OUTPUT_QUEUE_NAME=Q4
     depends_on:
       rabbitmq:
         condition: service_healthy
+    networks:
+    - net
     restart: on-failure
-
 volumes:
-  rabbitmq_data:
-
+  rabbitmq_data: {}
 networks:
   net:
     ipam:
       driver: default
       config:
-        - subnet: 172.25.125.0/24
+      - subnet: 172.25.125.0/24

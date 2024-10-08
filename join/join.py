@@ -19,7 +19,7 @@ class Join:
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
     def __signal_handler(self, sig, frame):
-        logging.debug(f"[JOIN {self._config['NODE_ID']}] Gracefully shutting down...")
+        logging.debug(f"Gracefully shutting down...")
         self.__middleware.shutdown()
 
     def start(self):
