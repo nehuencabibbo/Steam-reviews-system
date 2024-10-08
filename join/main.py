@@ -34,6 +34,11 @@ def get_config():
         config_params["PARTITION_RANGE"] = os.getenv(
             "PARTITION_RANGE", config["DEFAULT"]["PARTITION_RANGE"]
         )
+        config_params["AMOUNT_OF_BEHIND_NODES"] = int(
+            os.getenv(
+                "AMOUNT_OF_BEHIND_NODES", config["DEFAULT"]["AMOUNT_OF_BEHIND_NODES"]
+            )
+        )
 
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")

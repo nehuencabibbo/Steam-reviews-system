@@ -14,6 +14,7 @@ class Join:
         self.__protocol = protocol
         self.__middleware = middleware
         self.__config = config
+        self._amount_of_ends_received = 0
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -87,8 +88,13 @@ class Join:
         if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of reviews received")
 
-            encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
-            self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+            self._amount_of_ends_received += 1
+            logging.debug(
+                f"Amount of ends received up to now: {self._amount_of_ends_received} | Expecting: {self.__config['AMOUNT_OF_BEHIND_NODES']}"
+            )
+            if self._amount_of_ends_received == self.__config["AMOUNT_OF_BEHIND_NODES"]:
+                encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
+                self.__middleware.publish(encoded_message, forwarding_queue_name, "")
 
             self.__middleware.ack(delivery_tag)
 

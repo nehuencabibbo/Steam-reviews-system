@@ -11,15 +11,17 @@ Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
 # Q3
 Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 2
-Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
+Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
 # Q4
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
 Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
 Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 2
 Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 2
+Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
 # Q5
 Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
 Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
+Q5_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
 
 
 def create_file(output, file_name):
@@ -168,6 +170,7 @@ def add_join(
     input_games_queue_name: str,
     input_reviews_queue_name: str,
     output_queue_name: str,
+    amount_of_behind_nodes: int,
 ):
     output["services"][f"{query}_join{num}"] = {
         "container_name": f"{query}_join{num}",
@@ -176,6 +179,7 @@ def add_join(
             f"INPUT_GAMES_QUEUE_NAME={input_games_queue_name}",
             f"INPUT_REVIEWS_QUEUE_NAME={input_reviews_queue_name}",
             f"OUTPUT_QUEUE_NAME={output_queue_name}",
+            f"AMOUNT_OF_BEHIND_NODES={amount_of_behind_nodes}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -381,6 +385,7 @@ def generate_output():
         input_games_queue_name="0_q3_indie_games",  # Prefixed as it comes from a filter
         input_reviews_queue_name="q3_positive_review_count",
         output_queue_name="1_q3_join_by_app_id_result",
+        amount_of_behind_nodes=Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
     )
 
     add_top_k(
@@ -451,13 +456,23 @@ def generate_output():
         Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS, **q4_filter_english_reviews_args
     )
 
-    add_counter_by_app_id(
-        output=output,
-        query="q4",
-        num=0,
-        consume_queue_sufix="q4_english_reviews",
-        publish_queue="q4_english_review_count",
+    q4_english_reviews_counter_args = {
+        "output": output,
+        "query": "q4",
+        "consume_queue_sufix": "q4_english_reviews",
+        "publish_queue": "q4_english_review_count",
+    }
+    generate_counters_by_app_id(
+        Q4_AMOUNT_OF_COUNTERS_BY_APP_ID, **q4_english_reviews_counter_args
     )
+
+    # add_counter_by_app_id(
+    #     output=output,
+    #     query="q4",
+    #     num=0,
+    #     consume_queue_sufix="q4_english_reviews",
+    #     publish_queue="q4_english_review_count",
+    # )
 
     q4_filter_more_than_5000_args = {
         "output": output,
@@ -484,6 +499,7 @@ def generate_output():
         input_games_queue_name="0_q4_action_games",
         input_reviews_queue_name="0_q4_filter_more_than_5000_reviews",
         output_queue_name="Q4",
+        amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
     )
 
     # ---------------------------------------- Q5 ---------------------------------------------
@@ -506,22 +522,13 @@ def generate_output():
         Q5_AMOUNT_OF_ACTION_GAMES_FILTERS, **q5_filter_action_games_args
     )
 
-    add_join(
-        output=output,
-        query="q5",
-        num=0,
-        input_games_queue_name="0_q5_shooter_games",
-        input_reviews_queue_name="0_q5_counter",
-        output_queue_name="q5_percentile",
-    )
-
     q5_filter_negative_reviews_args = {
         "output": output,
         "query": "q5",
         "filter_name": "negative_reviews",
         "input_queue_name": "q5_reviews",
         "output_queue_name": "q5_negative_reviews",
-        "amount_of_forwarding_queues": 1,
+        "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
         "logging_level": "DEBUG",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": -1.0,
@@ -533,12 +540,25 @@ def generate_output():
         Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS, **q5_filter_negative_reviews_args
     )
 
-    add_counter_by_app_id(
+    q5_negative_reviews_counter_args = {
+        "output": output,
+        "query": "q5",
+        "consume_queue_sufix": "q5_negative_reviews",
+        "publish_queue": "0_q5_counter",
+    }
+
+    generate_counters_by_app_id(
+        Q5_AMOUNT_OF_COUNTERS_BY_APP_ID, **q5_negative_reviews_counter_args
+    )
+
+    add_join(
         output=output,
         query="q5",
         num=0,
-        consume_queue_sufix="q5_negative_reviews",
-        publish_queue="0_q5_counter",
+        input_games_queue_name="0_q5_shooter_games",
+        input_reviews_queue_name="0_q5_counter",
+        output_queue_name="q5_percentile",
+        amount_of_behind_nodes=Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
     )
 
     add_percentile(
@@ -548,7 +568,6 @@ def generate_output():
         consume_queue="q5_percentile",
         publish_queue="Q5",
     )
-
     # ---------------------------------------- END OF QUERIES ---------------------------------------------
 
     add_volumes(output=output)

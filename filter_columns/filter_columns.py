@@ -56,9 +56,11 @@ class FilterColumns:
         self._middleware.turn_fair_dispatch()
         self._middleware.start_consuming()
 
-    def __handle_end_transmission(self, body: List[str], reciving_queue_name: str, forwarding_queue_name: str):
+    def __handle_end_transmission(
+        self, body: List[str], reciving_queue_name: str, forwarding_queue_name: str
+    ):
         # Si me llego un END...
-        # 1) Me fijo si los la cantidad de ids que hay es igual a 
+        # 1) Me fijo si los la cantidad de ids que hay es igual a
         # la cantidad total de instancias de mi mismo que hay.
         # Si es asi => Envio el END a la proxima cola
         # Si no es asi => Checkeo si mi ID esta en la lista
@@ -67,14 +69,14 @@ class FilterColumns:
         peers_that_recived_end = body[1:]
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
             encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-            
+
             self._middleware.publish(encoded_message, forwarding_queue_name, "")
 
-        else: 
+        else:
             message = [END_TRANSMISSION_MESSAGE]
             if not self._config["NODE_ID"] in peers_that_recived_end:
                 peers_that_recived_end.append(self._config["NODE_ID"])
-            
+
             message += peers_that_recived_end
             encoded_message = self._protocol.encode(message)
             self._middleware.publish(encoded_message, reciving_queue_name, "")
@@ -93,17 +95,17 @@ class FilterColumns:
             logging.debug(f"Recived END from {message_type}: {body}")
             if message_type == GAMES_MESSAGE_TYPE:
                 self.__handle_end_transmission(
-                    body, 
-                    self._config["CLIENT_GAMES_QUEUE_NAME"], 
-                    self._config["NULL_DROP_GAMES_QUEUE_NAME"]
+                    body,
+                    self._config["CLIENT_GAMES_QUEUE_NAME"],
+                    self._config["NULL_DROP_GAMES_QUEUE_NAME"],
                 )
             elif message_type == REVIEWS_MESSAGE_TYPE:
                 self.__handle_end_transmission(
-                    body, 
+                    body,
                     self._config["CLIENT_REVIEWS_QUEUE_NAME"],
-                    self._config["NULL_DROP_REVIEWS_QUEUE_NAME"]
+                    self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
                 )
-            else: 
+            else:
                 raise Exception(f"Unkown message type: {message_type}")
 
             self._middleware.ack(delivery_tag)

@@ -15,7 +15,6 @@ class CounterByAppId:
         self.config = config
         self.middleware = middleware
         self.got_sigterm = False
-        self.__received_end = False
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
@@ -42,10 +41,9 @@ class CounterByAppId:
 
         logging.debug(f"GOT MSG: {body}")
 
-        if len(body) == 1 and body[0] == "END" and not self.__received_end:
+        if len(body) == 1 and body[0] == "END":
             self.send_results()
             self.middleware.ack(method.delivery_tag)
-            self.__received_end = True
             return
 
         record = f"{body[0]},{1}"
@@ -69,6 +67,7 @@ class CounterByAppId:
         logging.debug("SENDING END")
         encoded_msg = self.protocol.encode([END_TRANSMISSION_MESSAGE])
         self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
+        logging.debug(f'END SENT TO: {self.config["PUBLISH_QUEUE"]}')
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
