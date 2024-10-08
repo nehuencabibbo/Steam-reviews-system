@@ -39,8 +39,7 @@ class DropNulls:
         self._middleware.create_queue(self._config["Q2_GAMES"])
 
         # Q3, Q4, Q5
-        # for i in range(3, 6):
-        for i in range(3, 5):
+        for i in range(3, 6):
             self._middleware.create_queue(self._config[f"Q{i}_GAMES"])
             self._middleware.create_queue(self._config[f"Q{i}_REVIEWS"])
 
@@ -61,9 +60,11 @@ class DropNulls:
 
         self._middleware.start_consuming()
 
-    def __handle_end_transmission(self, body: List[str], reciving_queue_name: str, message_type: str):
+    def __handle_end_transmission(
+        self, body: List[str], reciving_queue_name: str, message_type: str
+    ):
         # Si me llego un END...
-        # 1) Me fijo si los la cantidad de ids que hay es igual a 
+        # 1) Me fijo si los la cantidad de ids que hay es igual a
         # la cantidad total de instancias de mi mismo que hay.
         # Si es asi => Envio el END a la proxima cola
         # Si no es asi => Checkeo si mi ID esta en la lista
@@ -72,7 +73,7 @@ class DropNulls:
         peers_that_recived_end = body[1:]
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
             encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-            
+
             if message_type == GAMES_MESSAGE_TYPE:
                 self.__handle_games_end_transmission_by_query()
             elif message_type == REVIEWS_MESSAGE_TYPE:
@@ -80,41 +81,38 @@ class DropNulls:
             else:
                 raise Exception(f"Unkown message type: {message_type}")
 
-        else: 
+        else:
             message = [END_TRANSMISSION_MESSAGE]
             if not self._config["NODE_ID"] in peers_that_recived_end:
                 peers_that_recived_end.append(self._config["NODE_ID"])
-                
+
             message += peers_that_recived_end
             encoded_message = self._protocol.encode(message)
             self._middleware.publish(encoded_message, reciving_queue_name, "")
 
     def __handle_games_end_transmission_by_query(self):
         encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-        # Mandar el END a cada uno particular 
+        # Mandar el END a cada uno particular
         # Como tengo N nodos de count by platform, a cada uno de ellos le tiene que llegar el end
         # Q1
         for i in range(self._config["COUNT_BY_PLATFORM_NODES"]):
             logging.debug(f"SENDING_TO: {i}_{self._config['Q1_PLATFORM']}")
             self._middleware.publish(
-                encoded_message, 
-                f"{i}_{self._config['Q1_PLATFORM']}"
+                encoded_message, f"{i}_{self._config['Q1_PLATFORM']}"
             )
 
         # Q2, Q3, Q4, Q5
-        for i in range(2, 5): # TODO: No se manda a la Q5 por ahora
+        for i in range(2, 6):
             self._middleware.publish(encoded_message, self._config[f"Q{i}_GAMES"])
 
     def __handle_games(self, delivery_tag: int, body: bytes):
         body = self._protocol.decode(body)
         body = [value.strip() for value in body]
-    
+
         if body[0] == END_TRANSMISSION_MESSAGE:
             logging.debug(f"Recived games END: {body}")
             self.__handle_end_transmission(
-                body, 
-                self._config["GAMES_RECIVING_QUEUE_NAME"],
-                GAMES_MESSAGE_TYPE
+                body, self._config["GAMES_RECIVING_QUEUE_NAME"], GAMES_MESSAGE_TYPE
             )
 
             self._middleware.ack(delivery_tag)
@@ -133,9 +131,7 @@ class DropNulls:
             # TODO: Should this be handeled in a different node?
             if platform_supported.lower() == "true":
                 node_id = node_id_to_send_to(
-                    "1", 
-                    platform, 
-                    self._config["COUNT_BY_PLATFORM_NODES"]
+                    "1", platform, self._config["COUNT_BY_PLATFORM_NODES"]
                 )
                 encoded_message = self._protocol.encode([platform])
                 self._middleware.publish(
@@ -175,9 +171,7 @@ class DropNulls:
         if body[0] == END_TRANSMISSION_MESSAGE:
             logging.debug(f"Recived reviews END: {body}")
             self.__handle_end_transmission(
-                body, 
-                self._config["REVIEWS_RECIVING_QUEUE_NAME"],
-                REVIEWS_MESSAGE_TYPE
+                body, self._config["REVIEWS_RECIVING_QUEUE_NAME"], REVIEWS_MESSAGE_TYPE
             )
             self._middleware.ack(delivery_tag)
 
@@ -185,8 +179,7 @@ class DropNulls:
 
         logging.debug(f"[NULL DROP {self._config['NODE_ID']}] Recived review: {body}")
         # Q3, Q5 Reviews: app_id, review_score
-        # for i in ["3", "5"]:
-        for i in ["3"]:
+        for i in ["3", "5"]:
             encoded_message = self._protocol.encode(
                 [body[REVIEW_APP_ID], body[REVIEW_SCORE]]
             )
@@ -199,7 +192,6 @@ class DropNulls:
         self._middleware.publish(encoded_message, self._config[f"Q4_REVIEWS"])
 
         self._middleware.ack(delivery_tag)
-
 
     def __signal_handler(self, sig, frame):
         logging.debug(

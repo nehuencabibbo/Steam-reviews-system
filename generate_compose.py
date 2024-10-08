@@ -13,7 +13,8 @@ Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
 Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
 Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 2
 Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 2
-Q5_FORWARD_NODES = 2
+Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
+Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
 
 
 def create_file(output, file_name):
@@ -54,10 +55,6 @@ def add_drop_nulls(output: Dict, num: int):
             f"NODE_ID={num}",
             "COUNT_BY_PLATFORM_NODES=1",  # TODO: change when scaling
             f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_NULLS}",
-            f"Q2_AMOUNT_OF_INDIE_GAMES_FILTERS={Q2_AMOUNT_OF_INDIE_GAMES_FILTERS}",
-            f"Q3_AMOUNT_OF_INDIE_GAMES_FILTERS={Q3_AMOUNT_OF_INDIE_GAMES_FILTERS}",
-            f"Q4_AMOUNT_OF_ACTION_GAMES_FILTERS={Q4_AMOUNT_OF_ACTION_GAMES_FILTERS}",
-            f"Q5_FORWARD_NODES={Q5_FORWARD_NODES}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -174,6 +171,24 @@ def add_join(
             f"INPUT_GAMES_QUEUE_NAME={input_games_queue_name}",
             f"INPUT_REVIEWS_QUEUE_NAME={input_reviews_queue_name}",
             f"OUTPUT_QUEUE_NAME={output_queue_name}",
+        ],
+        "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
+        "networks": ["net"],
+        "restart": "on-failure",
+    }
+
+
+def add_percentile(
+    output: Dict, query: str, num: int, consume_queue: str, publish_queue: str
+):
+    output["services"][f"{query}_percentil_{num}"] = {
+        "container_name": f"{query}_percentile_{num}",
+        "image": "percentile:latest",
+        "entrypoint": "python3 /main.py",
+        "environment": [
+            f"NODE_ID={num}",
+            f"CONSUME_QUEUE={consume_queue}",
+            f"PUBLISH_QUEUE={publish_queue}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -451,6 +466,71 @@ def generate_output():
         input_reviews_queue_name="0_q4_filter_more_than_5000_reviews",
         output_queue_name="Q4",
     )
+
+    # ---------------------------------------- Q5 ---------------------------------------------
+
+    q5_filter_action_games_args = {
+        "output": output,
+        "query": "q5",
+        "filter_name": "action_games",
+        "input_queue_name": "q5_games",
+        "output_queue_name": "q5_shooter_games",
+        "amount_of_forwarding_queues": 1,
+        "logging_level": "DEBUG",
+        "column_number_to_use": 2,  # genre
+        "value_to_filter_by": "action",
+        "criteria": "CONTAINS",
+        "columns_to_keep": "0,1",  # app_id, positive_review_count
+        "instances_of_myself": Q5_AMOUNT_OF_ACTION_GAMES_FILTERS,
+    }
+    generate_filters_by_value(
+        Q5_AMOUNT_OF_ACTION_GAMES_FILTERS, **q5_filter_action_games_args
+    )
+
+    add_join(
+        output=output,
+        query="q5",
+        num=0,
+        input_games_queue_name="0_q5_shooter_games",
+        input_reviews_queue_name="0_q5_counter",
+        output_queue_name="q5_percentile",
+    )
+
+    q5_filter_negative_reviews_args = {
+        "output": output,
+        "query": "q5",
+        "filter_name": "negative_reviews",
+        "input_queue_name": "q5_reviews",
+        "output_queue_name": "q5_negative_reviews",
+        "amount_of_forwarding_queues": 1,
+        "logging_level": "DEBUG",
+        "column_number_to_use": 1,  # review_score
+        "value_to_filter_by": -1.0,
+        "criteria": "EQUAL",
+        "columns_to_keep": "0",  # app_id, positive_review_count
+        "instances_of_myself": Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
+    }
+    generate_filters_by_value(
+        Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS, **q5_filter_negative_reviews_args
+    )
+
+    add_counter_by_app_id(
+        output=output,
+        query="q5",
+        num=0,
+        consume_queue_sufix="q5_negative_reviews",
+        publish_queue="0_q5_counter",
+    )
+
+    add_percentile(
+        output=output,
+        query="q5",
+        num=0,
+        consume_queue="q5_percentile",
+        publish_queue="Q5",
+    )
+
+    # ---------------------------------------- END OF QUERIES ---------------------------------------------
 
     add_volumes(output=output)
 
