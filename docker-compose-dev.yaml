@@ -28,7 +28,7 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: on-failure
-  # ---------------------------------------- Query 1 ---------------------------------------------
+ 
   filter_columns:
     image: filter_columns:latest
     container_name: filter_columns
@@ -41,6 +41,20 @@ services:
       - net
     restart: on-failure
 
+  drop_nulls:
+    image: drop_nulls:latest
+    container_name: drop_nulls
+    environment:
+      - NODE_ID=1
+      - COUNT_BY_PLATFORM_NODES=1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+ # ---------------------------------------- Query 1 ---------------------------------------------
   q1_counter:
     container_name: q1_counter
     image: counter_by_platform:latest
@@ -56,18 +70,6 @@ services:
         condition: service_healthy
     restart: on-failure
 
-  drop_nulls:
-    image: drop_nulls:latest
-    container_name: drop_nulls
-    environment:
-      - NODE_ID=1
-      - COUNT_BY_PLATFORM_NODES=1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - net
-    restart: on-failure
   # ---------------------------------------- Query 2 ---------------------------------------------
 
   q2_top_k:
@@ -304,6 +306,89 @@ services:
       - INPUT_GAMES_QUEUE_NAME=1_q4_shooter_games
       - INPUT_REVIEWS_QUEUE_NAME=1_q4_filter_more_than_5000_reviews
       - OUTPUT_QUEUE_NAME=Q4
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+ # ---------------------------------------- Query 5 ---------------------------------------------
+  q5_filter_action_games:
+    image: filter_by_column_value:latest
+    container_name: q5_filter_action_games
+    environment:
+      - RECIVING_QUEUE_NAME=q5_games
+      - FORWARDING_QUEUE_NAME=q5_shooter_games
+      - AMOUNT_OF_FORWARDING_QUEUES=1
+      - LOGGING_LEVEL=DEBUG
+      - COLUMN_NUMBER_TO_USE=2 # Genre
+      - VALUE_TO_FILTER_BY=action
+      - CRITERIA=CONTAINS
+      - COLUMNS_TO_KEEP=0,1 # app_id, name
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  q5_join:
+    container_name: q5_join
+    image: join:latest
+    networks:
+      - net 
+    environment:
+      - INPUT_GAMES_QUEUE_NAME=1_q5_shooter_games
+      - INPUT_REVIEWS_QUEUE_NAME=1_q5_counter
+      - OUTPUT_QUEUE_NAME=q5_percentile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  q5_filter_negative:
+    image: filter_by_column_value:latest
+    container_name: q5_filter_negative
+    environment:
+      - RECIVING_QUEUE_NAME=q5_reviews
+      - FORWARDING_QUEUE_NAME=q5_negative_reviews
+      - AMOUNT_OF_FORWARDING_QUEUES=1
+      - LOGGING_LEVEL=DEBUG
+      - COLUMN_NUMBER_TO_USE=1 # review_score
+      - VALUE_TO_FILTER_BY=-1.0 # negative review
+      - CRITERIA=EQUAL
+      - COLUMNS_TO_KEEP=0 # app_id
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - net
+    restart: on-failure
+
+  q5_counter:
+    container_name: q5_counter
+    image: counter:latest
+    entrypoint: python3 /main.py
+    environment:
+      - NODE_ID=1
+      - CONSUME_QUEUE_SUFIX=q5_negative_reviews
+      - PUBLISH_QUEUE=1_q5_counter
+    networks:
+      - net 
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  q5_percentile:
+    container_name: q5_percentile
+    image: percentile:latest
+    entrypoint: python3 /main.py
+    environment:
+      - NODE_ID=1
+      - CONSUME_QUEUE=q5_percentile
+      - PUBLISH_QUEUE=Q5
+    networks:
+      - net 
     depends_on:
       rabbitmq:
         condition: service_healthy

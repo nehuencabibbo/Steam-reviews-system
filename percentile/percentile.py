@@ -4,11 +4,9 @@ from common.middleware.middleware import Middleware
 from common.storage import storage
 from common.protocol.protocol import Protocol
 
-import os
-import csv
-
 END_TRANSMISSION_MESSAGE = ['END'] 
 FILE_NAME = "percentile_data.csv"
+NO_RECORDS = 0
 
 class Percentile:
 
@@ -51,31 +49,27 @@ class Percentile:
 
         self.amount_msg_received += 1
         if (self.amount_msg_received % self.config["SAVE_AFTER_MESSAGES"]) == 0:
-            logging.debug(f"Pesisting data in temporary storage")
             self.persist_data() 
         
         self.middleware.ack(method.delivery_tag)
 
     def persist_data(self):
-
+        logging.debug(f"Pesisting data in temporary storage")
         for record in  self.tmp_record_list:
             storage.add_to_sorted_file(self.config["STORAGE_DIR"], record)
         self.tmp_record_list = [] 
 
     def handle_end_message(self):
-        
-        rank = (self.config["PERCENTILE"] / 100) * self.amount_msg_received
-        rank = round(rank) # instead of interpolating, round the number
 
-        logging.debug(f"Ordinal rank is {rank}")
 
-        percentile = self.get_percentile()
+        percentile_value = self.get_percentile()
+        logging.debug(f"PERCENTILE VALUE: {percentile_value}")
 
         reader = storage.read_sorted_file(self.config["STORAGE_DIR"])
         for row in reader:
             record = row[0].split(",")
             record_value = int(record[1])
-            if record_value >= percentile:
+            if record_value >= percentile_value:
                 logging.debug(f"Sending: {record}")
                 encoded_message = self.protocol.encode(record)
                 self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
@@ -89,14 +83,14 @@ class Percentile:
         rank = (self.config["PERCENTILE"] / 100) * self.amount_msg_received
         rank = round(rank)
 
-        logging.debug(f"Ordinal rank is {rank}")
-
         reader = storage.read_sorted_file(self.config["STORAGE_DIR"])
         for i, row in enumerate(reader):
-            if i == rank:
+            if i == rank - 1:
                 _, value = row[0].split(",")
                 return int(value)
-
+            
+        return NO_RECORDS
+            
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
         self.got_sigterm = True

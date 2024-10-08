@@ -216,7 +216,6 @@ def add_to_sorted_file(dir: str, record: str):
     with open(file_path, mode="r") as infile, open(temp_file, mode="w", newline="") as outfile:
         reader = csv.reader(infile)
         writer = csv.writer(outfile)
-
         for line in reader:
             read_value = int(line[0].split(",", maxsplit=1)[1])
 
@@ -224,7 +223,8 @@ def add_to_sorted_file(dir: str, record: str):
                 writer.writerow(line)
                 continue
             
-            writer.writerow([record])
+            if not new_record_appended:
+                writer.writerow([record])
             writer.writerow(line)
             new_record_appended = True
 
