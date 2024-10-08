@@ -30,7 +30,9 @@ def get_config():
                 "COUNT_BY_PLATFORM_NODES", config["DEFAULT"]["COUNT_BY_PLATFORM_NODES"]
             )
         )
-        config_params["INSTANCES_OF_MYSELF"] = os.getenv("INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"])
+        config_params["INSTANCES_OF_MYSELF"] = os.getenv(
+            "INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"]
+        )
 
         # Reciving queues
         config_params["GAMES_RECIVING_QUEUE_NAME"] = os.getenv(
@@ -48,32 +50,23 @@ def get_config():
         )
         # Q2
         config_params["Q2_GAMES"] = os.getenv("Q2_GAMES", config["DEFAULT"]["Q2_GAMES"])
-        config_params["Q2_FORWARD_NODES"] = int(
-            os.getenv("Q2_FORWARD_NODES", config["DEFAULT"]["Q2_FORWARD_NODES"])
-        )
+
         # Q3
         config_params["Q3_GAMES"] = os.getenv("Q3_GAMES", config["DEFAULT"]["Q3_GAMES"])
         config_params["Q3_REVIEWS"] = os.getenv(
             "Q3_REVIEWS", config["DEFAULT"]["Q3_REVIEWS"]
         )
-        config_params["Q3_FORWARD_NODES"] = int(
-            os.getenv("Q3_FORWARD_NODES", config["DEFAULT"]["Q3_FORWARD_NODES"])
-        )
+
         # Q4
         config_params["Q4_GAMES"] = os.getenv("Q4_GAMES", config["DEFAULT"]["Q4_GAMES"])
         config_params["Q4_REVIEWS"] = os.getenv(
             "Q4_REVIEWS", config["DEFAULT"]["Q4_REVIEWS"]
         )
-        config_params["Q4_FORWARD_NODES"] = int(
-            os.getenv("Q4_FORWARD_NODES", config["DEFAULT"]["Q4_FORWARD_NODES"])
-        )
+
         # Q5
         config_params["Q5_GAMES"] = os.getenv("Q5_GAMES", config["DEFAULT"]["Q5_GAMES"])
         config_params["Q5_REVIEWS"] = os.getenv(
             "Q5_REVIEWS", config["DEFAULT"]["Q5_REVIEWS"]
-        )
-        config_params["Q5_FORWARD_NODES"] = int(
-            os.getenv("Q5_FORWARD_NODES", config["DEFAULT"]["Q5_FORWARD_NODES"])
         )
 
     except KeyError as e:
