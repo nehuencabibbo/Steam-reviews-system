@@ -10,7 +10,7 @@ Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
 Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 2
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
-Q4_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 2
+Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
 Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 2
 Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 2
 Q5_FORWARD_NODES = 2
@@ -379,30 +379,30 @@ def generate_output():
         Q4_AMOUNT_OF_ACTION_GAMES_FILTERS, **q4_filter_action_games_args
     )
 
-    q4_filter_positive_reviews_args = {
+    q4_filter_negative_reviews_args = {
         "output": output,
         "query": "q4",
-        "filter_name": "positive",
+        "filter_name": "negative",
         "input_queue_name": "q4_reviews",
-        "output_queue_name": "q4_positive_reviews",
+        "output_queue_name": "q4_negative_reviews",
         "amount_of_forwarding_queues": 1,
         "logging_level": "DEBUG",
         "column_number_to_use": 2,  # review_score
-        "value_to_filter_by": 1.0,
+        "value_to_filter_by": -1,
         "criteria": "EQUAL",
         "columns_to_keep": "0,1,2",  # app_id, review_score, review
-        "instances_of_myself": Q4_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS,
+        "instances_of_myself": Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
     }
 
     generate_filters_by_value(
-        Q4_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS, **q4_filter_positive_reviews_args
+        Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS, **q4_filter_negative_reviews_args
     )
 
     q4_filter_english_reviews_args = {
         "output": output,
         "query": "q4",
         "filter_name": "english",
-        "input_queue_name": "0_q4_positive_reviews",
+        "input_queue_name": "0_q4_negative_reviews",
         "output_queue_name": "q4_english_reviews",
         "amount_of_forwarding_queues": 1,
         "logging_level": "DEBUG",
@@ -442,22 +442,6 @@ def generate_output():
     generate_filters_by_value(
         Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS, **q4_filter_more_than_5000_args
     )
-
-    # add_filter_by_value(
-    #     output=output,
-    #     query="q4",
-    #     num=0,
-    #     filter_name="more_than_5000",
-    #     input_queue_name="q4_english_review_count",
-    #     output_queue_name="q4_filter_more_than_5000_reviews",
-    #     amount_of_forwarding_queues=1,
-    #     logging_level="DEBUG",
-    #     column_number_to_use=1,  # positive_review_count
-    #     value_to_filter_by=5000,
-    #     criteria="GREATER_THAN",
-    #     columns_to_keep="0,1",  # app_id, positive_review_count
-    #     instances_of_myself=Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS,
-    # )
 
     add_join(
         output=output,
