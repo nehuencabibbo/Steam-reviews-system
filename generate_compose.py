@@ -3,25 +3,25 @@ import yaml
 from typing import *
 
 
-AMOUNT_OF_DROP_FILTER_COLUMNS = 2
-AMOUNT_OF_DROP_NULLS = 2
+AMOUNT_OF_DROP_FILTER_COLUMNS = 10
+AMOUNT_OF_DROP_NULLS = 10
 # Q2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
 # Q3
-Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
-Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 2
-Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
+Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 6
+Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 6
+Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 6
 # Q4
-Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
-Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
-Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 2
-Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 2
-Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
+Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
+Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
+Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 10
+Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 3
+Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 3
 # Q5
 Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
 Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
-Q5_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
+Q5_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
 
 
 def create_file(output, file_name):
@@ -257,18 +257,7 @@ def generate_counters_by_app_id(amount_of_counters: int, **kwargs):
         add_counter_by_app_id(**kwargs, num=i)
 
 
-def generate_output():
-    output = {}
-
-    output["name"] = "steam_reviews_system"
-
-    output["services"] = {}
-    add_rabbit(output)
-    add_client(output)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS)
-
-    # -------------------------------------------- Q1 -----------------------------------------
+def generate_q1(output=Dict):
     add_counter_by_platform(
         output=output,
         query="q1",
@@ -277,7 +266,8 @@ def generate_output():
         publish_queue="Q1",
     )
 
-    # -------------------------------------------- Q2 -----------------------------------------
+
+def generate_q2(output=Dict):
     add_top_k(
         output=output,
         query="q2",
@@ -322,7 +312,8 @@ def generate_output():
         **q2_indie_games_from_last_decade_args,
     )
 
-    # # -------------------------------------------- Q3 -----------------------------------------
+
+def generate_q3(output: Dict):
     q3_filter_indie_games_args = {
         "output": output,
         "query": "q3",
@@ -351,7 +342,7 @@ def generate_output():
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
         "logging_level": "DEBUG",
         "column_number_to_use": 1,  # review_score
-        "value_to_filter_by": 1.0,  # positive_review
+        "value_to_filter_by": 1,  # positive_review
         "criteria": "EQUAL",
         "columns_to_keep": 0,  # app_id ,
         "instances_of_myself": Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS,
@@ -369,14 +360,6 @@ def generate_output():
     generate_counters_by_app_id(
         Q3_AMOUNT_OF_COUNTERS_BY_APP_ID, **q3_counter_by_app_id_args
     )
-
-    # add_counter_by_app_id(
-    #     output=output,
-    #     query="q3",
-    #     num=0,
-    #     consume_queue_sufix="q3_positive_reviews",
-    #     publish_queue="q3_positive_review_count",
-    # )
 
     add_join(
         output=output,
@@ -397,8 +380,8 @@ def generate_output():
         k=5,
     )
 
-    # -------------------------------------------- Q4 -----------------------------------------
 
+def generate_q4(output: Dict):
     q4_filter_action_games_args = {
         "output": output,
         "query": "q4",
@@ -466,14 +449,6 @@ def generate_output():
         Q4_AMOUNT_OF_COUNTERS_BY_APP_ID, **q4_english_reviews_counter_args
     )
 
-    # add_counter_by_app_id(
-    #     output=output,
-    #     query="q4",
-    #     num=0,
-    #     consume_queue_sufix="q4_english_reviews",
-    #     publish_queue="q4_english_review_count",
-    # )
-
     q4_filter_more_than_5000_args = {
         "output": output,
         "query": "q4",
@@ -502,8 +477,8 @@ def generate_output():
         amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
     )
 
-    # ---------------------------------------- Q5 ---------------------------------------------
 
+def generate_q5(output: Dict):
     q5_filter_action_games_args = {
         "output": output,
         "query": "q5",
@@ -568,7 +543,30 @@ def generate_output():
         consume_queue="q5_percentile",
         publish_queue="Q5",
     )
-    # ---------------------------------------- END OF QUERIES ---------------------------------------------
+
+
+def generate_output():
+    output = {}
+
+    output["name"] = "steam_reviews_system"
+
+    output["services"] = {}
+    add_rabbit(output)
+    add_client(output)
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS)
+
+    # -------------------------------------------- Q1 -----------------------------------------
+    # generate_q1(output=output)
+    # -------------------------------------------- Q2 -----------------------------------------
+    # generate_q2(output=output)
+    # -------------------------------------------- Q3 -----------------------------------------
+    generate_q3(output=output)
+    # -------------------------------------------- Q4 -----------------------------------------
+    # generate_q4(output=output)
+    # -------------------------------------------- Q5 -----------------------------------------
+    # generate_q5(output=output)
+    # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
 
