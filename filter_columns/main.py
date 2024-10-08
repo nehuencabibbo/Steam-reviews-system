@@ -17,8 +17,11 @@ def get_config():
     config = ConfigParser(os.environ)
     config.read("config.ini")
     try:
+        # Node config 
         config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])
+        config_params["INSTANCES_OF_MYSELF"] = os.getenv("INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"])
 
+        # Reciving queues 
         config_params["CLIENT_GAMES_QUEUE_NAME"] = os.getenv(
             "CLIENT_GAMES_QUEUE_NAME", config["DEFAULT"]["CLIENT_GAMES_QUEUE_NAME"]
         )
@@ -26,6 +29,7 @@ def get_config():
             "CLIENT_REVIEWS_QUEUE_NAME", config["DEFAULT"]["CLIENT_REVIEWS_QUEUE_NAME"]
         )
 
+        # Forwarding queues
         config_params["NULL_DROP_GAMES_QUEUE_NAME"] = os.getenv(
             "NULL_DROP_GAMES_QUEUE_NAME",
             config["DEFAULT"]["NULL_DROP_GAMES_QUEUE_NAME"],
@@ -35,6 +39,7 @@ def get_config():
             config["DEFAULT"]["NULL_DROP_REVIEWS_QUEUE_NAME"],
         )
 
+        # Dataset related 
         games_columns_to_keep = os.getenv(
             "GAMES_COLUMNS_TO_KEEP", config["DEFAULT"]["GAMES_COLUMNS_TO_KEEP"]
         ).split(",")
@@ -47,6 +52,7 @@ def get_config():
         reviews_columns_to_keep = [int(column) for column in reviews_columns_to_keep]
         config_params["REVIEWS_COLUMNS_TO_KEEP"] = reviews_columns_to_keep
 
+        # General config 
         config_params["LOGGING_LEVEL"] = os.getenv(
             "LOGGING_LEVEL", config["DEFAULT"]["LOGGING_LEVEL"]
         )

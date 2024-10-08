@@ -24,6 +24,7 @@ def get_config():
         config_params["RABBIT_IP"] = os.getenv(
             "RABBIT_IP", config["DEFAULT"]["RABBIT_IP"]
         )
+        config_params["INSTANCES_OF_MYSELF"] = os.getenv("INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"])
 
         # Node related
         config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])

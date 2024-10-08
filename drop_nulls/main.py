@@ -30,6 +30,7 @@ def get_config():
                 "COUNT_BY_PLATFORM_NODES", config["DEFAULT"]["COUNT_BY_PLATFORM_NODES"]
             )
         )
+        config_params["INSTANCES_OF_MYSELF"] = os.getenv("INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"])
 
         # Reciving queues
         config_params["GAMES_RECIVING_QUEUE_NAME"] = os.getenv(

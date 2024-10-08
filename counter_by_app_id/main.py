@@ -51,6 +51,8 @@ def main():
 
     logging_level = config.pop("LOGGING_LEVEL")
     init_logger(logging_level)
+    logging.debug("Logging configuration:")
+    [logging.debug(f"{key}: {value}") for key, value in config.items()]
     
     broker_ip = config.pop("RABBIT_IP")
     middleware = Middleware(broker_ip)
