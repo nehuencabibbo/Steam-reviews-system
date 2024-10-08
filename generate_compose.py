@@ -5,14 +5,19 @@ from typing import *
 
 AMOUNT_OF_DROP_FILTER_COLUMNS = 2
 AMOUNT_OF_DROP_NULLS = 2
+# Q2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
+# Q3
 Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 2
+Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
+# Q4
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
 Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
 Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 2
 Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 2
+# Q5
 Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
 Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
 
@@ -239,9 +244,13 @@ def generate_filters_by_value(
     amount_of_filters: int,
     **kwargs,
 ):
-    input_queue_name = kwargs.pop("input_queue_name")
     for i in range(amount_of_filters):
-        add_filter_by_value(**kwargs, input_queue_name=input_queue_name, num=i)
+        add_filter_by_value(**kwargs, num=i)
+
+
+def generate_counters_by_app_id(amount_of_counters: int, **kwargs):
+    for i in range(amount_of_counters):
+        add_counter_by_app_id(**kwargs, num=i)
 
 
 def generate_output():
@@ -335,7 +344,7 @@ def generate_output():
         "filter_name": "filter_positive",
         "input_queue_name": "q3_reviews",
         "output_queue_name": "q3_positive_reviews",
-        "amount_of_forwarding_queues": 1,
+        "amount_of_forwarding_queues": Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
         "logging_level": "DEBUG",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": 1.0,  # positive_review
@@ -347,13 +356,23 @@ def generate_output():
         Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS, **q3_filter_positive_args
     )
 
-    add_counter_by_app_id(
-        output=output,
-        query="q3",
-        num=0,
-        consume_queue_sufix="q3_positive_reviews",
-        publish_queue="q3_positive_review_count",
+    q3_counter_by_app_id_args = {
+        "output": output,
+        "query": "q3",
+        "consume_queue_sufix": "q3_positive_reviews",
+        "publish_queue": "q3_positive_review_count",
+    }
+    generate_counters_by_app_id(
+        Q3_AMOUNT_OF_COUNTERS_BY_APP_ID, **q3_counter_by_app_id_args
     )
+
+    # add_counter_by_app_id(
+    #     output=output,
+    #     query="q3",
+    #     num=0,
+    #     consume_queue_sufix="q3_positive_reviews",
+    #     publish_queue="q3_positive_review_count",
+    # )
 
     add_join(
         output=output,

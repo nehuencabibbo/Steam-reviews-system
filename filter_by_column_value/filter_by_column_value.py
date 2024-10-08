@@ -47,7 +47,7 @@ class FilterColumnByValue:
 
     def __handle_end_transmission(self, body: List[str]):
         # Si me llego un END...
-        # 1) Me fijo si los la cantidad de ids que hay es igual a 
+        # 1) Me fijo si los la cantidad de ids que hay es igual a
         # la cantidad total de instancias de mi mismo que hay.
         # Si es asi => Envio el END a la proxima cola
         # Si no es asi => Checkeo si mi ID esta en la lista
@@ -58,17 +58,15 @@ class FilterColumnByValue:
             encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
             self.__send_end_transmission_to_all_forwarding_queues()
 
-        else: 
+        else:
             message = [END_TRANSMISSION_MESSAGE]
             if not self._config["NODE_ID"] in peers_that_recived_end:
                 peers_that_recived_end.append(self._config["NODE_ID"])
-            
+
             message += peers_that_recived_end
             encoded_message = self._protocol.encode(message)
             self._middleware.publish(
-                encoded_message, 
-                self._config["RECIVING_QUEUE_NAME"], 
-                ""
+                encoded_message, self._config["RECIVING_QUEUE_NAME"], ""
             )
 
     def __send_end_transmission_to_all_forwarding_queues(self):
@@ -131,19 +129,19 @@ class FilterColumnByValue:
         Do not use to send END message as it is handled differently.
         """
         message = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], message)
-        logging.debug(f"Sending message: {message}")
         encoded_message = self._protocol.encode(message)
 
         # TODO: Change with app id when available
-        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            node_id = node_id_to_send_to(
-                "1", message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
-            )
-            self._middleware.publish(
-                encoded_message, f'{node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
-            )
-
-
+        # for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
+        node_id = node_id_to_send_to(
+            "1", message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+        )
+        logging.debug(
+            f'Sending message: {message} to queue: {node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
+        )
+        self._middleware.publish(
+            encoded_message, f'{node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
+        )
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
