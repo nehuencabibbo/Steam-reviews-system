@@ -15,7 +15,6 @@ class CounterByAppId:
         self.config = config
         self.middleware = middleware
         self.got_sigterm = False
-        self.__received_end = False
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
@@ -37,37 +36,47 @@ class CounterByAppId:
 
     def handle_message(self, ch, method, properties, body):
 
-        body = self.protocol.decode(body)
-        body = [value.strip() for value in body]
+        body = self.protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
 
         logging.debug(f"GOT MSG: {body}")
 
-        if len(body) == 1 and body[0] == "END" and not self.__received_end:
+        if len(body) == 1 and body[0][0] == "END":
             self.send_results()
             self.middleware.ack(method.delivery_tag)
-            self.__received_end = True
             return
-
-        record = f"{body[0]},{1}"
-        storage.sum_to_record(
-            self.config["STORAGE_DIR"], self.config["RANGE_FOR_PARTITION"], record
-        )
+        
+        for message in body:
+            record = f"{message[0]},{1}"
+            storage.sum_to_record(
+                self.config["STORAGE_DIR"], self.config["RANGE_FOR_PARTITION"], record
+            )
 
         self.middleware.ack(method.delivery_tag)
 
     def send_results(self):
-
+        batch = []
         reader = storage.read_all_files(self.config["STORAGE_DIR"])
         for record in reader:
+            #get batch
             message = record[0].split(",")
-            logging.debug(f"Sending: {message}")
-            encoded_msg = self.protocol.encode(message)
-            self.middleware.publish(
-                encoded_msg, queue_name=self.config["PUBLISH_QUEUE"]
-            )
+            batch.append(message)
+            if len(batch) == self.config["BATCH_SIZE"]:
+                logging.debug(f"Sending batch")
+                encoded_batch = self.protocol.encode_batch(batch)
+                self.middleware.publish(
+                    encoded_batch, queue_name=self.config["PUBLISH_QUEUE"]
+                )
+                batch = []    
+                 
+        if len(batch) > 0:
+            encoded_batch = self.protocol.encode_batch(batch)
+            #encoded_msg = self.protocol.encode([key,str(value)])
+            self.middleware.publish(encoded_batch, queue_name=self.config["PUBLISH_QUEUE"])
+            batch = []     
 
         logging.debug("SENDING END")
-        encoded_msg = self.protocol.encode([END_TRANSMISSION_MESSAGE])
+        encoded_msg = self.protocol.encode_batch([[END_TRANSMISSION_MESSAGE]])
         self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
 
     def __sigterm_handler(self, signal, frame):

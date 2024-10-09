@@ -27,6 +27,8 @@ def get_config():
         config_params["GAME_FILE_PATH"] = os.getenv("GAME_FILE_PATH", config["DEFAULT"]["GAME_FILE_PATH"])
         config_params["REVIEWS_FILE_PATH"] = os.getenv("REVIEWS_FILE_PATH", config["DEFAULT"]["REVIEWS_FILE_PATH"])
         
+        config_params["BATCH_SIZE"] = int(os.getenv("BATCH_SIZE", config["DEFAULT"]["BATCH_SIZE"]))
+
         config_params["LOGGING_LEVEL"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
         config_params["SENDING_WAIT_TIME"] = int(os.getenv('SENDING_WAIT_TIME', config["DEFAULT"]["SENDING_WAIT_TIME"]))
 

@@ -43,11 +43,11 @@ class Join:
         # logging.debug(f"[INPUT GAMES] received: {body}")
 
         # body = body.decode("utf-8").split(",")
-        body = self.__protocol.decode(body)
-        body = [value.strip() for value in body]
+        body = self.__protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
         logging.debug(f"Recived game: {body}")
 
-        if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
+        if body[0][0] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of games received")
             reviews_callback = self.__middleware.generate_callback(
                 self.__reviews_callback,
@@ -63,9 +63,10 @@ class Join:
             return
 
         try:
-            write_by_range(
-                "tmp/", int(self.__config["PARTITION_RANGE"]), ",".join(body)
-            )
+            for message in body:
+                write_by_range(
+                    "tmp/", int(self.__config["PARTITION_RANGE"]), ",".join(message)
+                )
         except ValueError as e:
             logging.error(
                 f"An error has occurred. {e}",
@@ -79,33 +80,38 @@ class Join:
         # logging.debug(f"[INPUT REVIEWS] received: {body}")
 
         # message = body.decode("utf-8")
-        body = self.__protocol.decode(body)
-
-        body = [value.strip() for value in body]
+        body = self.__protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
         logging.debug(f"Recived review: {body}")
 
-        if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
+        if body[0][0] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of reviews received")
 
-            encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
+            encoded_message = self.__protocol.encode_batch([[END_TRANSMISSION_MESSAGE]])
             self.__middleware.publish(encoded_message, forwarding_queue_name, "")
 
             self.__middleware.ack(delivery_tag)
 
             return
 
-        # TODO: handle conversion error
-        app_id = int(body[0])
-        for record in read_by_range(
-            "tmp/", int(self.__config["PARTITION_RANGE"]), app_id
-        ):
-            record_app_id, record_info = record[0].split(",", maxsplit=1)
-            if app_id == int(record_app_id):
-                # Get rid of the app_id from the review and append it to the original game record
-                joined_message = record_info + "," + body[1]
+        new_batch = []
+        for message in body:
 
-                encoded_message = self.__protocol.encode([joined_message])
-                self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+        # TODO: handle conversion error
+            app_id = int(message[0])
+            for record in read_by_range(
+                "tmp/", int(self.__config["PARTITION_RANGE"]), app_id
+            ):
+                record_app_id, record_info = record[0].split(",", maxsplit=1)
+                if app_id == int(record_app_id):
+                    # Get rid of the app_id from the review and append it to the original game record
+                    joined_message = record_info + "," + message[1]
+                    #TODO: CHECK IF JOINED MESSAGE IS ENCODED CORRECTLY
+                    new_batch.append([joined_message])
+
+
+        encoded_message = self.__protocol.encode_batch(new_batch)
+        self.__middleware.publish(encoded_message, forwarding_queue_name, "")
 
         self.__middleware.ack(delivery_tag)
 

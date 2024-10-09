@@ -7,7 +7,7 @@ from common.protocol.protocol import Protocol
 import os
 import csv
 
-END_TRANSMISSION_MESSAGE = ['END'] 
+END_TRANSMISSION_MESSAGE = 'END' 
 FILE_NAME = "percentile_data.csv"
 
 class Percentile:
@@ -35,24 +35,27 @@ class Percentile:
             if not self.got_sigterm: raise
     
     def handle_message(self, ch, method, properties, body):
-        body = self.protocol.decode(body)
-        body = [value.strip() for value in body]
+        body = self._protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
 
         logging.debug(f"GOT MSG: {body}")
 
-        if len(body) == 1 and body[0] == "END":
+        if body[0][0] == END_TRANSMISSION_MESSAGE:
             self.persist_data() #persist data that was not saved
             self.handle_end_message()
             self.middleware.ack(method.delivery_tag)
             return
         
-        body = ",".join(body)
-        self.tmp_record_list.append(body)
+        #TODO: save every batch?
+        for message in body:
 
-        self.amount_msg_received += 1
-        if (self.amount_msg_received % self.config["SAVE_AFTER_MESSAGES"]) == 0:
-            logging.debug(f"Pesisting data in temporary storage")
-            self.persist_data() 
+            message = ",".join(message)
+            self.tmp_record_list.append(message)
+
+            self.amount_msg_received += 1
+            if (self.amount_msg_received % self.config["SAVE_AFTER_MESSAGES"]) == 0:
+                logging.debug(f"Pesisting data in temporary storage")
+                self.persist_data() 
         
         self.middleware.ack(method.delivery_tag)
 
@@ -71,16 +74,26 @@ class Percentile:
 
         percentile = self.get_percentile()
 
+        batch = []
+
         reader = storage.read_sorted_file(self.config["STORAGE_DIR"])
         for row in reader:
             record = row[0].split(",")
             record_value = int(record[1])
             if record_value >= percentile:
-                logging.debug(f"Sending: {record}")
-                encoded_message = self.protocol.encode(record)
-                self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
+                logging.debug(f"Adding to batch: {record}")
+                batch.append(record)
+                if len(batch) == self.config["BATCH_SIZE"]:
+                    encoded_batch = self.protocol.encode_batch(batch)
+                    self.middleware.publish(encoded_batch, self.config["PUBLISH_QUEUE"])
+                    batch = []
+                # encoded_message = self.protocol.encode(record)
+                # self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
+        if len(batch) == 0:
+            encoded_batch = self.protocol.encode_batch(batch)
+            self.middleware.publish(encoded_batch, self.config["PUBLISH_QUEUE"])
 
-        encoded_message = self.protocol.encode(END_TRANSMISSION_MESSAGE)
+        encoded_message = self.protocol.encode_batch([[END_TRANSMISSION_MESSAGE]])
         self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
 
         self.amount_msg_received = 0

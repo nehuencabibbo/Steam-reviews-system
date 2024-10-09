@@ -33,33 +33,46 @@ class CounterByPlatform:
     
     def handle_message(self, ch, method, properties, body):
 
-        body = self.protocol.decode(body)
-        body = [value.strip() for value in body]
+        # body = self.protocol.decode(body)
+        # body = [value.strip() for value in body]
+        body = self.protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
 
         logging.debug(f"GOT MSG: {body}")
 
-        if len(body) == 1 and body[0] == "END":
+        if len(body) == 1 and body[0][0] == "END":
             self.send_results()
             self.middleware.ack(method.delivery_tag)
             return
 
-        field_to_count = body[0]
-        self.count(field_to_count)
+        for message in body:
+            field_to_count = message[0]
+            self.count(field_to_count)
 
         self.middleware.ack(method.delivery_tag)
 
     
     def send_results(self):
         # TODO: READ FROM STORAGE
-        
+        batch = []
         for key, value in self.count_dict.items():
             if self.got_sigterm:
                 return
+            batch.append([key,str(value)])
 
-            encoded_msg = self.protocol.encode([key,str(value)])
-            self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
+            if len(batch) == self.config["BATCH_SIZE"]:
+                encoded_batch = self.protocol.encode_batch(batch)
+            #encoded_msg = self.protocol.encode([key,str(value)])
+                self.middleware.publish(encoded_batch, queue_name=self.config["PUBLISH_QUEUE"])
+                batch = []
+        
+        if len(batch) > 0:
+            encoded_batch = self.protocol.encode_batch(batch)
+            #encoded_msg = self.protocol.encode([key,str(value)])
+            self.middleware.publish(encoded_batch, queue_name=self.config["PUBLISH_QUEUE"])
+            batch = []
 
-        encoded_msg = self.protocol.encode([END_TRANSMISSION_MESSAGE])
+        encoded_msg = self.protocol.encode_batch([[END_TRANSMISSION_MESSAGE]])
         self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
     
     def count(self, field_to_count):

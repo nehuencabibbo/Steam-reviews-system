@@ -66,7 +66,7 @@ class FilterColumns:
         #     Si no es asi => Agrego mi id a la lista y reencolo
         peers_that_recived_end = body[1:]
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
-            encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+            encoded_message = self._protocol.encode_batch([[END_TRANSMISSION_MESSAGE]])
             
             self._middleware.publish(encoded_message, forwarding_queue_name, "")
 
@@ -76,7 +76,7 @@ class FilterColumns:
                 peers_that_recived_end.append(self._config["NODE_ID"])
             
             message += peers_that_recived_end
-            encoded_message = self._protocol.encode(message)
+            encoded_message = self._protocol.encode_batch([message])
             self._middleware.publish(encoded_message, reciving_queue_name, "")
 
     def __handle_message(
@@ -86,20 +86,21 @@ class FilterColumns:
         message_type: str,
         forwarding_queue_name: str,
     ):
-        body = self._protocol.decode(body)
-        body = [value.strip() for value in body]
+        body = self._protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
 
-        if body[0] == END_TRANSMISSION_MESSAGE:
+
+        if body[0][0] == END_TRANSMISSION_MESSAGE:
             logging.debug(f"Recived END from {message_type}: {body}")
             if message_type == GAMES_MESSAGE_TYPE:
                 self.__handle_end_transmission(
-                    body, 
+                    body[0], 
                     self._config["CLIENT_GAMES_QUEUE_NAME"], 
                     self._config["NULL_DROP_GAMES_QUEUE_NAME"]
                 )
             elif message_type == REVIEWS_MESSAGE_TYPE:
                 self.__handle_end_transmission(
-                    body, 
+                    body[0], 
                     self._config["CLIENT_REVIEWS_QUEUE_NAME"],
                     self._config["NULL_DROP_REVIEWS_QUEUE_NAME"]
                 )
@@ -124,7 +125,7 @@ class FilterColumns:
             raise Exception(f"[ERROR] Unkown message type {message_type}")
 
         filtered_body = self.__filter_columns(columns_to_keep, body)
-        filtered_body = self._protocol.encode(filtered_body)
+        filtered_body = self._protocol.encode_batch(filtered_body)
         logging.debug(
             f"[FILTER COLUMNS {self._config['NODE_ID']}] Sending {message_type}: {body}"
         )
@@ -134,7 +135,12 @@ class FilterColumns:
         self._middleware.ack(delivery_tag)
 
     def __filter_columns(self, columns_to_keep: List[int], data: List[str]):
-        return [data[i] for i in columns_to_keep]
+        filtered_batch = []
+        for message in data:
+            logging.info(f"MESSAGE IS {message}")
+            filtered_batch.append([message[i] for i in columns_to_keep])
+        # return [data[i] for i in columns_to_keep]
+        return filtered_batch
 
     def __signal_handler(self, sig, frame):
         logging.debug(

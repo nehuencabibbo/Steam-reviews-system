@@ -41,21 +41,22 @@ class TopK:
 
     def __callback(self, delivery_tag, body, message_type, forwarding_queue_name):
 
-        body = self.__protocol.decode(body)
-        body = [value.strip() for value in body]
+        body = self.__protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
         logging.debug(f"[INPUT GAMES] received: {body}")
 
-        if len(body) == 1 and body[0] == END_TRANSMISSION_MESSAGE:
+        if body[0][0] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of games received")
             # TODO: Aca manda el topk
             self.__send_top(forwarding_queue_name)
-            encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
+            encoded_message = self.__protocol.encode_batch([[END_TRANSMISSION_MESSAGE]])
             self.__middleware.publish(encoded_message, forwarding_queue_name, "")
             self.__middleware.ack(delivery_tag)
             return
 
         try:
-            add_to_top("/tmp", ",".join(body), int(self.__config["K"]))
+            for message in body:
+                add_to_top("/tmp", ",".join(message), int(self.__config["K"]))
         except ValueError as e:
             logging.error(
                 f"An error has occurred. {e}",
@@ -64,8 +65,11 @@ class TopK:
         self.__middleware.ack(delivery_tag)
 
     def __send_top(self, forwarding_queue_name):
+        batch = []
         for record in read_top("tmp/", int(self.__config["K"])):
-            encoded_message = self.__protocol.encode(record)
-            self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+            batch.append(record)
+
+        encoded_message = self.__protocol.encode_batch(batch)
+        self.__middleware.publish(encoded_message, forwarding_queue_name, "")
 
         logging.debug(f"Top sent to queue: {forwarding_queue_name}")

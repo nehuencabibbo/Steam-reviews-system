@@ -22,6 +22,9 @@ def get_config():
         config_params["SAVE_AFTER_MESSAGES"] = int(os.getenv('SAVE_AFTER_MESSAGES', config["DEFAULT"]["SAVE_AFTER_MESSAGES"]))
         config_params["STORAGE_DIR"] = os.getenv('STORAGE_DIR', config["DEFAULT"]["STORAGE_DIR"])
 
+
+        config_params["BATCH_SIZE"] = int(os.getenv("BATCH_SIZE", config["DEFAULT"]["BATCH_SIZE"]))
+
         # logging
         config_params["LOGGING_LEVEL"] = os.getenv('LOGGING_LEVEL', config["DEFAULT"]["LOGGING_LEVEL"])
         

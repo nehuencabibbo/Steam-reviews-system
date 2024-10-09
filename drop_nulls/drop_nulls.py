@@ -87,11 +87,11 @@ class DropNulls:
                 peers_that_recived_end.append(self._config["NODE_ID"])
 
             message += peers_that_recived_end
-            encoded_message = self._protocol.encode(message)
+            encoded_message = self._protocol.encode_batch([message])
             self._middleware.publish(encoded_message, reciving_queue_name, "")
 
     def __handle_games_end_transmission_by_query(self):
-        encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+        encoded_message = self._protocol.encode_batch([[END_TRANSMISSION_MESSAGE]])
         # Mandar el END a cada uno particular
         # Como tengo N nodos de count by platform, a cada uno de ellos le tiene que llegar el end
         # Q1
@@ -106,90 +106,128 @@ class DropNulls:
             self._middleware.publish(encoded_message, self._config[f"Q{i}_GAMES"])
 
     def __handle_games(self, delivery_tag: int, body: bytes):
-        body = self._protocol.decode(body)
-        body = [value.strip() for value in body]
+        body = self._protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
 
-        if body[0] == END_TRANSMISSION_MESSAGE:
+        if body[0][0] == END_TRANSMISSION_MESSAGE:
             logging.debug(f"Recived games END: {body}")
             self.__handle_end_transmission(
-                body, self._config["GAMES_RECIVING_QUEUE_NAME"], GAMES_MESSAGE_TYPE
+                body[0], self._config["GAMES_RECIVING_QUEUE_NAME"], GAMES_MESSAGE_TYPE
             )
 
             self._middleware.ack(delivery_tag)
 
             return
 
-        logging.debug(f"Recived game: {body}")
-        if NULL_FIELD_VALUE in body:
-            self._middleware.ack(delivery_tag)
-            return
+        logging.debug(f"Recived batch: {body}")
 
-        # Q1 Platform: plataform
-        for platform, platform_index in PLATFORMS.items():
-            platform_supported = body[platform_index]  # True if supported else False
+        q1_platform_batches = {
+            "WINDOWS": [],
+            "LINUX": [],
+            "MAC": []
+        }
 
-            # TODO: Should this be handeled in a different node?
-            if platform_supported.lower() == "true":
-                node_id = node_id_to_send_to(
-                    "1", platform, self._config["COUNT_BY_PLATFORM_NODES"]
-                )
-                encoded_message = self._protocol.encode([platform])
-                self._middleware.publish(
-                    encoded_message, f"{node_id}_{self._config['Q1_PLATFORM']}"
-                )
+        q2_batch = []
+        other_queries_batches = []
+  
+        for message in body:
 
-        # Q2 Games: app_id, name, release date, genre, avg playtime forever
-        encoded_message = self._protocol.encode(
-            [
-                body[GAMES_APP_ID],
-                body[GAMES_NAME],
-                body[GAMES_RELEASE_DATE],
-                body[GAMES_AVG_PLAYTIME_FOREVER],
-                body[GAMES_GENRE],
-            ]
-        )
-        self._middleware.publish(encoded_message, self._config["Q2_GAMES"])
+            if NULL_FIELD_VALUE in message:
+                continue
 
-        # Q3, Q4, Q5 Games: app_id, name, genre
-        encoded_message = self._protocol.encode(
-            [body[GAMES_APP_ID], body[GAMES_NAME], body[GAMES_GENRE]]
-        )
+            # Q1 Platform: plataform
+            for platform, platform_index in PLATFORMS.items():
+                platform_supported = message[platform_index]  # True if supported else False
 
-        for i in range(3, 6):
-            self._middleware.publish(encoded_message, self._config[f"Q{i}_GAMES"])
+                # TODO: Should this be handeled in a different node?
+                if platform_supported.lower() == "true":
+                    q1_platform_batches[platform].append([platform])
+
+            # Q2 Games: app_id, name, release date, genre, avg playtime forever
+
+            q2_batch.append(
+                [
+                    message[GAMES_APP_ID],
+                    message[GAMES_NAME],
+                    message[GAMES_RELEASE_DATE],
+                    message[GAMES_AVG_PLAYTIME_FOREVER],
+                    message[GAMES_GENRE],
+                ]
+            )
+
+            # Q3, Q4, Q5 Games: app_id, name, genre
+            other_queries_batches.append(
+                [message[GAMES_APP_ID], message[GAMES_NAME], message[GAMES_GENRE]]
+            )
+
+        self._send_games_batch(q1_platform_batches, q2_batch, other_queries_batches)
 
         self._middleware.ack(delivery_tag)
 
+        q1_platform_batches = {
+            "WINDOWS": [],
+            "LINUX": [],
+            "MAC": []
+        }
+        q2_batch = []
+        other_queries_batches = []
+    
+    def _send_games_batch(self, q1_batch:dict, q2_batch, other_queries_batches):
+        # Q1 Games
+        for platform in q1_batch.keys():
+            platform_batch = q1_batch[platform]
+            if len(platform_batch) == 0:
+                continue
+
+            encoded_batch = self._protocol.encode_batch(platform_batch)
+            node_id = node_id_to_send_to(
+                "1", platform, self._config["COUNT_BY_PLATFORM_NODES"]
+            )
+            self._middleware.publish(
+                encoded_batch, f"{node_id}_{self._config['Q1_PLATFORM']}"
+            )
+        
+        # Q2 Games
+        q2_encoded_batch = self._protocol.encode_batch(q2_batch)
+        self._middleware.publish(q2_encoded_batch, self._config["Q2_GAMES"])
+        
+        # Q3, Q4, Q5 Games:
+        encoded_batch = self._protocol.encode_batch(other_queries_batches)
+        for i in range(3, 6):
+            self._middleware.publish(encoded_batch, self._config[f"Q{i}_GAMES"])
+
     def __handle_reviews_end_transmission_by_query(self):
         for i in range(3, 6):
-            encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+            encoded_message = self._protocol.encode_batch([[END_TRANSMISSION_MESSAGE]])
             self._middleware.publish(encoded_message, self._config[f"Q{i}_REVIEWS"])
 
     def __handle_reviews(self, delivery_tag: int, body: bytes):
-        body = self._protocol.decode(body)
-        body = [value.strip() for value in body]
-        if body[0] == END_TRANSMISSION_MESSAGE:
+        body = self._protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
+    
+        if body[0][0] == END_TRANSMISSION_MESSAGE:
             logging.debug(f"Recived reviews END: {body}")
             self.__handle_end_transmission(
-                body, self._config["REVIEWS_RECIVING_QUEUE_NAME"], REVIEWS_MESSAGE_TYPE
+                body[0], self._config["REVIEWS_RECIVING_QUEUE_NAME"], REVIEWS_MESSAGE_TYPE
             )
             self._middleware.ack(delivery_tag)
 
             return
 
         logging.debug(f"[NULL DROP {self._config['NODE_ID']}] Recived review: {body}")
+
         # Q3, Q5 Reviews: app_id, review_score
         for i in ["3", "5"]:
-            encoded_message = self._protocol.encode(
-                [body[REVIEW_APP_ID], body[REVIEW_SCORE]]
-            )
-            self._middleware.publish(encoded_message, self._config[f"Q{i}_REVIEWS"])
+            batch = [[message[REVIEW_APP_ID], message[REVIEW_SCORE]] for message in body]
+
+            encoded_batch = self._protocol.encode_batch(batch)
+            self._middleware.publish(encoded_batch, self._config[f"Q{i}_REVIEWS"])
 
         # Q4 Reviews: app_id, review_text, review_score
-        encoded_message = self._protocol.encode(
-            [body[REVIEW_APP_ID], body[REVIEW_TEXT], body[REVIEW_SCORE]]
-        )
-        self._middleware.publish(encoded_message, self._config[f"Q4_REVIEWS"])
+        batch = [[message[REVIEW_APP_ID], message[REVIEW_TEXT], message[REVIEW_SCORE]] for message in body]
+
+        encoded_batch = self._protocol.encode_batch(batch)
+        self._middleware.publish(encoded_batch, self._config[f"Q4_REVIEWS"])
 
         self._middleware.ack(delivery_tag)
 

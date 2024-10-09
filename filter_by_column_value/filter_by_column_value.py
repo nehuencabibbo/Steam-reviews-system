@@ -55,7 +55,7 @@ class FilterColumnByValue:
         #     Si no es asi => Agrego mi id a la lista y reencolo
         peers_that_recived_end = body[1:]
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
-            encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+            encoded_message = self._protocol.encode_batch([[END_TRANSMISSION_MESSAGE]])
             self.__send_end_transmission_to_all_forwarding_queues()
 
         else: 
@@ -64,7 +64,7 @@ class FilterColumnByValue:
                 peers_that_recived_end.append(self._config["NODE_ID"])
             
             message += peers_that_recived_end
-            encoded_message = self._protocol.encode(message)
+            encoded_message = self._protocol.encode_batch([message])
             self._middleware.publish(
                 encoded_message, 
                 self._config["RECIVING_QUEUE_NAME"], 
@@ -72,7 +72,7 @@ class FilterColumnByValue:
             )
 
     def __send_end_transmission_to_all_forwarding_queues(self):
-        encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+        encoded_message = self._protocol.encode_batch([[END_TRANSMISSION_MESSAGE]])
 
         # TODO: Verify that EVERY queue is started at 0
         for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
@@ -81,11 +81,12 @@ class FilterColumnByValue:
             )
 
     def __handle_message(self, delivery_tag: int, body: bytes):
-        body = self._protocol.decode(body)
-        body = [value.strip() for value in body]
+        body = self._protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
+
         logging.debug(f"Recived message: {body}")
-        if body[0] == END_TRANSMISSION_MESSAGE:
-            self.__handle_end_transmission(body)
+        if body[0][0] == END_TRANSMISSION_MESSAGE:
+            self.__handle_end_transmission(body[0])
 
             self._middleware.ack(delivery_tag)
 
@@ -95,50 +96,71 @@ class FilterColumnByValue:
 
         self._middleware.ack(delivery_tag)
 
-    def __filter_according_to_criteria(self, body: List[str]):
-        column_to_use = body[self._config["COLUMN_NUMBER_TO_USE"]]
-        value_to_filter_by = self._config["VALUE_TO_FILTER_BY"]
-        criteria = self._config["CRITERIA"]
+    def __filter_according_to_criteria(self, body: List[List[str]]):
+        
+        batch = {}
+        for message in body:
+            node_id = node_id_to_send_to(
+                "1", message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+            )
+            batch[node_id] = batch.get(node_id, []) #create list if node was not a key
 
-        if criteria == EQUAL_CRITERIA_KEYWORD:
-            if column_to_use == value_to_filter_by:
-                self.__send_message(body)
+            column_to_use = message[self._config["COLUMN_NUMBER_TO_USE"]]
+            value_to_filter_by = self._config["VALUE_TO_FILTER_BY"]
+            criteria = self._config["CRITERIA"]
 
-        elif criteria == GRATER_THAN_CRITERIA_KEYWORD:
-            if int(column_to_use) > int(value_to_filter_by):
-                self.__send_message(body)
+            if criteria == EQUAL_CRITERIA_KEYWORD:
+                if column_to_use == value_to_filter_by:
+                    
+                    batch[node_id].append(message)
+                    #self.__send_message(message)
 
-        elif criteria == CONTAINS_CRITERIA_KEYWORD:
-            if value_to_filter_by in column_to_use.lower():
-                self.__send_message(body)
+            elif criteria == GRATER_THAN_CRITERIA_KEYWORD:
+                if int(column_to_use) > int(value_to_filter_by):
+                    batch[node_id].append(message)
+                    #self.__send_message(message)
 
-        elif criteria == LANGUAGE_CRITERIA_KEYWORD:
-            detected_language, _ = langid.classify(column_to_use)
-            if detected_language == value_to_filter_by.lower():
-                self.__send_message(body)
-        else:
-            raise Exception(f"Unkown cirteria: {criteria}")
+            elif criteria == CONTAINS_CRITERIA_KEYWORD:
+                if value_to_filter_by in column_to_use.lower():
+                    batch[node_id].append(message)
+                    #self.__send_message(message)
 
-    def __filter_columns(self, columns_to_keep: List[int], data: List[str]):
+            elif criteria == LANGUAGE_CRITERIA_KEYWORD:
+                detected_language, _ = langid.classify(column_to_use)
+                if detected_language == value_to_filter_by.lower():
+                    batch[node_id].append(message)
+                    #self.__send_message(message)
+            else:
+                raise Exception(f"Unkown cirteria: {criteria}")
+            
+        if len(batch) > 0: self.__send_message(batch)
+
+    def __filter_columns(self, columns_to_keep: List[int], data: List[List[str]]):
         # No filter needed
         if len(columns_to_keep) == 1 and columns_to_keep[0] == -1:
             return data
 
-        return [data[i] for i in columns_to_keep]
+        filtered_batch = []
+        for message in data:
+            filtered_batch.append([message[i] for i in columns_to_keep])
 
-    def __send_message(self, message: List[str]):
+        return filtered_batch
+
+    def __send_message(self, message: Dict[int, List[str]]):
         """
         Do not use to send END message as it is handled differently.
         """
-        message = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], message)
-        logging.debug(f"Sending message: {message}")
-        encoded_message = self._protocol.encode(message)
+        for node_id, batch in message.items():
 
-        # TODO: Change with app id when available
-        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            node_id = node_id_to_send_to(
-                "1", message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
-            )
+            batch = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], batch)
+            logging.debug(f"Sending message: {batch}")
+            encoded_message = self._protocol.encode_batch(batch)
+
+            # TODO: Change with app id when available
+            # for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
+            #     node_id = node_id_to_send_to(
+            #         "1", message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+            #     )
             self._middleware.publish(
                 encoded_message, f'{node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
             )

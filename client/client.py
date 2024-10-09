@@ -56,21 +56,37 @@ class Client:
             self.middleware.shutdown()
 
     def __send_file(self, queue_name, file_path):
+
+        batch = []
+
         with open(file_path, "r") as file:
             reader = csv.reader(file)
             next(reader, None)  # skip header
             for row in reader:
-
                 if self.got_sigterm:
                     return
-                logging.debug(f"Sending appID {row[0]} to {queue_name}")
-                encoded_message = self.protocol.encode(row)
+                
+                batch.append(row)
+                if len(batch) == self.config["BATCH_SIZE"]: #TODO: check batch len is less tha 8KB
+                    logging.debug(f"Sending batch of size {self.config['BATCH_SIZE']}")
+                    encoded_batch = self.protocol.encode_batch(batch)
+                    self.middleware.publish(encoded_batch, queue_name=queue_name)
+                    batch = []
 
-                self.middleware.publish(encoded_message, queue_name=queue_name)
-                time.sleep(self.config["SENDING_WAIT_TIME"])
+                # logging.debug(f"Sending appID {row[0]} to {queue_name}")
+                #encoded_message = self.protocol.encode(row)
+
+                #self.middleware.publish(encoded_message, queue_name=queue_name)
+                #time.sleep(self.config["SENDING_WAIT_TIME"])
+        
+        if len(batch) > 0:
+            encoded_batch = self.protocol.encode_batch(batch)
+            #encoded_msg = self.protocol.encode([key,str(value)])
+            self.middleware.publish(encoded_batch, queue_name=self.config["PUBLISH_QUEUE"])
+            batch = []
 
         logging.debug("Sending file end")
-        encoded_message = self.protocol.encode([FILE_END_MSG])
+        encoded_message = self.protocol.encode_batch([[FILE_END_MSG]])
         self.middleware.publish(encoded_message, queue_name=queue_name)
 
     def __get_results(self):
@@ -91,16 +107,17 @@ class Client:
 
     def __handle_query_result(self, ch, method, properties, body):
 
-        body = Protocol.decode(body)
-        body = [value.strip() for value in body]
+        body = self.protocol.decode_batch(body)
+        body = [[value.strip() for value in message] for message in body]
 
         self.middleware.ack(method.delivery_tag)
 
-        if len(body) == 1 and body[0] == FILE_END_MSG:
+        if body[0][0] == FILE_END_MSG:
             self.middleware.stop_consuming()
             return
-
-        logging.info(f"{method.routing_key} result: {body}")
+        
+        for message in body:
+            logging.info(f"{method.routing_key} result: {message}")
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
