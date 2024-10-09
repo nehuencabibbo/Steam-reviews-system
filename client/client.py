@@ -71,6 +71,7 @@ class Client:
 
         logging.debug("Sending file end")
         # encoded_message = self.protocol.encode([FILE_END_MSG])
+        self.middleware.publish_batch(queue_name)
         self.middleware.send_end(queue=queue_name)
         # self.middleware.publish(encoded_message, queue_name=queue_name)
 

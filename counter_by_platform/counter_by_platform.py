@@ -65,6 +65,7 @@ class CounterByPlatform:
 
         # encoded_msg = self.protocol.encode([END_TRANSMISSION_MESSAGE])
         # self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
+        self.middleware.publish_batch(self.config["PUBLISH_QUEUE"])
         self.middleware.send_end(
             queue=self.config["PUBLISH_QUEUE"],
         )

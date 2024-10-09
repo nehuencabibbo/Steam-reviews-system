@@ -34,6 +34,22 @@ class Middleware:
         # Fairness
         self._channel.basic_qos(prefetch_count=1)
 
+    def publish_batch(self, queue_name='', exchange_name=''):
+
+        batch, amount_of_messages = self.__batchs_per_queue[queue_name]
+
+        if amount_of_messages == 0:
+            return
+
+        self._channel.basic_publish(
+            exchange=exchange_name,
+            routing_key=queue_name,
+            body=batch
+        )
+
+        self.__batchs_per_queue[queue_name] = [b"", 0]
+
+
     def publish(self, message: list[str], queue_name="", exchange_name="", batch=True):
         # Otherwise the END, peer_1,.. are not sent
         if not batch:
@@ -71,13 +87,13 @@ class Middleware:
         return self.__protocol.decode_batch(message)
 
     def send_end(self, queue, exchange_name="", end_message=END_TRANSMISSION_MESSAGE):
-        self._channel.basic_publish(
-            exchange=exchange_name,
-            routing_key=queue,
-            body=self.__batchs_per_queue[queue][0],
-        )
+        # self._channel.basic_publish(
+        #     exchange=exchange_name,
+        #     routing_key=queue,
+        #     body=self.__batchs_per_queue[queue][0],
+        # )
 
-        self.__batchs_per_queue[queue] = [b"", 0]
+        # self.__batchs_per_queue[queue] = [b"", 0]
 
         end_message = self.__protocol.add_to_batch(current_batch=b"", row=[end_message])
         self._channel.basic_publish(

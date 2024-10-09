@@ -55,34 +55,33 @@ class FilterColumnByValue:
         #     Si no es asi => Agrego mi id a la lista y reencolo
         peers_that_recived_end = body[1:]
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
-            # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
             self.__send_end_transmission_to_all_forwarding_queues()
 
         else:
+            self._send_last_batch_to_fowarding_queues()
+
             message = [END_TRANSMISSION_MESSAGE]
             if not self._config["NODE_ID"] in peers_that_recived_end:
                 peers_that_recived_end.append(self._config["NODE_ID"])
 
             message += peers_that_recived_end
-            # encoded_message = self._protocol.encode(message)
             self._middleware.publish(
                 message, self._config["RECIVING_QUEUE_NAME"], "", batch=False
             )
 
-    def __send_end_transmission_to_all_forwarding_queues(self):
-        # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+    def _send_last_batch_to_fowarding_queues(self):
+        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
+            queue_name = f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
+            self._middleware.publish_batch(queue_name)
 
+    def __send_end_transmission_to_all_forwarding_queues(self):
         # TODO: Verify that EVERY queue is started at 0
         for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            # self._middleware.publish(
-            #     encoded_message, f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
-            # )
             self._middleware.send_end(
                 queue=f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
             )
 
     def __handle_message(self, delivery_tag: int, body: bytes):
-        # body = self._protocol.decode(body)
         body = self._middleware.get_rows_from_message(body)
         for message in body:
             message = [value.strip() for value in message]

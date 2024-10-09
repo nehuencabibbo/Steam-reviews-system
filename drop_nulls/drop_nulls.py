@@ -82,6 +82,14 @@ class DropNulls:
                 raise Exception(f"Unkown message type: {message_type}")
 
         else:
+
+            if message_type == GAMES_MESSAGE_TYPE:
+                self.__handle_games_last_batch()
+            elif message_type == REVIEWS_MESSAGE_TYPE:
+                self.__handle_reviews_last_batch()
+            else:
+                raise Exception(f"Unkown message type: {message_type}")
+
             message = [END_TRANSMISSION_MESSAGE]
             if not self._config["NODE_ID"] in peers_that_recived_end:
                 peers_that_recived_end.append(self._config["NODE_ID"])
@@ -89,6 +97,17 @@ class DropNulls:
             message += peers_that_recived_end
             # encoded_message = self._protocol.encode(message)
             self._middleware.publish(message, reciving_queue_name, "", batch=False)
+
+    def __handle_games_last_batch(self):
+
+        for i in range(self._config["COUNT_BY_PLATFORM_NODES"]):
+            queue_name = f"{i}_{self._config['Q1_PLATFORM']}"
+            self._middleware.publish_batch(queue_name)
+
+        # Q2, Q3, Q4, Q5
+        for i in range(2, 6):
+            queue_name = self._config[f"Q{i}_GAMES"]
+            self._middleware.publish_batch(queue_name)
 
     def __handle_games_end_transmission_by_query(self):
         # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
@@ -184,6 +203,12 @@ class DropNulls:
         for i in range(3, 6):
             # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
             self._middleware.send_end(self._config[f"Q{i}_REVIEWS"])
+
+    def __handle_reviews_last_batch(self):
+
+        for i in range(3, 6):
+            queue_name = self._config[f"Q{i}_REVIEWS"]
+            self._middleware.publish_batch(queue_name)
 
     def __handle_reviews(self, delivery_tag: int, body: bytes):
         body = self._middleware.get_rows_from_message(message=body)

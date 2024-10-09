@@ -74,6 +74,7 @@ class FilterColumns:
             logging.debug("Sending real END")
             self._middleware.send_end(queue=forwarding_queue_name)
         else:
+            self._middleware.publish_batch(forwarding_queue_name)
             message = [END_TRANSMISSION_MESSAGE]
             if not self._config["NODE_ID"] in peers_that_recived_end:
                 peers_that_recived_end.append(self._config["NODE_ID"])
