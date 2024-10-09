@@ -23,6 +23,9 @@ class DropNulls:
         self._middleware = middleware
         self._config = config
 
+        self._games_counter = 0
+        self._reviews_counter = 0
+
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
@@ -95,8 +98,7 @@ class DropNulls:
                 peers_that_recived_end.append(self._config["NODE_ID"])
 
             message += peers_that_recived_end
-            # encoded_message = self._protocol.encode(message)
-            self._middleware.publish(message, reciving_queue_name, "", batch=False)
+            self._middleware.publish_message(message, reciving_queue_name)
 
     def __handle_games_last_batch(self):
 
@@ -141,13 +143,14 @@ class DropNulls:
                 )
 
                 self._middleware.ack(delivery_tag)
-
                 return
-
+            
+            self._games_counter += 1
             logging.debug(f"Recived game: {message}")
             if NULL_FIELD_VALUE in message:
-                self._middleware.ack(delivery_tag)
-                return
+                continue
+                # self._middleware.ack(delivery_tag)
+                # return
 
             # Q1 Platform: plataform
             for platform, platform_index in PLATFORMS.items():
@@ -217,6 +220,7 @@ class DropNulls:
 
             if message[0] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived reviews END: {message}")
+                logging.debug(f"AMOUNT OF REVIEW LINES: {self._reviews_counter}")
                 self.__handle_end_transmission(
                     message,
                     self._config["REVIEWS_RECIVING_QUEUE_NAME"],
@@ -226,6 +230,7 @@ class DropNulls:
 
                 return
 
+            self._reviews_counter += 1
             logging.debug(
                 f"[NULL DROP {self._config['NODE_ID']}] Recived review: {message}"
             )

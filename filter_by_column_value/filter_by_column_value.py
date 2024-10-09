@@ -65,9 +65,8 @@ class FilterColumnByValue:
                 peers_that_recived_end.append(self._config["NODE_ID"])
 
             message += peers_that_recived_end
-            self._middleware.publish(
-                message, self._config["RECIVING_QUEUE_NAME"], "", batch=False
-            )
+            
+            self._middleware.publish_message(message,self._config["RECIVING_QUEUE_NAME"]) 
 
     def _send_last_batch_to_fowarding_queues(self):
         for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):

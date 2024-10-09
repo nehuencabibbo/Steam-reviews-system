@@ -68,9 +68,6 @@ class FilterColumns:
         #     Si no es asi => Agrego mi id a la lista y reencolo
         peers_that_recived_end = body[1:]
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
-            # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-            # self._middleware.publish(encoded_message, forwarding_queue_name, "")
-
             logging.debug("Sending real END")
             self._middleware.send_end(queue=forwarding_queue_name)
         else:
@@ -79,10 +76,9 @@ class FilterColumns:
             if not self._config["NODE_ID"] in peers_that_recived_end:
                 peers_that_recived_end.append(self._config["NODE_ID"])
 
-            message += peers_that_recived_end
-            # encoded_message = self._protocol.encode(message)
+            message += peers_that_recived_end 
+            self._middleware.publish_message(message, reciving_queue_name)
 
-            self._middleware.publish(message, reciving_queue_name, "", batch=False)
 
     def __handle_message(
         self,
@@ -117,7 +113,7 @@ class FilterColumns:
                 self._middleware.ack(delivery_tag)
 
                 return
-
+            
             logging.debug(
                 f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived {message_type}: {message}"
             )
@@ -132,7 +128,6 @@ class FilterColumns:
                 raise Exception(f"[ERROR] Unkown message type {message_type}")
 
             filtered_body = self.__filter_columns(columns_to_keep, message)
-            # filtered_body = self._protocol.encode(filtered_body)
 
             logging.debug(
                 f"[FILTER COLUMNS {self._config['NODE_ID']}] Sending {message_type}: {message}"
