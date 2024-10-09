@@ -1,4 +1,3 @@
-import sys
 import csv
 import time
 import signal
@@ -13,11 +12,11 @@ AMMOUNT_OF_QUERIES = 5
 class Client:
 
     def __init__(self, config: dict, middleware: Middleware, protocol: Protocol):
-        self.protocol = protocol
-        self.config = config
-        self.middleware = middleware
+        self._protocol = protocol
+        self._config = config
+        self._middleware = middleware
         self.__create_queues()
-        self.got_sigterm = False
+        self._got_sigterm = False
 
         self.__find_and_set_csv_field_size_limit()
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
@@ -38,22 +37,22 @@ class Client:
 
     def __create_queues(self):
         # declare queues for sending data
-        self.middleware.create_queue(self.config["GAMES_QUEUE"])
-        self.middleware.create_queue(self.config["REVIEWS_QUEUE"])
+        self._middleware.create_queue(self._config["GAMES_QUEUE"])
+        self._middleware.create_queue(self._config["REVIEWS_QUEUE"])
 
         # declare consumer queues
         for i in range(1, AMMOUNT_OF_QUERIES + 1):
             queue_name = f"Q{i}_RESULT_QUEUE"
-            self.middleware.create_queue(self.config[queue_name])
+            self._middleware.create_queue(self._config[queue_name])
 
     def run(self):
-        self.__send_file(self.config["GAMES_QUEUE"], self.config["GAME_FILE_PATH"])
-        self.__send_file(self.config["REVIEWS_QUEUE"], self.config["REVIEWS_FILE_PATH"])
+        self.__send_file(self._config["GAMES_QUEUE"], self._config["GAME_FILE_PATH"])
+        self.__send_file(self._config["REVIEWS_QUEUE"], self._config["REVIEWS_FILE_PATH"])
 
         self.__get_results()
 
-        if not self.got_sigterm:
-            self.middleware.shutdown()
+        if not self._got_sigterm:
+            self._middleware.shutdown()
 
     def __send_file(self, queue_name, file_path):
         with open(file_path, "r") as file:
@@ -61,52 +60,52 @@ class Client:
             next(reader, None)  # skip header
             for row in reader:
 
-                if self.got_sigterm:
+                if self._got_sigterm:
                     return
                 logging.debug(f"Sending appID {row[0]} to {queue_name}")
                 # encoded_message = self.protocol.encode(row)
 
-                self.middleware.publish(row, queue_name=queue_name)
-                time.sleep(self.config["SENDING_WAIT_TIME"])
+                self._middleware.publish(row, queue_name=queue_name)
+                time.sleep(self._config["SENDING_WAIT_TIME"])
 
         logging.debug("Sending file end")
         # encoded_message = self.protocol.encode([FILE_END_MSG])
-        self.middleware.publish_batch(queue_name)
-        self.middleware.send_end(queue=queue_name)
+        self._middleware.publish_batch(queue_name)
+        self._middleware.send_end(queue=queue_name)
         # self.middleware.publish(encoded_message, queue_name=queue_name)
 
     def __get_results(self):
 
         for number_of_query in range(1, AMMOUNT_OF_QUERIES + 1):
-            if self.got_sigterm:
+            if self._got_sigterm:
                 return
             logging.debug(f"Waiting for results of query {number_of_query}")
 
-            queue_name = self.config[f"Q{number_of_query}_RESULT_QUEUE"]
+            queue_name = self._config[f"Q{number_of_query}_RESULT_QUEUE"]
 
-            self.middleware.attach_callback(queue_name, self.__handle_query_result)
+            self._middleware.attach_callback(queue_name, self.__handle_query_result)
             try:
-                self.middleware.start_consuming()
+                self._middleware.start_consuming()
             except OSError as _:
-                if not self.got_sigterm:
+                if not self._got_sigterm:
                     raise
 
     def __handle_query_result(self, ch, method, properties, body):
 
-        body = self.middleware.get_rows_from_message(message=body)
+        body = self._middleware.get_rows_from_message(message=body)
 
         for message in body:
             message = [value.strip() for value in message]
 
             if len(message) == 1 and message[0] == FILE_END_MSG:
-                self.middleware.stop_consuming()
+                self._middleware.stop_consuming()
                 return
 
             logging.info(f"{method.routing_key} result: {message}")
 
-        self.middleware.ack(method.delivery_tag)
+        self._middleware.ack(method.delivery_tag)
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
-        self.got_sigterm = True
-        self.middleware.shutdown()
+        self._got_sigterm = True
+        self._middleware.shutdown()

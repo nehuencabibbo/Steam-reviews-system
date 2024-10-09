@@ -1,6 +1,6 @@
 import logging
 import signal
-from middleware.middleware import Middleware
+from common.middleware.middleware import Middleware
 from common.storage.storage import read_by_range, write_by_range
 from common.protocol.protocol import Protocol
 

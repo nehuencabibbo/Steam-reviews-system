@@ -3,7 +3,7 @@ import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from middleware.middleware import Middleware
+from common.middleware.middleware import Middleware
 from filter_columns import FilterColumns
 from common.protocol.protocol import Protocol
 

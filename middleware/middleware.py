@@ -111,7 +111,7 @@ class Middleware:
 
     def shutdown(self):
         self._channel.stop_consuming()
-        self.connection.close()
+        self._connection.close()
 
     # Callback should be a function that recives:
     # - delivery_tag: so that it can ack the corresponding message

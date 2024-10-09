@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import *
 from common.protocol.protocol import Protocol
-from middleware.middleware import Middleware
+from common.middleware.middleware import Middleware
 from utils.utils import node_id_to_send_to
 from constants import *
 
