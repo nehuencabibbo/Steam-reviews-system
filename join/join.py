@@ -111,7 +111,8 @@ class Join:
 
 
         encoded_message = self.__protocol.encode_batch(new_batch)
-        self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+        if len(new_batch) > 0:
+            self.__middleware.publish(encoded_message, forwarding_queue_name, "")
 
         self.__middleware.ack(delivery_tag)
 
