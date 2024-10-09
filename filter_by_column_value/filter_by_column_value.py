@@ -153,17 +153,19 @@ class FilterColumnByValue:
         for node_id, batch in message.items():
 
             batch = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], batch)
-            logging.debug(f"Sending message: {batch}")
-            encoded_message = self._protocol.encode_batch(batch)
+            if len(batch) > 0:
+               
+                logging.debug(f"Sending message: {batch}")
+                encoded_message = self._protocol.encode_batch(batch)
 
-            # TODO: Change with app id when available
-            # for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            #     node_id = node_id_to_send_to(
-            #         "1", message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
-            #     )
-            self._middleware.publish(
-                encoded_message, f'{node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
-            )
+                # TODO: Change with app id when available
+                # for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
+                #     node_id = node_id_to_send_to(
+                #         "1", message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+                #     )
+                self._middleware.publish(
+                    encoded_message, f'{node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
+                )
 
 
 
