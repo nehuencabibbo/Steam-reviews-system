@@ -11,15 +11,18 @@ class Middleware:
         self._connection = self.__create_connection(broker_ip)
         self._channel = self._connection.channel()
         self.__protocol = protocol
-        self.__batch_size = 10  # TODO: receive as param
-        self.__max_batch_size = 4 * 1024  # TODO: receive as param
+        self.__batch_size = 1  # TODO: receive as param
+        self.__max_batch_size = 1 * 1024  # TODO: receive as param
         self.__batchs_per_queue = {}
 
     def __create_connection(self, ip):
         return pika.BlockingConnection(pika.ConnectionParameters(host=ip))
 
     def create_queue(self, name):
-        self.__batchs_per_queue[name] = b""
+        self.__batchs_per_queue[name] = [
+            b"",
+            0,
+        ]  # [messages encoded, amount of messages]
         self._channel.queue_declare(queue=name)
 
     def attach_callback(self, queue_name, callback):
@@ -41,24 +44,28 @@ class Middleware:
             )
             return
 
-        new_batch = self.__protocol.add_to_batch(
-            self.__batchs_per_queue[queue_name], message
-        )
+        queue_batch, amount_of_messages = self.__batchs_per_queue[queue_name]
+        new_batch = self.__protocol.add_to_batch(queue_batch, message)
 
-        if len(new_batch) > self.__max_batch_size:
-            logging.debug(
-                f"Length exceeded, evicting. Before: {len(self.__batchs_per_queue[queue_name])} | After: {len(new_batch)}"
-            )
+        # if len(new_batch) > self.__max_batch_size:
+        if amount_of_messages + 1 >= self.__batch_size:
+            # logging.debug(
+            #     f"Length exceeded, evicting. Before: {len(self.__batchs_per_queue[queue_name])} | After: {len(new_batch)}"
+            # )
             self._channel.basic_publish(
                 exchange=exchange_name,
                 routing_key=queue_name,
-                body=self.__batchs_per_queue[queue_name],
+                body=queue_batch,
             )
-            self.__batchs_per_queue[queue_name] = self.__protocol.add_to_batch(
-                b"", message
-            )
+            self.__batchs_per_queue[queue_name] = [
+                self.__protocol.add_to_batch(b"", message),
+                1,
+            ]
         else:
-            self.__batchs_per_queue[queue_name] = new_batch
+            self.__batchs_per_queue[queue_name] = [
+                new_batch,
+                amount_of_messages + 1,
+            ]
 
     def get_rows_from_message(self, message) -> list[list[str]]:
         return self.__protocol.decode_batch(message)
@@ -67,10 +74,10 @@ class Middleware:
         self._channel.basic_publish(
             exchange=exchange_name,
             routing_key=queue,
-            body=self.__batchs_per_queue[queue],
+            body=self.__batchs_per_queue[queue][0],
         )
 
-        self.__batchs_per_queue[queue] = b""
+        self.__batchs_per_queue[queue] = [b"", 0]
 
         end_message = self.__protocol.add_to_batch(current_batch=b"", row=[end_message])
         self._channel.basic_publish(
