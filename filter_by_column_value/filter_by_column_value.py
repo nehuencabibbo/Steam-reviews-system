@@ -58,7 +58,6 @@ class FilterColumnByValue:
             self.__send_end_transmission_to_all_forwarding_queues()
 
         else:
-            self._send_last_batch_to_fowarding_queues()
 
             message = [END_TRANSMISSION_MESSAGE]
             if not self._config["NODE_ID"] in peers_that_recived_end:
@@ -85,9 +84,10 @@ class FilterColumnByValue:
         for message in body:
             message = [value.strip() for value in message]
             logging.debug(f"Recived message: {message}")
-            if message[0] == END_TRANSMISSION_MESSAGE:
-                self.__handle_end_transmission(message)
 
+            if message[0] == END_TRANSMISSION_MESSAGE:
+                self._send_last_batch_to_fowarding_queues()
+                self.__handle_end_transmission(message)
                 self._middleware.ack(delivery_tag)
 
                 return

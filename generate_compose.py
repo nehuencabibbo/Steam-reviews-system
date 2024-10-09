@@ -342,7 +342,7 @@ def generate_q3(output: Dict):
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
         "logging_level": "DEBUG",
         "column_number_to_use": 1,  # review_score
-        "value_to_filter_by": 1,  # positive_review
+        "value_to_filter_by": 1.0,  # positive_review
         "criteria": "EQUAL",
         "columns_to_keep": 0,  # app_id ,
         "instances_of_myself": Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS,
@@ -561,7 +561,7 @@ def generate_output():
     # -------------------------------------------- Q2 -----------------------------------------
     generate_q2(output=output)
     # -------------------------------------------- Q3 -----------------------------------------
-    # generate_q3(output=output)
+    generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
     generate_q4(output=output)
     # -------------------------------------------- Q5 -----------------------------------------

@@ -36,38 +36,46 @@ class CounterByAppId:
 
     def handle_message(self, ch, method, properties, body):
 
-        body = self._protocol.decode(body)
-        body = [value.strip() for value in body]
+        # body = self._protocol.decode(body)
+        # body = [value.strip() for value in body]
+    
+        body = self._middleware.get_rows_from_message(body)
 
-        logging.debug(f"GOT MSG: {body}")
+        for message in body:
 
-        if len(body) == 1 and body[0] == "END":
-            self.send_results()
-            self._middleware.ack(method.delivery_tag)
-            return
+            logging.debug(f"GOT MSG: {message}")
 
-        record = f"{body[0]},{1}"
-        storage.sum_to_record(
-            self._config["STORAGE_DIR"], self._config["RANGE_FOR_PARTITION"], record
-        )
+            if len(message) == 1 and message[0] == "END":
+                self.send_results()
+                self._middleware.ack(method.delivery_tag)
+                return
+
+            record = f"{message[0]},{1}"
+            storage.sum_to_record(
+                self._config["STORAGE_DIR"], self._config["RANGE_FOR_PARTITION"], record
+            )
 
         self._middleware.ack(method.delivery_tag)
 
     def send_results(self):
 
+        queue_name = self._config["PUBLISH_QUEUE"]
+
         reader = storage.read_all_files(self._config["STORAGE_DIR"])
         for record in reader:
             message = record[0].split(",")
             logging.debug(f"Sending: {message}")
-            encoded_msg = self._protocol.encode(message)
-            self._middleware.publish(
-                encoded_msg, queue_name=self._config["PUBLISH_QUEUE"]
-            )
+            # encoded_msg = self._protocol.encode(message)
+            self._middleware.publish(message, queue_name)
+
+        self._middleware.publish_batch(queue_name)
 
         logging.debug("SENDING END")
-        encoded_msg = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-        self._middleware.publish(encoded_msg, queue_name=self._config["PUBLISH_QUEUE"])
-        logging.debug(f'END SENT TO: {self._config["PUBLISH_QUEUE"]}')
+        self._middleware.send_end(queue_name)
+
+        # encoded_msg = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+        # self._middleware.publish(encoded_msg, queue_name=self._config["PUBLISH_QUEUE"])
+        # logging.debug(f'END SENT TO: {self._config["PUBLISH_QUEUE"]}')
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")

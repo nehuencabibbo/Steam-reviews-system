@@ -50,8 +50,6 @@ class TopK:
                 logging.debug("END of games received")
                 # TODO: Aca manda el topk
                 self.__send_top(forwarding_queue_name)
-                # encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
-                # self.__middleware.publish(encoded_message, forwarding_queue_name, "")
                 self.__middleware.send_end(queue=forwarding_queue_name)
                 self.__middleware.ack(delivery_tag)
                 return
@@ -67,7 +65,7 @@ class TopK:
 
     def __send_top(self, forwarding_queue_name):
         for record in read_top("tmp/", int(self.__config["K"])):
-            # encoded_message = self.__protocol.encode(record)
             self.__middleware.publish(record, forwarding_queue_name, "")
-
+        
+        self.__middleware.publish_batch(forwarding_queue_name)
         logging.debug(f"Top sent to queue: {forwarding_queue_name}")
