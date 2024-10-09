@@ -9,13 +9,13 @@ AMOUNT_OF_DROP_NULLS = 2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
 # Q3
-Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 6
-Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 6
-Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 6
+Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
+Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 2
+Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
 # Q4
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
 Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
-Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 10
+Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 3
 Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 3
 Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 3
 # Q5
@@ -563,9 +563,9 @@ def generate_output():
     # -------------------------------------------- Q3 -----------------------------------------
     # generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
-    # generate_q4(output=output)
+    generate_q4(output=output)
     # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output)
+    generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

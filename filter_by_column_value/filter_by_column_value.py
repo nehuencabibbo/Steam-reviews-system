@@ -55,7 +55,7 @@ class FilterColumnByValue:
         #     Si no es asi => Agrego mi id a la lista y reencolo
         peers_that_recived_end = body[1:]
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
-            encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+            # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
             self.__send_end_transmission_to_all_forwarding_queues()
 
         else:
@@ -64,32 +64,37 @@ class FilterColumnByValue:
                 peers_that_recived_end.append(self._config["NODE_ID"])
 
             message += peers_that_recived_end
-            encoded_message = self._protocol.encode(message)
+            # encoded_message = self._protocol.encode(message)
             self._middleware.publish(
-                encoded_message, self._config["RECIVING_QUEUE_NAME"], ""
+                message, self._config["RECIVING_QUEUE_NAME"], "", batch=False
             )
 
     def __send_end_transmission_to_all_forwarding_queues(self):
-        encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+        # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
 
         # TODO: Verify that EVERY queue is started at 0
         for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            self._middleware.publish(
-                encoded_message, f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
+            # self._middleware.publish(
+            #     encoded_message, f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
+            # )
+            self._middleware.send_end(
+                queue=f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
             )
 
     def __handle_message(self, delivery_tag: int, body: bytes):
-        body = self._protocol.decode(body)
-        body = [value.strip() for value in body]
-        logging.debug(f"Recived message: {body}")
-        if body[0] == END_TRANSMISSION_MESSAGE:
-            self.__handle_end_transmission(body)
+        # body = self._protocol.decode(body)
+        body = self._middleware.get_rows_from_message(body)
+        for message in body:
+            message = [value.strip() for value in message]
+            logging.debug(f"Recived message: {message}")
+            if message[0] == END_TRANSMISSION_MESSAGE:
+                self.__handle_end_transmission(message)
 
-            self._middleware.ack(delivery_tag)
+                self._middleware.ack(delivery_tag)
 
-            return
+                return
 
-        self.__filter_according_to_criteria(body)
+            self.__filter_according_to_criteria(message)
 
         self._middleware.ack(delivery_tag)
 
@@ -129,7 +134,7 @@ class FilterColumnByValue:
         Do not use to send END message as it is handled differently.
         """
         message = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], message)
-        encoded_message = self._protocol.encode(message)
+        # encoded_message = self._protocol.encode(message)
 
         # TODO: Change with app id when available
         # for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
@@ -140,7 +145,7 @@ class FilterColumnByValue:
             f'Sending message: {message} to queue: {node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
         )
         self._middleware.publish(
-            encoded_message, f'{node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
+            message, f'{node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
         )
 
     def __signal_handler(self, sig, frame):
