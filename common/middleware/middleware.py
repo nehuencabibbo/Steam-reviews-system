@@ -1,10 +1,11 @@
 import pika
+import logging
 
 class Middleware:
     
     def __init__(self, broker_ip):
-        self.connection = self.__create_connection(broker_ip)
-        self._channel = self.connection.channel()
+        self._connection = self.__create_connection(broker_ip)
+        self._channel = self._connection.channel()
 
     def __create_connection(self, ip):
         return pika.BlockingConnection(pika.ConnectionParameters(host=ip))
@@ -18,6 +19,10 @@ class Middleware:
             on_message_callback=callback, 
             auto_ack=False
         )
+
+    def turn_fair_dispatch(self):
+        # Fairness
+        self._channel.basic_qos(prefetch_count=1)
 
     def publish(self, message, queue_name='', exchange_name=''):
         self._channel.basic_publish(
@@ -35,14 +40,22 @@ class Middleware:
     def stop_consuming(self):
         self._channel.stop_consuming()
 
+    def broadcast(self, encoded_message, amount_of_nodes, queue_sufix):
+        for i in range(1, amount_of_nodes + 1):
+            queue = f"1_{queue_sufix}"
+            logging.info(f"Sent END to queue: {queue}")
+            self.publish(encoded_message, queue_name=queue, exchange_name="")
+
     def shutdown(self):
         self.stop_consuming()
-        self.connection.close()
+        self._connection.close()
 
-    # Callback should be a function that recives: 
-    # - delivery_tag: so that it can ack the corresponding message 
+    # Callback should be a function that recives:
+    # - delivery_tag: so that it can ack the corresponding message
     # - body: the content of the message itself as bytes
     # - *args: any extra arguments necesary
     @classmethod
     def generate_callback(cls, callback, *args):
-        return lambda ch, method, props, body: callback(method.delivery_tag, body, *args)
+        return lambda ch, method, props, body: callback(
+            method.delivery_tag, body, *args
+        )

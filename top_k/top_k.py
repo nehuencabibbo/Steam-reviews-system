@@ -1,6 +1,6 @@
 import logging
 import signal
-from middleware.middleware import Middleware
+from common.middleware.middleware import Middleware
 from common.storage.storage import add_to_top, read_top
 from common.protocol.protocol import Protocol
 
