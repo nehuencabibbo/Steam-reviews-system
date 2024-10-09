@@ -13,7 +13,7 @@ Q2_AMOUNT_OF_TOP_K_NODES = 2
 Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 2
 Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
-Q3_AMOUNT_OF_TOP_K_NODES = 1
+Q3_AMOUNT_OF_TOP_K_NODES = 2
 # Q4
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
 Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
@@ -421,25 +421,34 @@ def generate_q3(output: Dict):
         amount_of_forwarding_queues=Q3_AMOUNT_OF_TOP_K_NODES,
     )
 
-    # q3_tops_k_args = {
-    #     "output": output,
-    #     "query": "q3",
-    #     "num": 0,
-    #     "input_top_k_queue_name": "1_q3_join_by_app_id_result",
-    #     "output_top_k_queue_name": "Q3",
-    #     "k": 5,
-    # }
+    q3_tops_k_args = {
+        "output": output,
+        "query": "q3",
+        "input_top_k_queue_name": "q3_join_by_app_id_result",
+        "output_top_k_queue_name": "0_q3_top_aggregator",
+        "k": 5,
+    }
 
-    # generate_tops_k()
+    generate_tops_k(Q3_AMOUNT_OF_TOP_K_NODES, **q3_tops_k_args)
 
-    add_top_k(
+    add_top_k_aggregator(
         output=output,
-        query="q3",
+        query="q3_aggregator",
         num=0,
-        input_top_k_queue_name="1_q3_join_by_app_id_result",
-        output_top_k_queue_name="Q3",
-        k=5,
+        input_top_k_aggregator_queue_name="q3_top_aggregator",
+        output_top_k_aggregator_queue_name="Q3",
+        k=10,
+        amount_of_top_k_nodes=Q3_AMOUNT_OF_TOP_K_NODES,
     )
+
+    # add_top_k(
+    #     output=output,
+    #     query="q3",
+    #     num=0,
+    #     input_top_k_queue_name="q3_join_by_app_id_result",
+    #     output_top_k_queue_name="Q3",
+    #     k=5,
+    # )
 
 
 def generate_q4(output: Dict):
@@ -536,6 +545,7 @@ def generate_q4(output: Dict):
         input_reviews_queue_name="0_q4_filter_more_than_5000_reviews",
         output_queue_name="Q4",
         amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
+        amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
     )
 
 
@@ -595,13 +605,14 @@ def generate_q5(output: Dict):
         input_reviews_queue_name="0_q5_counter",
         output_queue_name="q5_percentile",
         amount_of_behind_nodes=Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
+        amount_of_forwarding_queues=1,
     )
 
     add_percentile(
         output=output,
         query="q5",
         num=0,
-        consume_queue="q5_percentile",
+        consume_queue="0_q5_percentile",  # TODO: Change if scalation of this node is implemented
         publish_queue="Q5",
     )
 
@@ -623,10 +634,10 @@ def generate_output():
     generate_q2(output=output)
     # -------------------------------------------- Q3 -----------------------------------------
     generate_q3(output=output)
-    # # -------------------------------------------- Q4 -----------------------------------------
-    # generate_q4(output=output)
-    # # # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output)
+    # -------------------------------------------- Q4 -----------------------------------------
+    generate_q4(output=output)
+    # # -------------------------------------------- Q5 -----------------------------------------
+    generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

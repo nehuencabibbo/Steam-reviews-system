@@ -3,6 +3,7 @@ import signal
 from middleware.middleware import Middleware
 from common.storage.storage import read_by_range, write_by_range
 from common.protocol.protocol import Protocol
+from utils.utils import node_id_to_send_to
 
 END_TRANSMISSION_MESSAGE = "END"
 
@@ -93,8 +94,9 @@ class Join:
                 f"Amount of ends received up to now: {self._amount_of_ends_received} | Expecting: {self.__config['AMOUNT_OF_BEHIND_NODES']}"
             )
             if self._amount_of_ends_received == self.__config["AMOUNT_OF_BEHIND_NODES"]:
-                encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
-                self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+                # encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
+                # self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+                self.__send_end_to_forward_queues()
 
             self.__middleware.ack(delivery_tag)
 
@@ -107,13 +109,50 @@ class Join:
         ):
             record_app_id, record_info = record[0].split(",", maxsplit=1)
             if app_id == int(record_app_id):
+
                 # Get rid of the app_id from the review and append it to the original game record
                 joined_message = record_info + "," + body[1]
 
                 encoded_message = self.__protocol.encode([joined_message])
-                self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+
+                if (
+                    "Q" in forwarding_queue_name
+                ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
+                    self.__middleware.publish(
+                        encoded_message,
+                        forwarding_queue_name,
+                    )
+                    return
+
+                node_id = node_id_to_send_to(
+                    "1", record_app_id, self.__config["AMOUNT_OF_FORWARDING_QUEUES"]
+                )
+
+                logging.debug(
+                    f"Sending message: {joined_message} to queue: {node_id}_{forwarding_queue_name}"
+                )
+
+                self.__middleware.publish(
+                    encoded_message,
+                    f"{node_id}_{forwarding_queue_name}",
+                )
 
         self.__middleware.ack(delivery_tag)
+
+    def __send_end_to_forward_queues(self):
+        encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
+        forwarding_queue_name = self.__config["OUTPUT_QUEUE_NAME"]
+
+        if (
+            "Q" in forwarding_queue_name
+        ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
+            self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+
+        for i in range(self.__config["AMOUNT_OF_FORWARDING_QUEUES"]):
+            self.__middleware.publish(
+                encoded_message, f"{i}_{forwarding_queue_name}", ""
+            )
+            logging.debug(f"Sent end to: {i}_{forwarding_queue_name}")
 
 
 # TODO: make sigterm handle
