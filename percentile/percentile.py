@@ -3,9 +3,7 @@ import logging
 from common.middleware.middleware import Middleware
 from common.storage import storage
 from common.protocol.protocol import Protocol
-
-import os
-import csv
+import math
 
 END_TRANSMISSION_MESSAGE = ['END'] 
 FILE_NAME = "percentile_data.csv"
@@ -35,25 +33,28 @@ class Percentile:
             if not self._got_sigterm: raise
     
     def handle_message(self, ch, method, properties, body):
-        body = self._protocol.decode(body)
-        body = [value.strip() for value in body]
+        # body = self._protocol.decode(body)
+        # body = [value.strip() for value in body]
 
-        logging.debug(f"GOT MSG: {body}")
+        body = self._middleware.get_rows_from_message(body)
 
-        if len(body) == 1 and body[0] == "END":
-            self.persist_data() #persist data that was not saved
-            self.handle_end_message()
-            self._middleware.ack(method.delivery_tag)
-            return
-        
-        body = ",".join(body)
-        self._tmp_record_list.append(body)
+        for message in body:
+            logging.debug(f"GOT MSG: {message}")
 
-        self._amount_msg_received += 1
-        if (self._amount_msg_received % self._config["SAVE_AFTER_MESSAGES"]) == 0:
-            logging.debug(f"Pesisting data in temporary storage")
-            self.persist_data() 
-        
+            if len(message) == 1 and message[0] == "END":
+                self.persist_data() #persist data that was not saved
+                self.handle_end_message()
+                self._middleware.ack(method.delivery_tag)
+                return
+            
+            message = ",".join(message)
+            self._tmp_record_list.append(message)
+
+            self._amount_msg_received += 1
+            if (self._amount_msg_received % self._config["SAVE_AFTER_MESSAGES"]) == 0:
+                logging.debug(f"Pesisting data in temporary storage")
+                self.persist_data() 
+            
         self._middleware.ack(method.delivery_tag)
 
     def persist_data(self):
@@ -65,7 +66,7 @@ class Percentile:
     def handle_end_message(self):
         
         rank = (self._config["PERCENTILE"] / 100) * self._amount_msg_received
-        rank = round(rank) # instead of interpolating, round the number
+        rank = math.ceil(rank) # instead of interpolating, round the number
 
         logging.debug(f"Ordinal rank is {rank}")
 
@@ -77,11 +78,14 @@ class Percentile:
             record_value = int(record[1])
             if record_value >= percentile:
                 logging.debug(f"Sending: {record}")
-                encoded_message = self._protocol.encode(record)
-                self._middleware.publish(encoded_message, self._config["PUBLISH_QUEUE"])
+                #encoded_message = self._protocol.encode(record)
+                self._middleware.publish(record, self._config["PUBLISH_QUEUE"])
 
-        encoded_message = self._protocol.encode(END_TRANSMISSION_MESSAGE)
-        self._middleware.publish(encoded_message, self._config["PUBLISH_QUEUE"])
+        self._middleware.publish_batch(self._config["PUBLISH_QUEUE"])
+        self._middleware.send_end(self._config["PUBLISH_QUEUE"])
+
+        # encoded_message = self._protocol.encode(END_TRANSMISSION_MESSAGE)
+        # self._middleware.publish(encoded_message, self._config["PUBLISH_QUEUE"])
 
         self._amount_msg_received = 0
 
