@@ -33,8 +33,6 @@ class CounterByPlatform:
     
     def handle_message(self, ch, method, properties, body):
 
-        # body = self.protocol.decode(body)
-        # body = [value.strip() for value in body]
         body = self.protocol.decode_batch(body)
         body = [[value.strip() for value in message] for message in body]
 
@@ -62,13 +60,11 @@ class CounterByPlatform:
 
             if len(batch) == self.config["BATCH_SIZE"]:
                 encoded_batch = self.protocol.encode_batch(batch)
-            #encoded_msg = self.protocol.encode([key,str(value)])
                 self.middleware.publish(encoded_batch, queue_name=self.config["PUBLISH_QUEUE"])
                 batch = []
         
         if len(batch) > 0:
             encoded_batch = self.protocol.encode_batch(batch)
-            #encoded_msg = self.protocol.encode([key,str(value)])
             self.middleware.publish(encoded_batch, queue_name=self.config["PUBLISH_QUEUE"])
             batch = []
 

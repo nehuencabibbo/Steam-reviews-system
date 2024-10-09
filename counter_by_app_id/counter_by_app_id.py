@@ -58,7 +58,6 @@ class CounterByAppId:
         batch = []
         reader = storage.read_all_files(self.config["STORAGE_DIR"])
         for record in reader:
-            #get batch
             message = record[0].split(",")
             batch.append(message)
             if len(batch) == self.config["BATCH_SIZE"]:
@@ -71,7 +70,6 @@ class CounterByAppId:
                  
         if len(batch) > 0:
             encoded_batch = self.protocol.encode_batch(batch)
-            #encoded_msg = self.protocol.encode([key,str(value)])
             self.middleware.publish(encoded_batch, queue_name=self.config["PUBLISH_QUEUE"])
             batch = []     
 

@@ -72,16 +72,9 @@ class Client:
                     encoded_batch = self.protocol.encode_batch(batch)
                     self.middleware.publish(encoded_batch, queue_name=queue_name)
                     batch = []
-
-                # logging.debug(f"Sending appID {row[0]} to {queue_name}")
-                #encoded_message = self.protocol.encode(row)
-
-                #self.middleware.publish(encoded_message, queue_name=queue_name)
-                #time.sleep(self.config["SENDING_WAIT_TIME"])
         
         if len(batch) > 0:
             encoded_batch = self.protocol.encode_batch(batch)
-            #encoded_msg = self.protocol.encode([key,str(value)])
             self.middleware.publish(encoded_batch, queue_name=self.config["PUBLISH_QUEUE"])
             batch = []
 

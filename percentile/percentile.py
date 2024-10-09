@@ -87,8 +87,7 @@ class Percentile:
                     encoded_batch = self.protocol.encode_batch(batch)
                     self.middleware.publish(encoded_batch, self.config["PUBLISH_QUEUE"])
                     batch = []
-                # encoded_message = self.protocol.encode(record)
-                # self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
+                    
         if len(batch) != 0:
             encoded_batch = self.protocol.encode_batch(batch)
             self.middleware.publish(encoded_batch, self.config["PUBLISH_QUEUE"])

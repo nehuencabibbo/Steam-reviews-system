@@ -40,9 +40,6 @@ class Join:
         self.__middleware.start_consuming()
 
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
-        # logging.debug(f"[INPUT GAMES] received: {body}")
-
-        # body = body.decode("utf-8").split(",")
         body = self.__protocol.decode_batch(body)
         body = [[value.strip() for value in message] for message in body]
         logging.debug(f"Recived game: {body}")
@@ -77,9 +74,7 @@ class Join:
     def __reviews_callback(
         self, delivery_tag, body, message_type, forwarding_queue_name
     ):
-        # logging.debug(f"[INPUT REVIEWS] received: {body}")
 
-        # message = body.decode("utf-8")
         body = self.__protocol.decode_batch(body)
         body = [[value.strip() for value in message] for message in body]
         logging.debug(f"Recived review: {body}")
@@ -106,7 +101,6 @@ class Join:
                 if app_id == int(record_app_id):
                     # Get rid of the app_id from the review and append it to the original game record
                     joined_message = record_info + "," + message[1]
-                    #TODO: CHECK IF JOINED MESSAGE IS ENCODED CORRECTLY
                     new_batch.append([joined_message])
 
 

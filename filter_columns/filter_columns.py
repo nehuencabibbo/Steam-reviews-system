@@ -139,7 +139,6 @@ class FilterColumns:
         for message in data:
             logging.info(f"MESSAGE IS {message}")
             filtered_batch.append([message[i] for i in columns_to_keep])
-        # return [data[i] for i in columns_to_keep]
         return filtered_batch
 
     def __signal_handler(self, sig, frame):
