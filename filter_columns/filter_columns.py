@@ -68,18 +68,20 @@ class FilterColumns:
         #     Si no es asi => Agrego mi id a la lista y reencolo
         peers_that_recived_end = body[1:]
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
-            encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+            # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+            # self._middleware.publish(encoded_message, forwarding_queue_name, "")
 
-            self._middleware.publish(encoded_message, forwarding_queue_name, "")
-
+            logging.debug("Sending real END")
+            self._middleware.send_end(queue=forwarding_queue_name)
         else:
             message = [END_TRANSMISSION_MESSAGE]
             if not self._config["NODE_ID"] in peers_that_recived_end:
                 peers_that_recived_end.append(self._config["NODE_ID"])
 
             message += peers_that_recived_end
-            encoded_message = self._protocol.encode(message)
-            self._middleware.publish(encoded_message, reciving_queue_name, "")
+            # encoded_message = self._protocol.encode(message)
+
+            self._middleware.publish(message, reciving_queue_name, "", batch=False)
 
     def __handle_message(
         self,
@@ -88,50 +90,54 @@ class FilterColumns:
         message_type: str,
         forwarding_queue_name: str,
     ):
-        body = self._protocol.decode(body)
-        body = [value.strip() for value in body]
+        body = self._middleware.get_rows_from_message(body)
+        for message in body:
+            logging.debug(f"Recived message: {message}")
 
-        if body[0] == END_TRANSMISSION_MESSAGE:
-            logging.debug(f"Recived END from {message_type}: {body}")
+            message = [value.strip() for value in message]
+
+            if message[0] == END_TRANSMISSION_MESSAGE:
+                logging.debug(f"Recived END from {message_type}: {message}")
+                if message_type == GAMES_MESSAGE_TYPE:
+                    self.__handle_end_transmission(
+                        message,
+                        self._config["CLIENT_GAMES_QUEUE_NAME"],
+                        self._config["NULL_DROP_GAMES_QUEUE_NAME"],
+                    )
+                elif message_type == REVIEWS_MESSAGE_TYPE:
+                    self.__handle_end_transmission(
+                        message,
+                        self._config["CLIENT_REVIEWS_QUEUE_NAME"],
+                        self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
+                    )
+                else:
+                    raise Exception(f"Unkown message type: {message_type}")
+
+                self._middleware.ack(delivery_tag)
+
+                return
+
+            logging.debug(
+                f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived {message_type}: {message}"
+            )
+
+            columns_to_keep = []
             if message_type == GAMES_MESSAGE_TYPE:
-                self.__handle_end_transmission(
-                    body,
-                    self._config["CLIENT_GAMES_QUEUE_NAME"],
-                    self._config["NULL_DROP_GAMES_QUEUE_NAME"],
-                )
+                columns_to_keep = self._config["GAMES_COLUMNS_TO_KEEP"]
             elif message_type == REVIEWS_MESSAGE_TYPE:
-                self.__handle_end_transmission(
-                    body,
-                    self._config["CLIENT_REVIEWS_QUEUE_NAME"],
-                    self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
-                )
+                columns_to_keep = self._config["REVIEWS_COLUMNS_TO_KEEP"]
             else:
-                raise Exception(f"Unkown message type: {message_type}")
+                # Message type was not set properly, unrecoverable error
+                raise Exception(f"[ERROR] Unkown message type {message_type}")
 
-            self._middleware.ack(delivery_tag)
+            filtered_body = self.__filter_columns(columns_to_keep, message)
+            # filtered_body = self._protocol.encode(filtered_body)
 
-            return
+            logging.debug(
+                f"[FILTER COLUMNS {self._config['NODE_ID']}] Sending {message_type}: {message}"
+            )
 
-        logging.debug(
-            f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived {message_type}: {body}"
-        )
-
-        columns_to_keep = []
-        if message_type == GAMES_MESSAGE_TYPE:
-            columns_to_keep = self._config["GAMES_COLUMNS_TO_KEEP"]
-        elif message_type == REVIEWS_MESSAGE_TYPE:
-            columns_to_keep = self._config["REVIEWS_COLUMNS_TO_KEEP"]
-        else:
-            # Message type was not set properly, unrecoverable error
-            raise Exception(f"[ERROR] Unkown message type {message_type}")
-
-        filtered_body = self.__filter_columns(columns_to_keep, body)
-        filtered_body = self._protocol.encode(filtered_body)
-        logging.debug(
-            f"[FILTER COLUMNS {self._config['NODE_ID']}] Sending {message_type}: {body}"
-        )
-
-        self._middleware.publish(filtered_body, forwarding_queue_name, "")
+            self._middleware.publish(filtered_body, forwarding_queue_name, "")
 
         self._middleware.ack(delivery_tag)
 

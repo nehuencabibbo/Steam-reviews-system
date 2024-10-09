@@ -3,8 +3,8 @@ import yaml
 from typing import *
 
 
-AMOUNT_OF_DROP_FILTER_COLUMNS = 10
-AMOUNT_OF_DROP_NULLS = 10
+AMOUNT_OF_DROP_FILTER_COLUMNS = 2
+AMOUNT_OF_DROP_NULLS = 2
 # Q2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
@@ -557,11 +557,11 @@ def generate_output():
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    # generate_q1(output=output)
+    generate_q1(output=output)
     # -------------------------------------------- Q2 -----------------------------------------
     # generate_q2(output=output)
     # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output)
+    # generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
     # generate_q4(output=output)
     # -------------------------------------------- Q5 -----------------------------------------

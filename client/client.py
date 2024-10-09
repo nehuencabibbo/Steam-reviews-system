@@ -64,14 +64,15 @@ class Client:
                 if self.got_sigterm:
                     return
                 logging.debug(f"Sending appID {row[0]} to {queue_name}")
-                encoded_message = self.protocol.encode(row)
+                # encoded_message = self.protocol.encode(row)
 
-                self.middleware.publish(encoded_message, queue_name=queue_name)
+                self.middleware.publish(row, queue_name=queue_name)
                 time.sleep(self.config["SENDING_WAIT_TIME"])
 
         logging.debug("Sending file end")
-        encoded_message = self.protocol.encode([FILE_END_MSG])
-        self.middleware.publish(encoded_message, queue_name=queue_name)
+        # encoded_message = self.protocol.encode([FILE_END_MSG])
+        self.middleware.send_end(queue=queue_name)
+        # self.middleware.publish(encoded_message, queue_name=queue_name)
 
     def __get_results(self):
 
@@ -91,16 +92,18 @@ class Client:
 
     def __handle_query_result(self, ch, method, properties, body):
 
-        body = Protocol.decode(body)
-        body = [value.strip() for value in body]
+        body = self.middleware.get_rows_from_message(message=body)
+
+        for message in body:
+            message = [value.strip() for value in message]
+
+            if len(message) == 1 and message[0] == FILE_END_MSG:
+                self.middleware.stop_consuming()
+                return
+
+            logging.info(f"{method.routing_key} result: {message}")
 
         self.middleware.ack(method.delivery_tag)
-
-        if len(body) == 1 and body[0] == FILE_END_MSG:
-            self.middleware.stop_consuming()
-            return
-
-        logging.info(f"{method.routing_key} result: {body}")
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
