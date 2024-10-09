@@ -35,7 +35,7 @@ class Percentile:
             if not self.got_sigterm: raise
     
     def handle_message(self, ch, method, properties, body):
-        body = self._protocol.decode_batch(body)
+        body = self.protocol.decode_batch(body)
         body = [[value.strip() for value in message] for message in body]
 
         logging.debug(f"GOT MSG: {body}")
@@ -89,7 +89,7 @@ class Percentile:
                     batch = []
                 # encoded_message = self.protocol.encode(record)
                 # self.middleware.publish(encoded_message, self.config["PUBLISH_QUEUE"])
-        if len(batch) == 0:
+        if len(batch) != 0:
             encoded_batch = self.protocol.encode_batch(batch)
             self.middleware.publish(encoded_batch, self.config["PUBLISH_QUEUE"])
 
