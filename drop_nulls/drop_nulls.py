@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import *
 from common.protocol.protocol import Protocol
-from common.middleware.middleware import Middleware
+from common.middleware.middleware import Middleware, MiddlewareError
 from utils.utils import node_id_to_send_to
 from constants import *
 
@@ -22,9 +22,7 @@ class DropNulls:
         self._protocol = protocol
         self._middleware = middleware
         self._config = config
-
-        self._games_counter = 0
-        self._reviews_counter = 0
+        self._got_sigterm = False
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -61,7 +59,12 @@ class DropNulls:
             self._config["REVIEWS_RECIVING_QUEUE_NAME"], reviews_callback
         )
 
-        self._middleware.start_consuming()
+        try: 
+            self._middleware.start_consuming()
+        except MiddlewareError as e:
+            # TODO: If got_sigterm is showing any error needed?  
+            if not self._got_sigterm:
+                logging.error(e)
 
     def __handle_end_transmission(
         self, body: List[str], reciving_queue_name: str, message_type: str
@@ -145,7 +148,6 @@ class DropNulls:
                 self._middleware.ack(delivery_tag)
                 return
             
-            self._games_counter += 1
             logging.debug(f"Recived game: {message}")
             if NULL_FIELD_VALUE in message:
                 continue
@@ -220,7 +222,6 @@ class DropNulls:
 
             if message[0] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived reviews END: {message}")
-                logging.debug(f"AMOUNT OF REVIEW LINES: {self._reviews_counter}")
                 self.__handle_end_transmission(
                     message,
                     self._config["REVIEWS_RECIVING_QUEUE_NAME"],
@@ -230,10 +231,13 @@ class DropNulls:
 
                 return
 
-            self._reviews_counter += 1
             logging.debug(
-                f"[NULL DROP {self._config['NODE_ID']}] Recived review: {message}"
+                f"Recived review: {message}"
             )
+            if NULL_FIELD_VALUE in message:
+                logging.debug("NULL was found in recived review, dropping it")
+                continue
+
             # Q3, Q5 Reviews: app_id, review_score
             for i in ["3", "5"]:
                 # encoded_message = self._protocol.encode(
@@ -259,4 +263,5 @@ class DropNulls:
         logging.debug(
             f"[NULL DROP {self._config['NODE_ID']}] Gracefully shutting down..."
         )
+        self._got_sigterm = True 
         self._middleware.shutdown()

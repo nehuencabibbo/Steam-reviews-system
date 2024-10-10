@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from typing import *
 from constants import *
 from common.protocol.protocol import Protocol
-from common.middleware.middleware import Middleware
+from common.middleware.middleware import Middleware, MiddlewareError
 from utils.utils import node_id_to_send_to
 
 import signal
@@ -23,6 +23,7 @@ class FilterColumnByValue:
         self._protocol = protocol
         self._middleware = middleware
         self._config = config
+        self._got_sigterm = False 
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -43,7 +44,12 @@ class FilterColumnByValue:
         )
         self._middleware.attach_callback(self._config["RECIVING_QUEUE_NAME"], callback)
 
-        self._middleware.start_consuming()
+        try:
+            self._middleware.start_consuming()
+        except MiddlewareError as e:
+            # TODO: If got_sigterm is showing any error needed?  
+            if not self._got_sigterm:
+                logging.error(e)
 
     def __handle_end_transmission(self, body: List[str]):
         # Si me llego un END...
@@ -109,7 +115,13 @@ class FilterColumnByValue:
                 self.__send_message(body)
 
         elif criteria == GRATER_THAN_CRITERIA_KEYWORD:
-            if int(column_to_use) > int(value_to_filter_by):
+            try: 
+                column_to_use = int(column_to_use)
+                value_to_filter_by = int(value_to_filter_by)
+            except ValueError as e:
+                logging.debug(f"Failed integer conversion: {e}")
+
+            if column_to_use > value_to_filter_by:
                 self.__send_message(body)
 
         elif criteria == CONTAINS_CRITERIA_KEYWORD:
@@ -119,6 +131,16 @@ class FilterColumnByValue:
         elif criteria == LANGUAGE_CRITERIA_KEYWORD:
             detected_language, _ = langid.classify(column_to_use)
             if detected_language == value_to_filter_by.lower():
+                self.__send_message(body)
+
+        elif criteria == EQUAL_FLOAT_CRITERIA_KEYWORD:
+            try: 
+                column_to_use = float(column_to_use)
+                value_to_filter_by = float(value_to_filter_by)
+            except ValueError as e: 
+                logging.debug(f"Failed float conversion: {e}")
+
+            if column_to_use == value_to_filter_by: 
                 self.__send_message(body)
         else:
             raise Exception(f"Unkown cirteria: {criteria}")
@@ -151,4 +173,5 @@ class FilterColumnByValue:
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
+        self._got_sigterm = True 
         self._middleware.shutdown()

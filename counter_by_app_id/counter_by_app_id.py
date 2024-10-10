@@ -1,6 +1,8 @@
 import signal
 import logging
-from common.middleware.middleware import Middleware
+
+import pika
+from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import *
 from common.protocol.protocol import Protocol
 from common.storage import storage
@@ -30,9 +32,12 @@ class CounterByAppId:
         try:
             logging.debug("Starting to consume...")
             self._middleware.start_consuming()
-        except OSError as _:
-            if not self._got_sigterm:
-                raise
+        except MiddlewareError as e:
+                # TODO: If got_sigterm is showing any error needed?  
+                if not self._got_sigterm:
+                    logging.error(e)
+                
+        logging.info("Finished")
 
     def handle_message(self, ch, method, properties, body):
 
@@ -73,11 +78,16 @@ class CounterByAppId:
         logging.debug("SENDING END")
         self._middleware.send_end(queue_name)
 
+        # if not delete_directory(self._config["STORAGE_DIR"]):
+        #     logging.debug(f"Couldn't delete directory: {self._config["STORAGE_DIR"]}")
+        # else: 
+        #     logging.debug(f"Deleted directory: {self._config["STORAGE_DIR"]}")
         # encoded_msg = self._protocol.encode([END_TRANSMISSION_MESSAGE])
         # self._middleware.publish(encoded_msg, queue_name=self._config["PUBLISH_QUEUE"])
         # logging.debug(f'END SENT TO: {self._config["PUBLISH_QUEUE"]}')
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
+
         self._got_sigterm = True
         self._middleware.shutdown()

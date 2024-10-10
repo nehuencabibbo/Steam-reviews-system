@@ -1,7 +1,7 @@
 import logging
 import signal
-from common.middleware.middleware import Middleware
-from common.storage.storage import read_by_range, write_by_range
+from common.middleware.middleware import Middleware, MiddlewareError
+from common.storage.storage import read_by_range, write_by_range, delete_directory
 from common.protocol.protocol import Protocol
 from utils.utils import node_id_to_send_to
 
@@ -12,16 +12,17 @@ class Join:
     def __init__(
         self, protocol: Protocol, middleware: Middleware, config: dict[str, str]
     ):
-        self.__protocol = protocol
         self.__middleware = middleware
         self.__config = config
         self._amount_of_ends_received = 0
+        self._got_sigterm = False
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
     def __signal_handler(self, sig, frame):
         logging.debug(f"Gracefully shutting down...")
+        self._got_sigterm = True
         self.__middleware.shutdown()
 
     def start(self):
@@ -47,7 +48,12 @@ class Join:
             self.__config["INPUT_GAMES_QUEUE_NAME"], games_callback
         )
 
-        self.__middleware.start_consuming()
+        try:
+            self.__middleware.start_consuming()
+        except MiddlewareError as e:
+            # TODO: If got_sigterm is showing any error needed?
+            if not self._got_sigterm:
+                logging.error(e)
 
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
         body = self.__middleware.get_rows_from_message(body)
@@ -82,19 +88,20 @@ class Join:
     def __reviews_callback(
         self, delivery_tag, body, message_type, forwarding_queue_name
     ):
-        # logging.debug(f"[INPUT REVIEWS] received: {body}")
-
-        # message = body.decode("utf-8")
-        # body = self.__protocol.decode(body)
-
-        # body = [value.strip() for value in body]
-
         body = self.__middleware.get_rows_from_message(body)
         for review in body:
             logging.debug(f"Recived review: {review}")
 
             if len(review) == 1 and review[0] == END_TRANSMISSION_MESSAGE:
+
                 # send rest of batch if there is any
+                # self.__middleware.publish_batch(forwarding_queue_name)
+
+                # if not delete_directory('/tmp'):
+                #     logging.debug(f"Couldn't delete directory: {'/tmp'}")
+                # else:
+                #     logging.debug(f"Deleted directory: {'/tmp'}")
+
                 logging.debug("END of reviews received")
                 self._amount_of_ends_received += 1
                 logging.debug(
@@ -145,15 +152,9 @@ class Join:
                             f"{node_id}_{forwarding_queue_name}",
                         )
 
-            # joined_message = [record_info, review[1]]
-
-            # # encoded_message = self.__protocol.encode([joined_message])
-            # self.__middleware.publish(joined_message, forwarding_queue_name, "")
-
         self.__middleware.ack(delivery_tag)
 
     def __send_end_to_forward_queues(self):
-        # encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
         forwarding_queue_name = self.__config["OUTPUT_QUEUE_NAME"]
 
         if (
