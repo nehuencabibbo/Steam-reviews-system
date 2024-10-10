@@ -5,17 +5,16 @@ import shutil
 
 # TODO: use threads for all functions or some parallelization tool (maybe)
 
-def delete_directory(dir: str):
+def delete_directory(dir: str) -> bool:
     """
     Removes the specified directory along with all its contents
     """
     if not os.path.exists(dir):
-        print(f"Directory {dir} does not exist.")
 
-        return
+        return False 
 
     shutil.rmtree(dir)
-    print(f"Directory {dir} and all its contents have been removed.")
+    return True 
     
 def write_by_range(dir: str, range: int, record: str):
     key = None

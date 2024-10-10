@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from typing import *
 from constants import *
 from common.protocol.protocol import Protocol
-from common.middleware.middleware import Middleware
+from common.middleware.middleware import Middleware, MiddlewareError
 from utils.utils import node_id_to_send_to
 
 import signal
@@ -23,6 +23,7 @@ class FilterColumnByValue:
         self._protocol = protocol
         self._middleware = middleware
         self._config = config
+        self._got_sigterm = False 
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -43,7 +44,12 @@ class FilterColumnByValue:
         )
         self._middleware.attach_callback(self._config["RECIVING_QUEUE_NAME"], callback)
 
-        self._middleware.start_consuming()
+        try:
+            self._middleware.start_consuming()
+        except MiddlewareError as e:
+            # TODO: If got_sigterm is showing any error needed?  
+            if not self._got_sigterm:
+                logging.error(e)
 
     def __handle_end_transmission(self, body: List[str]):
         # Si me llego un END...
@@ -164,4 +170,5 @@ class FilterColumnByValue:
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
+        self._got_sigterm = True 
         self._middleware.shutdown()

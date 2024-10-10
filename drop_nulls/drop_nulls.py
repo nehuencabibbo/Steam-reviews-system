@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import *
 from common.protocol.protocol import Protocol
-from common.middleware.middleware import Middleware
+from common.middleware.middleware import Middleware, MiddlewareError
 from utils.utils import node_id_to_send_to
 from constants import *
 
@@ -22,6 +22,7 @@ class DropNulls:
         self._protocol = protocol
         self._middleware = middleware
         self._config = config
+        self._got_sigterm = False
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -58,7 +59,12 @@ class DropNulls:
             self._config["REVIEWS_RECIVING_QUEUE_NAME"], reviews_callback
         )
 
-        self._middleware.start_consuming()
+        try: 
+            self._middleware.start_consuming()
+        except MiddlewareError as e:
+            # TODO: If got_sigterm is showing any error needed?  
+            if not self._got_sigterm:
+                logging.error(e)
 
     def __handle_end_transmission(
         self, body: List[str], reciving_queue_name: str, message_type: str
@@ -257,4 +263,5 @@ class DropNulls:
         logging.debug(
             f"[NULL DROP {self._config['NODE_ID']}] Gracefully shutting down..."
         )
+        self._got_sigterm = True 
         self._middleware.shutdown()

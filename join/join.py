@@ -1,7 +1,7 @@
 import logging
 import signal
-from common.middleware.middleware import Middleware
-from common.storage.storage import read_by_range, write_by_range
+from common.middleware.middleware import Middleware, MiddlewareError
+from common.storage.storage import read_by_range, write_by_range, delete_directory
 from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
@@ -11,16 +11,17 @@ class Join:
     def __init__(
         self, protocol: Protocol, middleware: Middleware, config: dict[str, str]
     ):
-        self.__protocol = protocol
         self.__middleware = middleware
         self.__config = config
         self._amount_of_ends_received = 0
+        self._got_sigterm = False 
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
     def __signal_handler(self, sig, frame):
         logging.debug(f"Gracefully shutting down...")
+        self._got_sigterm = True 
         self.__middleware.shutdown()
 
     def start(self):
@@ -38,7 +39,12 @@ class Join:
             self.__config["INPUT_GAMES_QUEUE_NAME"], games_callback
         )
 
-        self.__middleware.start_consuming()
+        try:
+            self.__middleware.start_consuming()
+        except MiddlewareError as e:
+            # TODO: If got_sigterm is showing any error needed?  
+            if not self._got_sigterm:
+                logging.error(e)
 
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
         # logging.debug(f"[INPUT GAMES] received: {body}")
@@ -95,6 +101,11 @@ class Join:
             if len(review) == 1 and review[0] == END_TRANSMISSION_MESSAGE:
                 #send rest of batch if there is any
                 self.__middleware.publish_batch(forwarding_queue_name)
+                
+                # if not delete_directory('/tmp'):
+                #     logging.debug(f"Couldn't delete directory: {'/tmp'}")
+                # else: 
+                #     logging.debug(f"Deleted directory: {'/tmp'}")
 
                 logging.debug("END of reviews received")
 

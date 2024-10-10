@@ -1,7 +1,7 @@
 import logging
 import signal
-from common.middleware.middleware import Middleware
-from common.storage.storage import add_to_top, read_top
+from common.middleware.middleware import Middleware, MiddlewareError
+from common.storage.storage import add_to_top, read_top, delete_directory
 from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
@@ -36,8 +36,11 @@ class TopK:
         self.__middleware.attach_callback(
             self.__config["INPUT_TOP_K_QUEUE_NAME"], games_callback
         )
-
-        self.__middleware.start_consuming()
+        try:
+            self.__middleware.start_consuming()
+        except MiddlewareError as e:
+            if not self._got_sigterm:
+                logging.error(e)
 
     def __callback(self, delivery_tag, body, message_type, forwarding_queue_name):
 
@@ -52,6 +55,12 @@ class TopK:
                 self.__send_top(forwarding_queue_name)
                 self.__middleware.send_end(queue=forwarding_queue_name)
                 self.__middleware.ack(delivery_tag)
+
+                # if not delete_directory('/tmp'):
+                #     logging.debug(f"Couldn't delete directory: {'/tmp'}")
+                # else: 
+                #     logging.debug(f"Deleted directory: {'/tmp'}")
+
                 return
 
             try:

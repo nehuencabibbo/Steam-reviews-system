@@ -2,7 +2,9 @@ import csv
 import time
 import signal
 import logging
-from common.middleware.middleware import Middleware
+
+import pika
+from common.middleware.middleware import Middleware, MiddlewareError
 from common.protocol.protocol import Protocol
 
 FILE_END_MSG = "END"
@@ -86,9 +88,12 @@ class Client:
             self._middleware.attach_callback(queue_name, self.__handle_query_result)
             try:
                 self._middleware.start_consuming()
-            except OSError as _:
+            except MiddlewareError as e:
+                # TODO: If got_sigterm is showing any error needed?  
                 if not self._got_sigterm:
-                    raise
+                    logging.error(e)
+
+            logging.info("Finished")
 
     def __handle_query_result(self, ch, method, properties, body):
 
