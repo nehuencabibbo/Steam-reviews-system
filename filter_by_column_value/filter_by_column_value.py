@@ -103,7 +103,13 @@ class FilterColumnByValue:
                 self.__send_message(body)
 
         elif criteria == GRATER_THAN_CRITERIA_KEYWORD:
-            if int(column_to_use) > int(value_to_filter_by):
+            try:
+                column_to_use = int(column_to_use)
+                value_to_filter_by = int(value_to_filter_by)
+            except ValueError as e:
+                logging.error(f"Failed to convert value: {e}")
+                
+            if column_to_use > value_to_filter_by:
                 self.__send_message(body)
 
         elif criteria == CONTAINS_CRITERIA_KEYWORD:
@@ -116,7 +122,13 @@ class FilterColumnByValue:
                 self.__send_message(body)
 
         elif criteria == EQUAL_FLOAT_CRITERIA_KEYWORD:
-            if float(column_to_use) == float(value_to_filter_by):
+            try:
+                column_to_use = float(column_to_use)
+                value_to_filter_by = float(value_to_filter_by)
+            except ValueError as e:
+                logging.error(f"Failed to convert value: {e}")
+
+            if column_to_use == value_to_filter_by:
                 self.__send_message(body)
 
         else:
