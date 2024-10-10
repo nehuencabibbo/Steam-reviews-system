@@ -8,10 +8,12 @@ AMOUNT_OF_DROP_NULLS = 2
 # Q2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
+Q2_AMOUNT_OF_TOP_K_NODES = 2
 # Q3
 Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 2
 Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
+Q3_AMOUNT_OF_TOP_K_NODES = 2
 # Q4
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
 Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
@@ -120,6 +122,33 @@ def add_top_k(
             f"INPUT_TOP_K_QUEUE_NAME={input_top_k_queue_name}",
             f"OUTPUT_TOP_K_QUEUE_NAME={output_top_k_queue_name}",
             f"K={k}",
+            f"NODE_ID={num}",
+            f"AMOUNT_OF_RECEIVING_QUEUES=1",
+        ],
+        "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
+        "networks": ["net"],
+        "restart": "on-failure",
+    }
+
+
+def add_top_k_aggregator(
+    output: Dict,
+    query: str,
+    num: int,
+    input_top_k_aggregator_queue_name: str,
+    output_top_k_aggregator_queue_name: str,
+    k: int,
+    amount_of_top_k_nodes: int,
+):
+    output["services"][f"{query}_top_k{num}"] = {
+        "image": "top_k:latest",
+        "container_name": f"{query}_top_k{num}",
+        "environment": [
+            f"INPUT_TOP_K_QUEUE_NAME={input_top_k_aggregator_queue_name}",
+            f"OUTPUT_TOP_K_QUEUE_NAME={output_top_k_aggregator_queue_name}",
+            f"K={k}",
+            f"NODE_ID={num}",
+            f"AMOUNT_OF_RECEIVING_QUEUES={amount_of_top_k_nodes}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -171,6 +200,7 @@ def add_join(
     input_reviews_queue_name: str,
     output_queue_name: str,
     amount_of_behind_nodes: int,
+    amount_of_forwarding_queues: int,
 ):
     output["services"][f"{query}_join{num}"] = {
         "container_name": f"{query}_join{num}",
@@ -180,6 +210,7 @@ def add_join(
             f"INPUT_REVIEWS_QUEUE_NAME={input_reviews_queue_name}",
             f"OUTPUT_QUEUE_NAME={output_queue_name}",
             f"AMOUNT_OF_BEHIND_NODES={amount_of_behind_nodes}",
+            f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -257,6 +288,11 @@ def generate_counters_by_app_id(amount_of_counters: int, **kwargs):
         add_counter_by_app_id(**kwargs, num=i)
 
 
+def generate_tops_k(amount_of_tops_k: int, **kwargs):
+    for i in range(amount_of_tops_k):
+        add_top_k(**kwargs, num=i)
+
+
 def generate_q1(output=Dict):
     add_counter_by_platform(
         output=output,
@@ -268,14 +304,6 @@ def generate_q1(output=Dict):
 
 
 def generate_q2(output=Dict):
-    add_top_k(
-        output=output,
-        query="q2",
-        num=0,
-        input_top_k_queue_name="0_q2_indie_games_from_last_decade",
-        output_top_k_queue_name="Q2",
-        k=10,
-    )
 
     q2_indie_filter_args = {
         "output": output,
@@ -299,7 +327,7 @@ def generate_q2(output=Dict):
         "filter_name": "indie_games_from_last_decade",
         "input_queue_name": "0_q2_indie_games",
         "output_queue_name": "q2_indie_games_from_last_decade",
-        "amount_of_forwarding_queues": 1,
+        "amount_of_forwarding_queues": Q2_AMOUNT_OF_TOP_K_NODES,
         "logging_level": "DEBUG",
         "column_number_to_use": 2,  # release date
         "value_to_filter_by": 201,
@@ -307,9 +335,30 @@ def generate_q2(output=Dict):
         "columns_to_keep": "1,3",  # name, avg_forever
         "instances_of_myself": Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS,
     }
+
     generate_filters_by_value(
         Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS,
         **q2_indie_games_from_last_decade_args,
+    )
+
+    q2_top_k_args = {
+        "output": output,
+        "query": "q2",
+        "input_top_k_queue_name": "q2_indie_games_from_last_decade",
+        "output_top_k_queue_name": "0_q2_top_aggregator",
+        "k": 10,
+    }
+
+    generate_tops_k(Q2_AMOUNT_OF_TOP_K_NODES, **q2_top_k_args)
+
+    add_top_k_aggregator(
+        output=output,
+        query="q2_aggregator",
+        num=0,
+        input_top_k_aggregator_queue_name="q2_top_aggregator",
+        output_top_k_aggregator_queue_name="Q2",
+        k=10,
+        amount_of_top_k_nodes=Q2_AMOUNT_OF_TOP_K_NODES,
     )
 
 
@@ -367,18 +416,39 @@ def generate_q3(output: Dict):
         num=0,
         input_games_queue_name="0_q3_indie_games",  # Prefixed as it comes from a filter
         input_reviews_queue_name="q3_positive_review_count",
-        output_queue_name="1_q3_join_by_app_id_result",
+        output_queue_name="q3_join_by_app_id_result",
         amount_of_behind_nodes=Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
+        amount_of_forwarding_queues=Q3_AMOUNT_OF_TOP_K_NODES,
     )
 
-    add_top_k(
+    q3_tops_k_args = {
+        "output": output,
+        "query": "q3",
+        "input_top_k_queue_name": "q3_join_by_app_id_result",
+        "output_top_k_queue_name": "0_q3_top_aggregator",
+        "k": 5,
+    }
+
+    generate_tops_k(Q3_AMOUNT_OF_TOP_K_NODES, **q3_tops_k_args)
+
+    add_top_k_aggregator(
         output=output,
-        query="q3",
+        query="q3_aggregator",
         num=0,
-        input_top_k_queue_name="1_q3_join_by_app_id_result",
-        output_top_k_queue_name="Q3",
-        k=5,
+        input_top_k_aggregator_queue_name="q3_top_aggregator",
+        output_top_k_aggregator_queue_name="Q3",
+        k=10,
+        amount_of_top_k_nodes=Q3_AMOUNT_OF_TOP_K_NODES,
     )
+
+    # add_top_k(
+    #     output=output,
+    #     query="q3",
+    #     num=0,
+    #     input_top_k_queue_name="q3_join_by_app_id_result",
+    #     output_top_k_queue_name="Q3",
+    #     k=5,
+    # )
 
 
 def generate_q4(output: Dict):
@@ -475,6 +545,7 @@ def generate_q4(output: Dict):
         input_reviews_queue_name="0_q4_filter_more_than_5000_reviews",
         output_queue_name="Q4",
         amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
+        amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
     )
 
 
@@ -534,13 +605,14 @@ def generate_q5(output: Dict):
         input_reviews_queue_name="0_q5_counter",
         output_queue_name="q5_percentile",
         amount_of_behind_nodes=Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
+        amount_of_forwarding_queues=1,
     )
 
     add_percentile(
         output=output,
         query="q5",
         num=0,
-        consume_queue="q5_percentile",
+        consume_queue="0_q5_percentile",  # TODO: Change if scalation of this node is implemented
         publish_queue="Q5",
     )
 

@@ -14,6 +14,7 @@ class TopK:
         self.__protocol = protocol
         self.__middleware = middleware
         self.__config = config
+        self.__total_ends_received = 0
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -23,18 +24,22 @@ class TopK:
         self.__middleware.shutdown()
 
     def start(self):
-        self.__middleware.create_queue(self.__config["INPUT_TOP_K_QUEUE_NAME"])
+        self.__middleware.create_queue(
+            f"{self.__config['NODE_ID']}_{self.__config['INPUT_TOP_K_QUEUE_NAME']}"
+        )
+
         self.__middleware.create_queue(self.__config["OUTPUT_TOP_K_QUEUE_NAME"])
 
         # # callback, inputq, outputq
         games_callback = self.__middleware.generate_callback(
             self.__callback,
-            self.__config["INPUT_TOP_K_QUEUE_NAME"],
+            f"{self.__config['NODE_ID']}_{self.__config['INPUT_TOP_K_QUEUE_NAME']}",
             self.__config["OUTPUT_TOP_K_QUEUE_NAME"],
         )
 
         self.__middleware.attach_callback(
-            self.__config["INPUT_TOP_K_QUEUE_NAME"], games_callback
+            f"{self.__config['NODE_ID']}_{self.__config['INPUT_TOP_K_QUEUE_NAME']}",
+            games_callback,
         )
 
         self.__middleware.start_consuming()
@@ -60,6 +65,7 @@ class TopK:
                 logging.error(
                     f"An error has occurred. {e}",
                 )
+
 
         self.__middleware.ack(delivery_tag)
 

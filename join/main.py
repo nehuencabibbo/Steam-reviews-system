@@ -40,6 +40,13 @@ def get_config():
             )
         )
 
+        config_params["AMOUNT_OF_FORWARDING_QUEUES"] = int(
+            os.getenv(
+                "AMOUNT_OF_FORWARDING_QUEUES",
+                config["DEFAULT"]["AMOUNT_OF_FORWARDING_QUEUES"],
+            )
+        )
+
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
     except ValueError as e:

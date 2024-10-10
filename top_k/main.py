@@ -23,6 +23,8 @@ def get_config():
             "RABBIT_IP", config["DEFAULT"]["RABBIT_IP"]
         )
 
+        config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])
+
         config_params["K"] = os.getenv("K", config["DEFAULT"]["K"])
 
         config_params["INPUT_TOP_K_QUEUE_NAME"] = os.getenv(
@@ -34,6 +36,13 @@ def get_config():
 
         config_params["PARTITION_RANGE"] = os.getenv(
             "PARTITION_RANGE", config["DEFAULT"]["PARTITION_RANGE"]
+        )
+
+        config_params["AMOUNT_OF_RECEIVING_QUEUES"] = int(
+            os.getenv(
+                "AMOUNT_OF_RECEIVING_QUEUES",
+                config["DEFAULT"]["AMOUNT_OF_RECEIVING_QUEUES"],
+            )
         )
 
     except KeyError as e:

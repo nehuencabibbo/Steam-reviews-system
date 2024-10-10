@@ -3,6 +3,7 @@ import signal
 from common.middleware.middleware import Middleware
 from common.storage.storage import read_by_range, write_by_range
 from common.protocol.protocol import Protocol
+from utils.utils import node_id_to_send_to
 
 END_TRANSMISSION_MESSAGE = "END"
 
@@ -126,6 +127,21 @@ class Join:
                     self.__middleware.publish(joined_message, forwarding_queue_name, "")
 
         self.__middleware.ack(delivery_tag)
+
+    def __send_end_to_forward_queues(self):
+        encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
+        forwarding_queue_name = self.__config["OUTPUT_QUEUE_NAME"]
+
+        if (
+            "Q" in forwarding_queue_name
+        ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
+            self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+
+        for i in range(self.__config["AMOUNT_OF_FORWARDING_QUEUES"]):
+            self.__middleware.publish(
+                encoded_message, f"{i}_{forwarding_queue_name}", ""
+            )
+            logging.debug(f"Sent end to: {i}_{forwarding_queue_name}")
 
 
 # TODO: make sigterm handle
