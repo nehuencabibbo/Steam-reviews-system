@@ -2,6 +2,8 @@ import csv
 import time
 import signal
 import logging
+
+import pika
 from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
 
@@ -86,9 +88,28 @@ class Client:
             self._middleware.attach_callback(queue_name, self.__handle_query_result)
             try:
                 self._middleware.start_consuming()
-            except OSError as _:
+            except pika.exceptions.ChannelClosedByBroker as e: 
+                # Rabbit mq terminated during execution most probably
+                # TODO: Is writing to a closed channel handled by this too or
+                # does pika.exceptions.ClosedChannel need to be accounted for? 
+                logging.debug(f"Channel was closed by borker: {e}")
+
+            except pika.exceptions.ConnectionClosed as e:
+                # Connection was finished either due to shutdown
+                # or general network errors
                 if not self._got_sigterm:
-                    raise
+                    logging.debug(f"A connection error ocurred with the broker: {e}")
+                else: 
+                    logging.error((
+                        "Connection with the broker was"
+                        "terminated due to sigterm"
+                    ))
+
+            except OSError as e:
+                if not self._got_sigterm:
+                    logging.error("Attempted to send data to a closed socket")
+
+            logging.info("Finished")
 
     def __handle_query_result(self, ch, method, properties, body):
 

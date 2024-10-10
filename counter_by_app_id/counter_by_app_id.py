@@ -1,5 +1,7 @@
 import signal
 import logging
+
+import pika
 from common.middleware.middleware import Middleware
 from common.storage.storage import *
 from common.protocol.protocol import Protocol
@@ -30,9 +32,25 @@ class CounterByAppId:
         try:
             logging.debug("Starting to consume...")
             self._middleware.start_consuming()
-        except OSError as _:
+        except pika.exceptions.ChannelClosedByBroker as e: 
             if not self._got_sigterm:
-                raise
+                logging.debug(f"Channel was closed by borker: {e}")
+            else: 
+                logging.error((
+                    "Channel used to connect with the broker was"
+                    "terminated due to sigterm"
+                ))
+                
+        except pika.exceptions.ConnectionClosed as e:
+            if not self._got_sigterm:
+                logging.debug(f"A connection error ocurred with the broker: {e}")
+            else: 
+                logging.error((
+                    "Connection with the broker was"
+                    "terminated due to sigterm"
+                ))
+
+            logging.info("Finished")
 
     def handle_message(self, ch, method, properties, body):
 
