@@ -82,13 +82,6 @@ class Join:
     def __reviews_callback(
         self, delivery_tag, body, message_type, forwarding_queue_name
     ):
-        # logging.debug(f"[INPUT REVIEWS] received: {body}")
-
-        # message = body.decode("utf-8")
-        # body = self.__protocol.decode(body)
-
-        # body = [value.strip() for value in body]
-
         body = self.__middleware.get_rows_from_message(body)
         for review in body:
             logging.debug(f"Recived review: {review}")
@@ -145,15 +138,9 @@ class Join:
                             f"{node_id}_{forwarding_queue_name}",
                         )
 
-            # joined_message = [record_info, review[1]]
-
-            # # encoded_message = self.__protocol.encode([joined_message])
-            # self.__middleware.publish(joined_message, forwarding_queue_name, "")
-
         self.__middleware.ack(delivery_tag)
 
     def __send_end_to_forward_queues(self):
-        # encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
         forwarding_queue_name = self.__config["OUTPUT_QUEUE_NAME"]
 
         if (
