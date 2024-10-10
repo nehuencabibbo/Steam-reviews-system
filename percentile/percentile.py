@@ -37,9 +37,6 @@ class Percentile:
                 raise
 
     def handle_message(self, ch, method, properties, body):
-        # body = self._protocol.decode(body)
-        # body = [value.strip() for value in body]
-
         body = self._middleware.get_rows_from_message(body)
         logging.debug(f"body: {body}")
         for message in body:
@@ -69,11 +66,6 @@ class Percentile:
 
     def handle_end_message(self):
 
-        rank = (self._config["PERCENTILE"] / 100) * self._amount_msg_received
-        rank = math.ceil(rank)  # instead of interpolating, round the number
-
-        logging.debug(f"Ordinal rank is {rank}")
-
         percentile = self.get_percentile()
 
         reader = storage.read_sorted_file(self._config["STORAGE_DIR"])
@@ -82,29 +74,27 @@ class Percentile:
             record_value = int(record[1])
             if record_value >= percentile:
                 logging.debug(f"Sending: {record}")
-                # encoded_message = self._protocol.encode(record)
                 self._middleware.publish(record, self._config["PUBLISH_QUEUE"])
 
         self._middleware.publish_batch(self._config["PUBLISH_QUEUE"])
         self._middleware.send_end(self._config["PUBLISH_QUEUE"])
 
-        # encoded_message = self._protocol.encode(END_TRANSMISSION_MESSAGE)
-        # self._middleware.publish(encoded_message, self._config["PUBLISH_QUEUE"])
-
         self._amount_msg_received = 0
 
     def get_percentile(self):
         rank = (self._config["PERCENTILE"] / 100) * self._amount_msg_received
-        rank = round(rank)
+        rank = math.ceil(rank)  # instead of interpolating, round the number
 
         logging.debug(f"Ordinal rank is {rank}")
 
         reader = storage.read_sorted_file(self._config["STORAGE_DIR"])
         for i, row in enumerate(reader):
-            if i == rank:
+            if (i + 1) == rank:
                 _, value = row[0].split(",")
                 logging.debug(f"VALUE: {value}")
                 return int(value)
+            
+        return 0
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
