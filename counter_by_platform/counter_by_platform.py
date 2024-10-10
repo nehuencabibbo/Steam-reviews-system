@@ -1,6 +1,6 @@
 import signal
 import logging
-from common.middleware.middleware import Middleware
+from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import *
 from common.protocol.protocol import Protocol
 
@@ -30,9 +30,10 @@ class CounterByPlatform:
         try:
             logging.debug("Starting to consume...")
             self._middleware.start_consuming()
-        except OSError as _:
+        except MiddlewareError as e:
+                # TODO: If got_sigterm is showing any error needed?  
             if not self._got_sigterm:
-                raise
+                logging.error(e)
 
     def handle_message(self, ch, method, properties, body):
         body = self._middleware.get_rows_from_message(body)

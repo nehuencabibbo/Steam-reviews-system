@@ -1,6 +1,6 @@
 import signal
 import logging
-from common.middleware.middleware import Middleware
+from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage import storage
 from common.protocol.protocol import Protocol
 import math
@@ -32,9 +32,9 @@ class Percentile:
         try:
             logging.debug("Starting to consume...")
             self._middleware.start_consuming()
-        except OSError as _:
+        except MiddlewareError as e:
             if not self._got_sigterm:
-                raise
+                logging.error(e)
 
     def handle_message(self, ch, method, properties, body):
         # body = self._protocol.decode(body)
@@ -92,6 +92,10 @@ class Percentile:
         # self._middleware.publish(encoded_message, self._config["PUBLISH_QUEUE"])
 
         self._amount_msg_received = 0
+        # if not storage.delete_directory(self._config["STORAGE_DIR"]):
+        #     logging.debug(f"Couldn't delete directory: {self._config["STORAGE_DIR"]}")
+        # else:
+        #     logging.debug(f"Deleted directory: {self._config["STORAGE_DIR"]}")
 
     def get_percentile(self):
         rank = (self._config["PERCENTILE"] / 100) * self._amount_msg_received

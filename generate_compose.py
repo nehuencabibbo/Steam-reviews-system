@@ -392,7 +392,7 @@ def generate_q3(output: Dict):
         "logging_level": "DEBUG",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": 1.0,  # positive_review
-        "criteria": "EQUAL",
+        "criteria": "EQUAL_FLOAT",
         "columns_to_keep": 0,  # app_id ,
         "instances_of_myself": Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS,
     }
@@ -480,8 +480,8 @@ def generate_q4(output: Dict):
         "amount_of_forwarding_queues": 1,
         "logging_level": "DEBUG",
         "column_number_to_use": 2,  # review_score
-        "value_to_filter_by": -1,
-        "criteria": "EQUAL",
+        "value_to_filter_by": -1.0,
+        "criteria": "EQUAL_FLOAT",
         "columns_to_keep": "0,1,2",  # app_id, review_score, review
         "instances_of_myself": Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
     }
@@ -578,7 +578,7 @@ def generate_q5(output: Dict):
         "logging_level": "DEBUG",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": -1.0,
-        "criteria": "EQUAL",
+        "criteria": "EQUAL_FLOAT",
         "columns_to_keep": "0",  # app_id, positive_review_count
         "instances_of_myself": Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
     }

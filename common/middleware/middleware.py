@@ -5,6 +5,17 @@ from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
 
+class MiddlewareError(Exception):
+    def __init__(self, message=None):
+        # super().__init__(message)
+        self.message = message
+
+    def __str__(self):
+        return (
+            f"MiddlewareError: {self.message}" 
+            if self.message else 
+            "MiddlewareError has occurred"
+        )
 
 class Middleware:
     def __init__(self, broker_ip, protocol: Protocol = Protocol()):
@@ -81,7 +92,19 @@ class Middleware:
         )
 
     def start_consuming(self):
-        self._channel.start_consuming()
+        try:
+            self._channel.start_consuming()
+        except pika.exceptions.ChannelClosedByBroker as e: 
+            # Rabbit mq terminated during execution most probably
+            # TODO: Is writing to a closed channel handled by this too or
+            # does pika.exceptions.ClosedChannel need to be accounted for? 
+            raise MiddlewareError(message=f"Channel was closed by borker: {e}")
+        except pika.exceptions.ConnectionClosed as e:
+            # Connection was finished either due to shutdown
+            # or general network error
+            raise MiddlewareError(f"A connection error ocurred with the broker: {e}")
+        except OSError as e:
+            raise MiddlewareError("Attempted to send data to a closed socket")
 
     def stop_consuming(self):
         self._channel.stop_consuming()
