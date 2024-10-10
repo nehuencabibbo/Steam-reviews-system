@@ -1,14 +1,22 @@
 import os
 import csv
 import logging
+import shutil
 
 # TODO: use threads for all functions or some parallelization tool (maybe)
 
+def delete_directory(dir: str):
+    """
+    Removes the specified directory along with all its contents
+    """
+    if not os.path.exists(dir):
+        print(f"Directory {dir} does not exist.")
 
-# Record is a string which format is csv. It must contain in its first value a numerical type, as it must be
-# assigned to a partition of the storage (range based storage is being used)
+        return
 
-
+    shutil.rmtree(dir)
+    print(f"Directory {dir} and all its contents have been removed.")
+    
 def write_by_range(dir: str, range: int, record: str):
     key = None
     try:
