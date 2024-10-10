@@ -17,7 +17,7 @@ Q3_AMOUNT_OF_TOP_K_NODES = 2
 # Q4
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
 Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
-Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 3
+Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 1
 Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 3
 Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 3
 # Q5
@@ -437,7 +437,7 @@ def generate_q3(output: Dict):
         num=0,
         input_top_k_aggregator_queue_name="q3_top_aggregator",
         output_top_k_aggregator_queue_name="Q3",
-        k=10,
+        k=5,
         amount_of_top_k_nodes=Q3_AMOUNT_OF_TOP_K_NODES,
     )
 
@@ -630,13 +630,13 @@ def generate_output():
 
     # -------------------------------------------- Q1 -----------------------------------------
     generate_q1(output=output)
-    # -------------------------------------------- Q2 -----------------------------------------
+    # # -------------------------------------------- Q2 -----------------------------------------
     generate_q2(output=output)
-    # -------------------------------------------- Q3 -----------------------------------------
+    # # -------------------------------------------- Q3 -----------------------------------------
     generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
     generate_q4(output=output)
-    # # -------------------------------------------- Q5 -----------------------------------------
+    # -------------------------------------------- Q5 -----------------------------------------
     generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 

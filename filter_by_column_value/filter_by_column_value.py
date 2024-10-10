@@ -64,8 +64,10 @@ class FilterColumnByValue:
                 peers_that_recived_end.append(self._config["NODE_ID"])
 
             message += peers_that_recived_end
-            
-            self._middleware.publish_message(message,self._config["RECIVING_QUEUE_NAME"]) 
+
+            self._middleware.publish_message(
+                message, self._config["RECIVING_QUEUE_NAME"]
+            )
 
     def _send_last_batch_to_fowarding_queues(self):
         for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
@@ -75,6 +77,7 @@ class FilterColumnByValue:
     def __send_end_transmission_to_all_forwarding_queues(self):
         # TODO: Verify that EVERY queue is started at 0
         for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
+
             self._middleware.send_end(
                 queue=f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
             )

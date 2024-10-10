@@ -47,7 +47,9 @@ class Client:
 
     def run(self):
         self.__send_file(self._config["GAMES_QUEUE"], self._config["GAME_FILE_PATH"])
-        self.__send_file(self._config["REVIEWS_QUEUE"], self._config["REVIEWS_FILE_PATH"])
+        self.__send_file(
+            self._config["REVIEWS_QUEUE"], self._config["REVIEWS_FILE_PATH"]
+        )
 
         self.__get_results()
 
@@ -93,12 +95,12 @@ class Client:
     def __handle_query_result(self, ch, method, properties, body):
 
         body = self._middleware.get_rows_from_message(message=body)
-
         for message in body:
             message = [value.strip() for value in message]
 
             if len(message) == 1 and message[0] == FILE_END_MSG:
                 self._middleware.stop_consuming()
+                self._middleware.ack(method.delivery_tag)
                 return
 
             logging.info(f"{method.routing_key} result: {message}")

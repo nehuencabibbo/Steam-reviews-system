@@ -34,42 +34,40 @@ class Middleware:
         # Fairness
         self._channel.basic_qos(prefetch_count=1)
 
-    def publish_batch(self, queue_name='', exchange_name=''):
-
+    def publish_batch(self, queue_name="", exchange_name=""):
         batch, amount_of_messages = self.__batchs_per_queue[queue_name]
 
         if amount_of_messages == 0:
             return
 
         self._channel.basic_publish(
-            exchange=exchange_name,
-            routing_key=queue_name,
-            body=batch
+            exchange=exchange_name, routing_key=queue_name, body=batch
         )
 
         self.__batchs_per_queue[queue_name] = [b"", 0]
 
     def publish_message(self, message: list[str], queue_name="", exchange_name=""):
         self._channel.basic_publish(
-                exchange=exchange_name,
-                routing_key=queue_name,
-                body=self.__protocol.add_to_batch(current_batch=b"", row=message),
-            )
-        
-    def publish(self, message: list[str], queue_name="", exchange_name="", batch=True):
+            exchange=exchange_name,
+            routing_key=queue_name,
+            body=self.__protocol.add_to_batch(current_batch=b"", row=message),
+        )
 
+    def publish(self, message: list[str], queue_name="", exchange_name=""):
         queue_batch, amount_of_messages = self.__batchs_per_queue[queue_name]
         new_batch = self.__protocol.add_to_batch(queue_batch, message)
 
         # if len(new_batch) > self.__max_batch_size:
         if amount_of_messages + 1 >= self.__batch_size:
-
             self._channel.basic_publish(
                 exchange=exchange_name,
                 routing_key=queue_name,
                 body=queue_batch,
             )
-            self.__batchs_per_queue[queue_name] = [self.__protocol.add_to_batch(b"", message),1]
+            self.__batchs_per_queue[queue_name] = [
+                self.__protocol.add_to_batch(b"", message),
+                1,
+            ]
         else:
             self.__batchs_per_queue[queue_name] = [new_batch, amount_of_messages + 1]
 

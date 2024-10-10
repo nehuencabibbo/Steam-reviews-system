@@ -52,10 +52,20 @@ class TopK:
             logging.debug(f"[INPUT GAMES] received: {message}")
 
             if len(message) == 1 and message[0] == END_TRANSMISSION_MESSAGE:
+                self.__total_ends_received += 1
                 logging.debug("END of games received")
-                # TODO: Aca manda el topk
-                self.__send_top(forwarding_queue_name)
-                self.__middleware.send_end(queue=forwarding_queue_name)
+                logging.debug(
+                    f"Amount of ends received up to now: {self.__total_ends_received} | Expecting: {self.__config['AMOUNT_OF_RECEIVING_QUEUES']}"
+                )
+
+                if (
+                    self.__total_ends_received
+                    == self.__config["AMOUNT_OF_RECEIVING_QUEUES"]
+                ):
+                    # TODO: Aca manda el topk
+                    self.__send_top(forwarding_queue_name)
+                    self.__middleware.send_end(queue=forwarding_queue_name)
+
                 self.__middleware.ack(delivery_tag)
                 return
 
@@ -66,12 +76,11 @@ class TopK:
                     f"An error has occurred. {e}",
                 )
 
-
         self.__middleware.ack(delivery_tag)
 
     def __send_top(self, forwarding_queue_name):
         for record in read_top("tmp/", int(self.__config["K"])):
             self.__middleware.publish(record, forwarding_queue_name, "")
-        
+
         self.__middleware.publish_batch(forwarding_queue_name)
         logging.debug(f"Top sent to queue: {forwarding_queue_name}")

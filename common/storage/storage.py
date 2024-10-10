@@ -131,7 +131,29 @@ def add_to_top(dir: str, record: str, k: int):
                 top_length += 1
                 continue
 
-            read_value = int(line[0].split(",", maxsplit=1)[1])
+            read_name, read_value = line[0].split(",", maxsplit=1)
+            read_value = int(read_value)
+
+            if read_value == top_cantidate_val:
+                logging.debug(
+                    f"Record: {top_cantidate_record} has the same value than: {line}"
+                )
+                logging.debug(f"{key} > {read_name}?")
+                if key > read_name:
+                    logging.debug(
+                        f"Record: {top_cantidate_record} replaced the value: {line}"
+                    )
+                    writer.writerow([top_cantidate_record])
+                    top_cantidate_val = read_value
+                    top_cantidate_record = line[0]
+                    top_replaced = True
+                    top_length += 1
+                else:
+                    writer.writerow(line)
+                    top_length += 1
+
+                # continue anyways as it has to check if the name is greater than other names
+                continue
 
             if read_value < top_cantidate_val:
                 logging.debug(
@@ -150,6 +172,7 @@ def add_to_top(dir: str, record: str, k: int):
         if top_length < k:
             logging.debug(f"Record {top_cantidate_record} was appended")
             writer.writerow([top_cantidate_record])
+
     file_path = os.path.join(dir, f"top_{k}.csv")
 
     os.makedirs(dir, exist_ok=True)
@@ -157,6 +180,8 @@ def add_to_top(dir: str, record: str, k: int):
     # No minor element found, and top is not complete, append
 
     os.replace(temp_file, file_path)
+
+    # [logging.debug(val) for val in read_top(dir, k)]
 
 
 def read_top(dir: str, k: int):
@@ -176,6 +201,7 @@ def read_top(dir: str, k: int):
         for line in reader:
             yield line
 
+
 def read_all_files(dir: str):
 
     if not os.path.exists(dir):
@@ -185,7 +211,7 @@ def read_all_files(dir: str):
 
     for filename in os.listdir(dir):
         if not file_name_prefix in filename:
-            continue 
+            continue
 
         file_path = os.path.join(dir, filename)
 
@@ -196,8 +222,8 @@ def read_all_files(dir: str):
 
 
 def add_to_sorted_file(dir: str, record: str):
-    #TODO: add parameter for ascending or descending order. Current order is ascending order
-    #TODO: batch processing
+    # TODO: add parameter for ascending or descending order. Current order is ascending order
+    # TODO: batch processing
 
     _, record_value = record.split(",", maxsplit=1)
     new_record_value = int(record_value)
@@ -213,18 +239,20 @@ def add_to_sorted_file(dir: str, record: str):
 
     temp_file = f"temp_sorted.csv"
     new_record_appended = False
-    with open(file_path, mode="r") as infile, open(temp_file, mode="w", newline="") as outfile:
+    with open(file_path, mode="r") as infile, open(
+        temp_file, mode="w", newline=""
+    ) as outfile:
         reader = csv.reader(infile)
         writer = csv.writer(outfile)
-
         for line in reader:
             read_value = int(line[0].split(",", maxsplit=1)[1])
 
             if new_record_value > read_value:
                 writer.writerow(line)
                 continue
-            
-            writer.writerow([record])
+
+            if not new_record_appended:
+                writer.writerow([record])
             writer.writerow(line)
             new_record_appended = True
 
@@ -234,7 +262,8 @@ def add_to_sorted_file(dir: str, record: str):
     os.makedirs(dir, exist_ok=True)
     os.replace(temp_file, file_path)
 
-def read_sorted_file(dir:str):
+
+def read_sorted_file(dir: str):
 
     file_path = os.path.join(dir, "sorted_file.csv")
     os.makedirs(dir, exist_ok=True)
@@ -246,4 +275,3 @@ def read_sorted_file(dir:str):
         reader = csv.reader(f)
         for line in reader:
             yield line
-
