@@ -4,7 +4,6 @@ RUN pip install pika
 RUN pip install langid 
 
 COPY /filter_by_column_value /filter_by_column_value
-COPY /middleware /middleware
 COPY /utils /utils
 COPY /common /common
 
