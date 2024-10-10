@@ -106,7 +106,13 @@ class FilterColumnByValue:
                 self.__send_message(body)
 
         elif criteria == GRATER_THAN_CRITERIA_KEYWORD:
-            if int(column_to_use) > int(value_to_filter_by):
+            try: 
+                column_to_use = int(column_to_use)
+                value_to_filter_by = int(value_to_filter_by)
+            except ValueError as e:
+                logging.debug(f"Failed integer conversion: {e}")
+
+            if column_to_use > value_to_filter_by:
                 self.__send_message(body)
 
         elif criteria == CONTAINS_CRITERIA_KEYWORD:
@@ -116,6 +122,16 @@ class FilterColumnByValue:
         elif criteria == LANGUAGE_CRITERIA_KEYWORD:
             detected_language, _ = langid.classify(column_to_use)
             if detected_language == value_to_filter_by.lower():
+                self.__send_message(body)
+
+        elif criteria == EQUAL_FLOAT_CRITERIA_KEYWORD:
+            try: 
+                column_to_use = float(column_to_use)
+                value_to_filter_by = float(value_to_filter_by)
+            except ValueError as e: 
+                logging.debug(f"Failed float conversion: {e}")
+
+            if column_to_use == value_to_filter_by: 
                 self.__send_message(body)
         else:
             raise Exception(f"Unkown cirteria: {criteria}")
