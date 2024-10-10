@@ -23,9 +23,6 @@ class DropNulls:
         self._middleware = middleware
         self._config = config
 
-        self._games_counter = 0
-        self._reviews_counter = 0
-
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
@@ -145,7 +142,6 @@ class DropNulls:
                 self._middleware.ack(delivery_tag)
                 return
             
-            self._games_counter += 1
             logging.debug(f"Recived game: {message}")
             if NULL_FIELD_VALUE in message:
                 continue
@@ -220,7 +216,6 @@ class DropNulls:
 
             if message[0] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived reviews END: {message}")
-                logging.debug(f"AMOUNT OF REVIEW LINES: {self._reviews_counter}")
                 self.__handle_end_transmission(
                     message,
                     self._config["REVIEWS_RECIVING_QUEUE_NAME"],
@@ -230,10 +225,13 @@ class DropNulls:
 
                 return
 
-            self._reviews_counter += 1
             logging.debug(
-                f"[NULL DROP {self._config['NODE_ID']}] Recived review: {message}"
+                f"Recived review: {message}"
             )
+            if NULL_FIELD_VALUE in message:
+                logging.debug("NULL was found in recived review, dropping it")
+                continue
+
             # Q3, Q5 Reviews: app_id, review_score
             for i in ["3", "5"]:
                 # encoded_message = self._protocol.encode(
