@@ -26,7 +26,8 @@ class Join:
 
     def start(self):
         self.__middleware.create_queue(self.__config["INPUT_GAMES_QUEUE_NAME"])
-        self.__middleware.create_queue(self.__config["OUTPUT_QUEUE_NAME"])
+        for i in range(self.__config["AMOUNT_OF_FORWARDING_QUEUES"]):
+            self.__middleware.create_queue(f'{i}_{self.__config["OUTPUT_QUEUE_NAME"]}')
 
         # callback, inputq, outputq
         games_callback = self.__middleware.generate_callback(
@@ -94,17 +95,18 @@ class Join:
             logging.debug(f"Recived review: {review}")
 
             if len(review) == 1 and review[0] == END_TRANSMISSION_MESSAGE:
-                #send rest of batch if there is any
-                self.__middleware.publish_batch(forwarding_queue_name)
-
+                # send rest of batch if there is any
                 logging.debug("END of reviews received")
-
                 self._amount_of_ends_received += 1
                 logging.debug(
                     f"Amount of ends received up to now: {self._amount_of_ends_received} | Expecting: {self.__config['AMOUNT_OF_BEHIND_NODES']}"
                 )
-                if self._amount_of_ends_received == self.__config["AMOUNT_OF_BEHIND_NODES"]:
-                    self.__middleware.send_end(forwarding_queue_name)
+                if (
+                    self._amount_of_ends_received
+                    == self.__config["AMOUNT_OF_BEHIND_NODES"]
+                ):
+                    self.__send_end_to_forward_queues()
+                    # self.__middleware.send_end(forwarding_queue_name)
 
                     # encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
                     # self.__middleware.publish(encoded_message, forwarding_queue_name, "")
@@ -122,25 +124,52 @@ class Join:
                 if app_id == int(record_app_id):
                     # Get rid of the app_id from the review and append it to the original game record
                     joined_message = [record_info, review[1]]
-
                     # encoded_message = self.__protocol.encode([joined_message])
-                    self.__middleware.publish(joined_message, forwarding_queue_name, "")
+
+                    if (
+                        "Q" in forwarding_queue_name
+                    ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
+                        self.__middleware.publish(
+                            joined_message,
+                            forwarding_queue_name,
+                        )
+                        return
+
+                    node_id = node_id_to_send_to(
+                        "1",
+                        record_app_id,
+                        self.__config["AMOUNT_OF_FORWARDING_QUEUES"],
+                    )
+
+                    logging.debug(
+                        f"Sending message: {joined_message} to queue: {node_id}_{forwarding_queue_name}"
+                    )
+
+                    self.__middleware.publish(
+                        joined_message,
+                        f"{node_id}_{forwarding_queue_name}",
+                    )
+
+                # joined_message = [record_info, review[1]]
+
+                # # encoded_message = self.__protocol.encode([joined_message])
+                # self.__middleware.publish(joined_message, forwarding_queue_name, "")
 
         self.__middleware.ack(delivery_tag)
 
     def __send_end_to_forward_queues(self):
-        encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
+        # encoded_message = self.__protocol.encode([END_TRANSMISSION_MESSAGE])
         forwarding_queue_name = self.__config["OUTPUT_QUEUE_NAME"]
 
         if (
             "Q" in forwarding_queue_name
         ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
-            self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+            # self.__middleware.publish(encoded_message, forwarding_queue_name, "")
+            self.__middleware.send_end(forwarding_queue_name)
 
         for i in range(self.__config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            self.__middleware.publish(
-                encoded_message, f"{i}_{forwarding_queue_name}", ""
-            )
+            self.__middleware.publish_batch(f"{i}_{forwarding_queue_name}")
+            self.__middleware.send_end(f"{i}_{forwarding_queue_name}")
             logging.debug(f"Sent end to: {i}_{forwarding_queue_name}")
 
 
