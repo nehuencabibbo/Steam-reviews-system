@@ -83,7 +83,7 @@ class Client:
         for number_of_query in range(1, AMMOUNT_OF_QUERIES + 1):
             if self._got_sigterm:
                 return
-            logging.debug(f"Waiting for results of query {number_of_query}")
+            logging.info(f"Waiting for results of query {number_of_query}")
 
             queue_name = self._config[f"Q{number_of_query}_RESULT_QUEUE"]
 
