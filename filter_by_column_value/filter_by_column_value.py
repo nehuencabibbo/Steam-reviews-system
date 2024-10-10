@@ -114,6 +114,11 @@ class FilterColumnByValue:
             detected_language, _ = langid.classify(column_to_use)
             if detected_language == value_to_filter_by.lower():
                 self.__send_message(body)
+
+        elif criteria == EQUAL_FLOAT_CRITERIA_KEYWORD:
+            if float(column_to_use) == float(value_to_filter_by):
+                self.__send_message(body)
+
         else:
             raise Exception(f"Unkown cirteria: {criteria}")
 
