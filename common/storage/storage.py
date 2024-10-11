@@ -231,9 +231,8 @@ def read_all_files(dir: str):
 def add_to_sorted_file(dir: str, record: str):
     # TODO: add parameter for ascending or descending order. Current order is ascending order
     # TODO: batch processing
-
-    #_, record_value = record.split(",", maxsplit=1)
-    new_record_value = int(record[1]) #int(record_value)
+    record_name = record[0]
+    new_record_value = int(record[1])
 
     file_path = os.path.join(dir, f"sorted_file.csv")
     os.makedirs(dir, exist_ok=True)
@@ -252,9 +251,13 @@ def add_to_sorted_file(dir: str, record: str):
         reader = csv.reader(infile)
         writer = csv.writer(outfile)
         for line in reader:
-            read_value = int(line[1]) #int(line[0].split(",", maxsplit=1)[1])
+            read_name = line[0]
+            read_value = int(line[1])
 
             if new_record_value > read_value:
+                writer.writerow(line)
+                continue
+            elif new_record_value == read_value and record_name >= read_name:
                 writer.writerow(line)
                 continue
 
