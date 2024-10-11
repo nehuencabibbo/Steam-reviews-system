@@ -19,38 +19,24 @@ def get_config():
     try:
         # Node config 
         config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])
-        config_params["INSTANCES_OF_MYSELF"] = os.getenv("INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"])
+        config_params["INSTANCES_OF_MYSELF"] = int(os.getenv("INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"]))
 
-        # Reciving queues 
-        config_params["CLIENT_GAMES_QUEUE_NAME"] = os.getenv(
-            "CLIENT_GAMES_QUEUE_NAME", config["DEFAULT"]["CLIENT_GAMES_QUEUE_NAME"]
-        )
-        config_params["CLIENT_REVIEWS_QUEUE_NAME"] = os.getenv(
-            "CLIENT_REVIEWS_QUEUE_NAME", config["DEFAULT"]["CLIENT_REVIEWS_QUEUE_NAME"]
+        # Reciving queue
+        config_params["RECIVING_QUEUE"] = os.getenv(
+            "RECIVING_QUEUE", config["DEFAULT"]["RECIVING_QUEUE"]
         )
 
-        # Forwarding queues
-        config_params["NULL_DROP_GAMES_QUEUE_NAME"] = os.getenv(
-            "NULL_DROP_GAMES_QUEUE_NAME",
-            config["DEFAULT"]["NULL_DROP_GAMES_QUEUE_NAME"],
-        )
-        config_params["NULL_DROP_REVIEWS_QUEUE_NAME"] = os.getenv(
-            "NULL_DROP_REVIEWS_QUEUE_NAME",
-            config["DEFAULT"]["NULL_DROP_REVIEWS_QUEUE_NAME"],
+        # Forwarding queue
+        config_params["RECIVING_QUEUE"] = os.getenv(
+            "RECIVING_QUEUE", config["DEFAULT"]["RECIVING_QUEUE"]
         )
 
         # Dataset related 
-        games_columns_to_keep = os.getenv(
-            "GAMES_COLUMNS_TO_KEEP", config["DEFAULT"]["GAMES_COLUMNS_TO_KEEP"]
+        columns_to_keep =  os.getenv(
+            "COLUMNS_TO_KEEP", config["DEFAULT"]["COLUMNS_TO_KEEP"]
         ).split(",")
-        games_columns_to_keep = [int(column) for column in games_columns_to_keep]
-        config_params["GAMES_COLUMNS_TO_KEEP"] = games_columns_to_keep
-
-        reviews_columns_to_keep = os.getenv(
-            "REVIEWS_COLUMNS_TO_KEEP", config["DEFAULT"]["REVIEWS_COLUMNS_TO_KEEP"]
-        ).split(",")
-        reviews_columns_to_keep = [int(column) for column in reviews_columns_to_keep]
-        config_params["REVIEWS_COLUMNS_TO_KEEP"] = reviews_columns_to_keep
+        columns_to_keep = [int(column) for column in columns_to_keep]
+        config_params["COLUMNS_TO_KEEP"] = columns_to_keep
 
         # General config 
         config_params["LOGGING_LEVEL"] = os.getenv(

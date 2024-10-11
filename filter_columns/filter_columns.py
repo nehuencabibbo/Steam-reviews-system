@@ -8,8 +8,6 @@ from common.protocol.protocol import Protocol
 import signal
 import logging
 
-GAMES_MESSAGE_TYPE = "games"
-REVIEWS_MESSAGE_TYPE = "reviews"
 END_TRANSMISSION_MESSAGE = "END"
 
 
@@ -23,6 +21,13 @@ class FilterColumns:
         self._protocol = protocol
         self._middleware = middleware
         self._config = config
+
+        self._forwarding_queue = self._config["FORWARDING_QUEUE"]
+        self._reciving_queue = self._config["RECIVING_QUEUE"]
+        self._node_id = self._config["NODE_ID"]
+        self._instances_of_myself = self._config["INSTANCES_OF_MYSELF"]
+        self._columns_to_keep = self._config["COLUMNS_TO_KEEP"]
+
         self._got_sigterm = False 
 
         signal.signal(signal.SIGINT, self.__signal_handler)
@@ -30,28 +35,17 @@ class FilterColumns:
 
     def start(self):
         # Queues that the client uses to send data
-        self._middleware.create_queue(self._config["CLIENT_GAMES_QUEUE_NAME"])
-        self._middleware.create_queue(self._config["CLIENT_REVIEWS_QUEUE_NAME"])
+        self._middleware.create_queue(self._forwarding_queue)
+
         # Queues that filter columns uses to send data to null drop
-        self._middleware.create_queue(self._config["NULL_DROP_GAMES_QUEUE_NAME"])
-        self._middleware.create_queue(self._config["NULL_DROP_REVIEWS_QUEUE_NAME"])
+        self._middleware.create_queue(self._reciving_queue)
 
-        games_callback = self._middleware.__class__.generate_callback(
+        callback = self._middleware.__class__.generate_callback(
             self.__handle_message,
-            GAMES_MESSAGE_TYPE,
-            self._config["NULL_DROP_GAMES_QUEUE_NAME"],
+            self._reciving_queue,
         )
         self._middleware.attach_callback(
-            self._config["CLIENT_GAMES_QUEUE_NAME"], games_callback
-        )
-
-        reviews_callback = self._middleware.__class__.generate_callback(
-            self.__handle_message,
-            REVIEWS_MESSAGE_TYPE,
-            self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
-        )
-        self._middleware.attach_callback(
-            self._config["CLIENT_REVIEWS_QUEUE_NAME"], reviews_callback
+            self._reciving_queue, callback
         )
 
         self._middleware.turn_fair_dispatch()
@@ -62,9 +56,7 @@ class FilterColumns:
             if not self._got_sigterm:
                 logging.error(e)
 
-    def __handle_end_transmission(
-        self, body: List[str], reciving_queue_name: str, forwarding_queue_name: str
-    ):
+    def __handle_end_transmission(self, body: List[str]):
         # Si me llego un END...
         # 1) Me fijo si los la cantidad de ids que hay es igual a
         # la cantidad total de instancias de mi mismo que hay.
@@ -73,82 +65,55 @@ class FilterColumns:
         #     Si es asi => No agrego nada y reencolo
         #     Si no es asi => Agrego mi id a la lista y reencolo
         peers_that_recived_end = body[1:]
-        if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
-            logging.debug("Sending real END")
-            self._middleware.send_end(queue=forwarding_queue_name)
+        if len(peers_that_recived_end) == self._instances_of_myself:
+            logging.debug("Sending REAL END")
+            self._middleware.send_end(queue=self._forwarding_queue_name)
         else:
-            self._middleware.publish_batch(forwarding_queue_name)
+            self._middleware.publish_batch(self._forwarding_queue)
             message = [END_TRANSMISSION_MESSAGE]
-            if not self._config["NODE_ID"] in peers_that_recived_end:
-                peers_that_recived_end.append(self._config["NODE_ID"])
+            if not self._node_id in peers_that_recived_end:
+                peers_that_recived_end.append(self._node_id)
 
             message += peers_that_recived_end 
-            self._middleware.publish_message(message, reciving_queue_name)
+            self._middleware.publish_message(message, self._reciving_queue_name)
 
 
     def __handle_message(
         self,
         delivery_tag: int,
         body: bytes,
-        message_type: str,
-        forwarding_queue_name: str,
     ):
         body = self._middleware.get_rows_from_message(body)
         for message in body:
-            logging.debug(f"Recived message: {message}")
-
-            message = [value.strip() for value in message]
+            logging.debug(f"Recived message: {message} from {self._reciving_queue}")
 
             if message[0] == END_TRANSMISSION_MESSAGE:
-                logging.debug(f"Recived END from {message_type}: {message}")
-                if message_type == GAMES_MESSAGE_TYPE:
-                    self.__handle_end_transmission(
-                        message,
-                        self._config["CLIENT_GAMES_QUEUE_NAME"],
-                        self._config["NULL_DROP_GAMES_QUEUE_NAME"],
-                    )
-                elif message_type == REVIEWS_MESSAGE_TYPE:
-                    self.__handle_end_transmission(
-                        message,
-                        self._config["CLIENT_REVIEWS_QUEUE_NAME"],
-                        self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
-                    )
-                else:
-                    raise Exception(f"Unkown message type: {message_type}")
+                logging.debug(f"Recived END from: {self._reciving_queue}")
 
+                self.__handle_end_transmission(message)
                 self._middleware.ack(delivery_tag)
 
                 return
-            
-            logging.debug(
-                f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived {message_type}: {message}"
-            )
 
-            columns_to_keep = []
-            if message_type == GAMES_MESSAGE_TYPE:
-                columns_to_keep = self._config["GAMES_COLUMNS_TO_KEEP"]
-            elif message_type == REVIEWS_MESSAGE_TYPE:
-                columns_to_keep = self._config["REVIEWS_COLUMNS_TO_KEEP"]
-            else:
-                # Message type was not set properly, unrecoverable error
-                raise Exception(f"[ERROR] Unkown message type {message_type}")
-
+            columns_to_keep = self._columns_to_keep
             filtered_body = self.__filter_columns(columns_to_keep, message)
 
             logging.debug(
-                f"[FILTER COLUMNS {self._config['NODE_ID']}] Sending {message_type}: {message}"
+                f"Sending: {message} to {self._forwarding_queue}"
             )
 
-            self._middleware.publish(filtered_body, forwarding_queue_name, "")
+            self._middleware.publish(
+                filtered_body, 
+                self._forwarding_queue_name, 
+                ""
+            )
 
         self._middleware.ack(delivery_tag)
 
     def __filter_columns(self, columns_to_keep: List[int], data: List[str]):
-        return [data[i] for i in columns_to_keep]
+        return [data[i].strip() for i in columns_to_keep]
 
     def __signal_handler(self, sig, frame):
-        logging.debug(
-            f"[FILTER COLUMNS {self._config['NODE_ID']}] Gracefully shutting down..."
-        )
+        logging.debug(f"Gracefully shutting down...")
         self._got_sigterm = True 
         self._middleware.shutdown()
