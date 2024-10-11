@@ -28,24 +28,60 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: on-failure
-  filter_columns0:
+  filter_games_columns0:
     image: filter_columns:latest
-    container_name: filter_columns0
+    container_name: filter_games_columns0
     environment:
     - NODE_ID=0
     - INSTANCES_OF_MYSELF=2
+    - RECIVING_QUEUE_NAME=games
+    - FORWARDING_QUEUE_NAME=reviews
+    - COLUMNS_TO_KEEP=0,1,2,17,18,19,29,36
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
     - net
     restart: on-failure
-  filter_columns1:
+  filter_games_columns1:
     image: filter_columns:latest
-    container_name: filter_columns1
+    container_name: filter_games_columns1
     environment:
     - NODE_ID=1
     - INSTANCES_OF_MYSELF=2
+    - RECIVING_QUEUE_NAME=games
+    - FORWARDING_QUEUE_NAME=reviews
+    - COLUMNS_TO_KEEP=0,1,2,17,18,19,29,36
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  filter_reviews_columns0:
+    image: filter_columns:latest
+    container_name: filter_reviews_columns0
+    environment:
+    - NODE_ID=0
+    - INSTANCES_OF_MYSELF=2
+    - RECIVING_QUEUE_NAME=reviews
+    - FORWARDING_QUEUE_NAME=null_drop_reviews
+    - COLUMNS_TO_KEEP=0,2,3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+    - net
+    restart: on-failure
+  filter_reviews_columns1:
+    image: filter_columns:latest
+    container_name: filter_reviews_columns1
+    environment:
+    - NODE_ID=1
+    - INSTANCES_OF_MYSELF=2
+    - RECIVING_QUEUE_NAME=reviews
+    - FORWARDING_QUEUE_NAME=null_drop_reviews
+    - COLUMNS_TO_KEEP=0,2,3
     depends_on:
       rabbitmq:
         condition: service_healthy

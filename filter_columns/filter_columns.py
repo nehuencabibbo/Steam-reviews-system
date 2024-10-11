@@ -22,11 +22,11 @@ class FilterColumns:
         self._middleware = middleware
         self._config = config
 
-        self._forwarding_queue = self._config["FORWARDING_QUEUE"]
-        self._reciving_queue = self._config["RECIVING_QUEUE"]
-        self._node_id = self._config["NODE_ID"]
-        self._instances_of_myself = self._config["INSTANCES_OF_MYSELF"]
-        self._columns_to_keep = self._config["COLUMNS_TO_KEEP"]
+        self._forwarding_queue_name: str = self._config["FORWARDING_QUEUE_NAME"]
+        self._reciving_queue_name: str = self._config["RECIVING_QUEUE_NAME"]
+        self._node_id: str = self._config["NODE_ID"]
+        self._instances_of_myself: int = self._config["INSTANCES_OF_MYSELF"]
+        self._columns_to_keep: List[int] = self._config["COLUMNS_TO_KEEP"]
 
         self._got_sigterm = False 
 
@@ -35,17 +35,16 @@ class FilterColumns:
 
     def start(self):
         # Queues that the client uses to send data
-        self._middleware.create_queue(self._forwarding_queue)
+        self._middleware.create_queue(self._forwarding_queue_name)
 
         # Queues that filter columns uses to send data to null drop
-        self._middleware.create_queue(self._reciving_queue)
+        self._middleware.create_queue(self._reciving_queue_name)
 
         callback = self._middleware.__class__.generate_callback(
             self.__handle_message,
-            self._reciving_queue,
         )
         self._middleware.attach_callback(
-            self._reciving_queue, callback
+            self._reciving_queue_name, callback
         )
 
         self._middleware.turn_fair_dispatch()
@@ -69,7 +68,7 @@ class FilterColumns:
             logging.debug("Sending REAL END")
             self._middleware.send_end(queue=self._forwarding_queue_name)
         else:
-            self._middleware.publish_batch(self._forwarding_queue)
+            self._middleware.publish_batch(self._forwarding_queue_name)
             message = [END_TRANSMISSION_MESSAGE]
             if not self._node_id in peers_that_recived_end:
                 peers_that_recived_end.append(self._node_id)
@@ -85,10 +84,10 @@ class FilterColumns:
     ):
         body = self._middleware.get_rows_from_message(body)
         for message in body:
-            logging.debug(f"Recived message: {message} from {self._reciving_queue}")
+            logging.debug(f"Recived message: {message} from {self._reciving_queue_name}")
 
             if message[0] == END_TRANSMISSION_MESSAGE:
-                logging.debug(f"Recived END from: {self._reciving_queue}")
+                logging.debug(f"Recived END from: {self._reciving_queue_name}")
 
                 self.__handle_end_transmission(message)
                 self._middleware.ack(delivery_tag)
@@ -99,7 +98,7 @@ class FilterColumns:
             filtered_body = self.__filter_columns(columns_to_keep, message)
 
             logging.debug(
-                f"Sending: {message} to {self._forwarding_queue}"
+                f"Sending: {message} to {self._forwarding_queue_name}"
             )
 
             self._middleware.publish(

@@ -3,7 +3,8 @@ import yaml
 from typing import *
 
 
-AMOUNT_OF_DROP_FILTER_COLUMNS = 2
+AMOUNT_OF_GAMES_DROP_FILTER_COLUMNS = 2
+AMOUNT_OF_REVIEWS_DROP_FILTER_COLUMNS = 2
 AMOUNT_OF_DROP_NULLS = 2
 # Q2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
@@ -42,13 +43,33 @@ def add_volumes(output: Dict):
     output["volumes"] = {"rabbitmq_data": {}}
 
 
-def add_filter_columns(output: Dict, num: int):
-    output["services"][f"filter_columns{num}"] = {
+def add_filter_games_columns(output: Dict, num: int, amount: int):
+    output["services"][f"filter_games_columns{num}"] = {
         "image": "filter_columns:latest",
-        "container_name": f"filter_columns{num}",
+        "container_name": f"filter_games_columns{num}",
         "environment": [
             f"NODE_ID={num}",
-            f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_FILTER_COLUMNS}",
+            f"INSTANCES_OF_MYSELF={amount}",
+            f"RECIVING_QUEUE_NAME=games",
+            f"FORWARDING_QUEUE_NAME=reviews",
+            f"COLUMNS_TO_KEEP=0,1,2,17,18,19,29,36",
+        ],
+        "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
+        "networks": ["net"],
+        "restart": "on-failure",
+    }
+
+
+def add_filter_reviews_columns(output: Dict, num: int, amount: int):
+    output["services"][f"filter_reviews_columns{num}"] = {
+        "image": "filter_columns:latest",
+        "container_name": f"filter_reviews_columns{num}",
+        "environment": [
+            f"NODE_ID={num}",
+            f"INSTANCES_OF_MYSELF={amount}",
+            f"RECIVING_QUEUE_NAME=reviews",
+            f"FORWARDING_QUEUE_NAME=null_drop_reviews",
+            f"COLUMNS_TO_KEEP=0,2,3"
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -241,10 +262,12 @@ def generate_drop_nulls(output: Dict, amount: int):
         add_drop_nulls(output=output, num=i)
 
 
-def generate_drop_columns(output: Dict, amount: int):
-    for i in range(amount):
-        add_filter_columns(output=output, num=i)
+def generate_drop_columns(output: Dict, games_amount: int, reviews_amount: int):
+    for i in range(games_amount):
+        add_filter_games_columns(output=output, num=i, amount=games_amount)
 
+    for i in range(reviews_amount):
+        add_filter_reviews_columns(output=output, num=i, amount=reviews_amount)
 
 def add_rabbit(output: Dict):
     output["services"]["rabbitmq"] = {
@@ -625,7 +648,11 @@ def generate_output():
     output["services"] = {}
     add_rabbit(output)
     add_client(output)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS)
+    generate_drop_columns(
+        output, 
+        AMOUNT_OF_GAMES_DROP_FILTER_COLUMNS, 
+        AMOUNT_OF_REVIEWS_DROP_FILTER_COLUMNS
+    )
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS)
 
     # -------------------------------------------- Q1 -----------------------------------------

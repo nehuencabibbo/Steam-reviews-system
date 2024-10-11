@@ -22,13 +22,13 @@ def get_config():
         config_params["INSTANCES_OF_MYSELF"] = int(os.getenv("INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"]))
 
         # Reciving queue
-        config_params["RECIVING_QUEUE"] = os.getenv(
-            "RECIVING_QUEUE", config["DEFAULT"]["RECIVING_QUEUE"]
+        config_params["RECIVING_QUEUE_NAME"] = os.getenv(
+            "RECIVING_QUEUE_NAME", config["DEFAULT"]["RECIVING_QUEUE_NAME"]
         )
 
         # Forwarding queue
-        config_params["RECIVING_QUEUE"] = os.getenv(
-            "RECIVING_QUEUE", config["DEFAULT"]["RECIVING_QUEUE"]
+        config_params["FORWARDING_QUEUE_NAME"] = os.getenv(
+            "FORWARDING_QUEUE_NAME", config["DEFAULT"]["FORWARDING_QUEUE_NAME"]
         )
 
         # Dataset related 
