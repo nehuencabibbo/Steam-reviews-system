@@ -3,8 +3,8 @@ import yaml
 from typing import *
 
 
-AMOUNT_OF_DROP_FILTER_COLUMNS = 2
-AMOUNT_OF_DROP_NULLS = 2
+AMOUNT_OF_DROP_FILTER_COLUMNS = 5
+AMOUNT_OF_DROP_NULLS = 5
 # Q2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
@@ -12,18 +12,18 @@ Q2_AMOUNT_OF_TOP_K_NODES = 2
 # Q3
 Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 2
-Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
-Q3_AMOUNT_OF_TOP_K_NODES = 2
+Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
+Q3_AMOUNT_OF_TOP_K_NODES = 3
 # Q4
-Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
-Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
-Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 1
-Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 3
-Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 3
+Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
+Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
+Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 4
+Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 2
+Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
 # Q5
-Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
-Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
-Q5_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
+Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
+Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
+Q5_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
 
 
 def create_file(output, file_name):
@@ -170,6 +170,7 @@ def add_filter_by_value(
     criteria: str,
     columns_to_keep: str,
     instances_of_myself: str,
+    batch_size: int = 10,
 ):
     output["services"][f"{query}_filter_{filter_name}{num}"] = {
         "image": "filter_by_column_value:latest",
@@ -185,6 +186,7 @@ def add_filter_by_value(
             f"CRITERIA={criteria}",
             f"COLUMNS_TO_KEEP={columns_to_keep}",
             f"INSTANCES_OF_MYSELF={instances_of_myself}",
+            f"BATCH_SIZE={batch_size}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -484,6 +486,7 @@ def generate_q4(output: Dict):
         "criteria": "EQUAL_FLOAT",
         "columns_to_keep": "0,1,2",  # app_id, review_score, review
         "instances_of_myself": Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
+        "batch_size": 1,
     }
 
     generate_filters_by_value(
@@ -499,7 +502,7 @@ def generate_q4(output: Dict):
         "amount_of_forwarding_queues": 1,
         "logging_level": "DEBUG",
         "column_number_to_use": 2,  # review_score
-        "value_to_filter_by": "EN",
+        "value_to_filter_by": "en",
         "criteria": "LANGUAGE",
         "columns_to_keep": "0,1",  # app_id, review_score
         "instances_of_myself": Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS,

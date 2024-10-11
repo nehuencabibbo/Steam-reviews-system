@@ -5,6 +5,7 @@ from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
 
+
 class MiddlewareError(Exception):
     def __init__(self, message=None):
         super().__init__(message)
@@ -12,15 +13,17 @@ class MiddlewareError(Exception):
 
     def __str__(self):
         return (
-            f"MiddlewareError: {self.message}" 
-            if self.message else 
-            "MiddlewareError has occurred"
+            f"MiddlewareError: {self.message}"
+            if self.message
+            else "MiddlewareError has occurred"
         )
-    
+
+
 class Middleware:
-    def __init__(self, broker_ip, protocol: Protocol = Protocol()):
+    def __init__(self, broker_ip, protocol: Protocol = Protocol(), prefetch_count=1):
         self._connection = self.__create_connection(broker_ip)
         self._channel = self._connection.channel()
+        self._channel.basic_qos(prefetch_count=prefetch_count)
         self.__protocol = protocol
         self.__batch_size = 10  # TODO: receive as param
         self.__max_batch_size = 1 * 1024  # TODO: receive as param
@@ -95,10 +98,10 @@ class Middleware:
     def start_consuming(self):
         try:
             self._channel.start_consuming()
-        except pika.exceptions.ChannelClosedByBroker as _: 
+        except pika.exceptions.ChannelClosedByBroker as _:
             # Rabbit mq terminated during execution most probably
             # TODO: Is writing to a closed channel handled by this too or
-            # does pika.exceptions.ClosedChannel need to be accounted for? 
+            # does pika.exceptions.ClosedChannel need to be accounted for?
             raise MiddlewareError(message="Channel was closed by borker")
         except pika.exceptions.ConnectionClosed as _:
             # Connection was finished either due to shutdown

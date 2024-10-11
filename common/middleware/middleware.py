@@ -5,6 +5,7 @@ from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
 
+
 class MiddlewareError(Exception):
     def __init__(self, message=None):
         # super().__init__(message)
@@ -12,17 +13,25 @@ class MiddlewareError(Exception):
 
     def __str__(self):
         return (
-            f"MiddlewareError: {self.message}" 
-            if self.message else 
-            "MiddlewareError has occurred"
+            f"MiddlewareError: {self.message}"
+            if self.message
+            else "MiddlewareError has occurred"
         )
 
+
 class Middleware:
-    def __init__(self, broker_ip, protocol: Protocol = Protocol()):
+    def __init__(
+        self,
+        broker_ip,
+        protocol: Protocol = Protocol(),
+        prefetch_count: int = 100,
+        batch_size: int = 10,
+    ):
         self._connection = self.__create_connection(broker_ip)
         self._channel = self._connection.channel()
+        self._channel.basic_qos(prefetch_count=prefetch_count)
         self.__protocol = protocol
-        self.__batch_size = 10  # TODO: receive as param
+        self.__batch_size = batch_size
         self.__max_batch_size = 1 * 1024  # TODO: receive as param
         self.__batchs_per_queue = {}
 
@@ -94,10 +103,10 @@ class Middleware:
     def start_consuming(self):
         try:
             self._channel.start_consuming()
-        except pika.exceptions.ChannelClosedByBroker as e: 
+        except pika.exceptions.ChannelClosedByBroker as e:
             # Rabbit mq terminated during execution most probably
             # TODO: Is writing to a closed channel handled by this too or
-            # does pika.exceptions.ClosedChannel need to be accounted for? 
+            # does pika.exceptions.ClosedChannel need to be accounted for?
             raise MiddlewareError(message=f"Channel was closed by borker: {e}")
         except pika.exceptions.ConnectionClosed as e:
             # Connection was finished either due to shutdown

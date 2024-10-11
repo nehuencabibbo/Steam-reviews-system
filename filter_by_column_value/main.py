@@ -24,7 +24,9 @@ def get_config():
         config_params["RABBIT_IP"] = os.getenv(
             "RABBIT_IP", config["DEFAULT"]["RABBIT_IP"]
         )
-        config_params["INSTANCES_OF_MYSELF"] = os.getenv("INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"])
+        config_params["INSTANCES_OF_MYSELF"] = os.getenv(
+            "INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"]
+        )
 
         # Node related
         config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])
@@ -58,6 +60,13 @@ def get_config():
             )
         )
 
+        config_params["BATCH_SIZE"] = int(
+            os.getenv(
+                "BATCH_SIZE",
+                config["DEFAULT"]["BATCH_SIZE"],
+            )
+        )
+
         # TODO: Raise an error if __REQUIRED__ is paresed anywhere here
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
@@ -82,7 +91,9 @@ def main():
     [logging.debug(f"{key}: {value}") for key, value in config.items()]
 
     protocol = Protocol()
-    middleware = Middleware(config["RABBIT_IP"])
+    middleware = Middleware(
+        config["RABBIT_IP"], prefetch_count=1, batch_size=config["BATCH_SIZE"]
+    )
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 

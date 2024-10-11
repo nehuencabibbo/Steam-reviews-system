@@ -23,7 +23,7 @@ class FilterColumnByValue:
         self._protocol = protocol
         self._middleware = middleware
         self._config = config
-        self._got_sigterm = False 
+        self._got_sigterm = False
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -47,7 +47,7 @@ class FilterColumnByValue:
         try:
             self._middleware.start_consuming()
         except MiddlewareError as e:
-            # TODO: If got_sigterm is showing any error needed?  
+            # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
 
@@ -115,7 +115,7 @@ class FilterColumnByValue:
                 self.__send_message(body)
 
         elif criteria == GRATER_THAN_CRITERIA_KEYWORD:
-            try: 
+            try:
                 column_to_use = int(column_to_use)
                 value_to_filter_by = int(value_to_filter_by)
             except ValueError as e:
@@ -129,18 +129,20 @@ class FilterColumnByValue:
                 self.__send_message(body)
 
         elif criteria == LANGUAGE_CRITERIA_KEYWORD:
+            logging.debug(f"Filtering by language... ")
             detected_language, _ = langid.classify(column_to_use)
             if detected_language == value_to_filter_by.lower():
+                logging.debug(f"English detected: {body}")
                 self.__send_message(body)
 
         elif criteria == EQUAL_FLOAT_CRITERIA_KEYWORD:
-            try: 
+            try:
                 column_to_use = float(column_to_use)
                 value_to_filter_by = float(value_to_filter_by)
-            except ValueError as e: 
+            except ValueError as e:
                 logging.debug(f"Failed float conversion: {e}")
 
-            if column_to_use == value_to_filter_by: 
+            if column_to_use == value_to_filter_by:
                 self.__send_message(body)
         else:
             raise Exception(f"Unkown cirteria: {criteria}")
@@ -173,5 +175,5 @@ class FilterColumnByValue:
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
-        self._got_sigterm = True 
+        self._got_sigterm = True
         self._middleware.shutdown()
