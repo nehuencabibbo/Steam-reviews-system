@@ -15,6 +15,7 @@ docker-image:
 .PHONY: docker-image
 
 docker-run: docker-image
+	python3 generate_compose.py docker-compose-dev.yaml
 	docker compose -f docker-compose-dev.yaml up -d --build
 .PHONY: docker-up
 
