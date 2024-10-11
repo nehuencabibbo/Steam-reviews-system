@@ -232,8 +232,8 @@ def add_to_sorted_file(dir: str, record: str):
     # TODO: add parameter for ascending or descending order. Current order is ascending order
     # TODO: batch processing
 
-    _, record_value = record.split(",", maxsplit=1)
-    new_record_value = int(record_value)
+    #_, record_value = record.split(",", maxsplit=1)
+    new_record_value = int(record[1]) #int(record_value)
 
     file_path = os.path.join(dir, f"sorted_file.csv")
     os.makedirs(dir, exist_ok=True)
@@ -241,7 +241,7 @@ def add_to_sorted_file(dir: str, record: str):
     if not os.path.exists(file_path):
         with open(file_path, "w") as f:
             writer = csv.writer(f)
-            writer.writerow([record])
+            writer.writerow(record)
         return
 
     temp_file = f"temp_sorted.csv"
@@ -252,19 +252,19 @@ def add_to_sorted_file(dir: str, record: str):
         reader = csv.reader(infile)
         writer = csv.writer(outfile)
         for line in reader:
-            read_value = int(line[0].split(",", maxsplit=1)[1])
+            read_value = int(line[1]) #int(line[0].split(",", maxsplit=1)[1])
 
             if new_record_value > read_value:
                 writer.writerow(line)
                 continue
 
             if not new_record_appended:
-                writer.writerow([record])
+                writer.writerow(record)
             writer.writerow(line)
             new_record_appended = True
 
         if not new_record_appended:
-            writer.writerow([record])
+            writer.writerow(record)
 
     os.makedirs(dir, exist_ok=True)
     os.replace(temp_file, file_path)

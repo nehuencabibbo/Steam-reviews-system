@@ -7,7 +7,7 @@ import math
 
 END_TRANSMISSION_MESSAGE = ["END"]
 FILE_NAME = "percentile_data.csv"
-
+NO_RECORDS = 0
 
 class Percentile:
 
@@ -37,8 +37,6 @@ class Percentile:
                 logging.error(e)
 
     def handle_message(self, ch, method, properties, body):
-        # body = self._protocol.decode(body)
-        # body = [value.strip() for value in body]
 
         body = self._middleware.get_rows_from_message(body)
         logging.debug(f"body: {body}")
@@ -51,11 +49,12 @@ class Percentile:
                 self._middleware.ack(method.delivery_tag)
                 return
 
-            message = ",".join(message)
             self._tmp_record_list.append(message)
 
             self._amount_msg_received += 1
-            if (self._amount_msg_received % self._config["SAVE_AFTER_MESSAGES"]) == 0:
+            
+            have_to_save_batch = (self._amount_msg_received % self._config["SAVE_AFTER_MESSAGES"]) == 0
+            if have_to_save_batch:
                 logging.debug(f"Pesisting data in temporary storage")
                 self.persist_data()
 
@@ -69,27 +68,19 @@ class Percentile:
 
     def handle_end_message(self):
 
-        rank = (self._config["PERCENTILE"] / 100) * self._amount_msg_received
-        rank = math.ceil(rank)  # instead of interpolating, round the number
-
-        logging.debug(f"Ordinal rank is {rank}")
-
         percentile = self.get_percentile()
+        logging.info(f"Percentile is: {percentile}")
 
         reader = storage.read_sorted_file(self._config["STORAGE_DIR"])
         for row in reader:
-            record = row[0].split(",")
-            record_value = int(record[1])
+
+            record_value = int(row[1])
             if record_value >= percentile:
-                logging.debug(f"Sending: {record}")
-                # encoded_message = self._protocol.encode(record)
-                self._middleware.publish(record, self._config["PUBLISH_QUEUE"])
+                logging.debug(f"Sending: {row}")
+                self._middleware.publish(row, self._config["PUBLISH_QUEUE"])
 
         self._middleware.publish_batch(self._config["PUBLISH_QUEUE"])
         self._middleware.send_end(self._config["PUBLISH_QUEUE"])
-
-        # encoded_message = self._protocol.encode(END_TRANSMISSION_MESSAGE)
-        # self._middleware.publish(encoded_message, self._config["PUBLISH_QUEUE"])
 
         self._amount_msg_received = 0
         # if not storage.delete_directory(self._config["STORAGE_DIR"]):
@@ -99,16 +90,18 @@ class Percentile:
 
     def get_percentile(self):
         rank = (self._config["PERCENTILE"] / 100) * self._amount_msg_received
-        rank = round(rank)
+        rank = math.ceil(rank)  # instead of interpolating, round the number
 
         logging.debug(f"Ordinal rank is {rank}")
 
         reader = storage.read_sorted_file(self._config["STORAGE_DIR"])
         for i, row in enumerate(reader):
             if (i + 1) == rank:
-                _, value = row[0].split(",")
+                _, value = row
                 logging.debug(f"VALUE: {value}")
                 return int(value)
+        
+        return NO_RECORDS
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
