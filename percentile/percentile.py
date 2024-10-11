@@ -105,7 +105,7 @@ class Percentile:
 
         reader = storage.read_sorted_file(self._config["STORAGE_DIR"])
         for i, row in enumerate(reader):
-            if i == rank:
+            if (i + 1) == rank:
                 _, value = row[0].split(",")
                 logging.debug(f"VALUE: {value}")
                 return int(value)
