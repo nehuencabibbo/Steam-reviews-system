@@ -15,12 +15,14 @@ class TopK:
         self.__middleware = middleware
         self.__config = config
         self.__total_ends_received = 0
+        self._got_sigterm = False
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
     def __signal_handler(self, sig, frame):
         logging.debug(f"Gracefully shutting down...")
+        self._got_sigterm = True
         self.__middleware.shutdown()
 
     def start(self):
@@ -79,7 +81,7 @@ class TopK:
                 return
 
             try:
-                add_to_top("/tmp", ",".join(message), int(self.__config["K"]))
+                add_to_top("/tmp", message, int(self.__config["K"]))
             except ValueError as e:
                 logging.error(
                     f"An error has occurred. {e}",

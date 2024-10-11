@@ -90,12 +90,12 @@ def sum_to_record(dir: str, range: int, record: str):
     os.replace(temp_file, file_path)
 
 
-def add_to_top(dir: str, record: str, k: int):
+def add_to_top(dir: str, record: list[str], k: int):
     if k <= 0:
         logging.error("Error, K must be > 0. Got: {k}")
         return
     # TODO: modify if necessary (some records may not be a key,value pair)
-    key, value = record.split(",", maxsplit=1)
+    key, value = record
 
     file_path = os.path.join(dir, f"top_{k}.csv")
 
@@ -106,7 +106,7 @@ def add_to_top(dir: str, record: str, k: int):
         # -> Crearlo y apppendear
         with open(file_path, "w") as f:
             writer = csv.writer(f)
-            writer.writerow([record])
+            writer.writerow(record)
         return
 
     temp_file = f"temp_{k}.csv"
@@ -132,13 +132,13 @@ def add_to_top(dir: str, record: str, k: int):
 
             # TODO: modify if necessary (some records may not be a key,value pair)
             if top_replaced:
-                logging.debug(f"Shifting {line[0]} with {top_cantidate_record}")
-                writer.writerow([top_cantidate_record])
-                top_cantidate_record = line[0]
+                logging.debug(f"Shifting {line} with {top_cantidate_record}")
+                writer.writerow(top_cantidate_record)
+                top_cantidate_record = line
                 top_length += 1
                 continue
-
-            read_name, read_value = line[0].split(",", maxsplit=1)
+            
+            read_name, read_value = line
             read_value = int(read_value)
 
             if read_value == top_cantidate_val:
@@ -150,9 +150,9 @@ def add_to_top(dir: str, record: str, k: int):
                     logging.debug(
                         f"Record: {top_cantidate_record} replaced the value: {line}"
                     )
-                    writer.writerow([top_cantidate_record])
+                    writer.writerow(top_cantidate_record)
                     top_cantidate_val = read_value
-                    top_cantidate_record = line[0]
+                    top_cantidate_record = line
                     top_replaced = True
                     top_length += 1
                 else:
@@ -166,9 +166,9 @@ def add_to_top(dir: str, record: str, k: int):
                 logging.debug(
                     f"Record: {top_cantidate_record} replaced the value: {line}"
                 )
-                writer.writerow([top_cantidate_record])
+                writer.writerow(top_cantidate_record)
                 top_cantidate_val = read_value
-                top_cantidate_record = line[0]
+                top_cantidate_record = line
                 top_replaced = True
                 top_length += 1
                 continue
@@ -178,7 +178,7 @@ def add_to_top(dir: str, record: str, k: int):
 
         if top_length < k:
             logging.debug(f"Record {top_cantidate_record} was appended")
-            writer.writerow([top_cantidate_record])
+            writer.writerow(top_cantidate_record)
 
     file_path = os.path.join(dir, f"top_{k}.csv")
 
