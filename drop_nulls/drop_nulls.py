@@ -23,7 +23,7 @@ class DropNulls:
         self._middleware = middleware
         self._config = config
         self._got_sigterm = False
-
+        self.r = 0
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
@@ -59,10 +59,10 @@ class DropNulls:
             self._config["REVIEWS_RECIVING_QUEUE_NAME"], reviews_callback
         )
 
-        try: 
+        try:
             self._middleware.start_consuming()
         except MiddlewareError as e:
-            # TODO: If got_sigterm is showing any error needed?  
+            # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
 
@@ -147,7 +147,7 @@ class DropNulls:
 
                 self._middleware.ack(delivery_tag)
                 return
-            
+
             logging.debug(f"Recived game: {message}")
             if NULL_FIELD_VALUE in message:
                 continue
@@ -231,9 +231,7 @@ class DropNulls:
 
                 return
 
-            logging.debug(
-                f"Recived review: {message}"
-            )
+            logging.debug(f"Recived review: {message}")
             if NULL_FIELD_VALUE in message:
                 logging.debug("NULL was found in recived review, dropping it")
                 continue
@@ -252,6 +250,8 @@ class DropNulls:
             # encoded_message = self._protocol.encode(
             #     [message[REVIEW_APP_ID], message[REVIEW_TEXT], message[REVIEW_SCORE]]
             # )
+            self.r += 1
+            logging.debug(f"amount of reviews sent to q4: {self.r}")
             self._middleware.publish(
                 [message[REVIEW_APP_ID], message[REVIEW_TEXT], message[REVIEW_SCORE]],
                 self._config[f"Q4_REVIEWS"],
@@ -263,5 +263,5 @@ class DropNulls:
         logging.debug(
             f"[NULL DROP {self._config['NODE_ID']}] Gracefully shutting down..."
         )
-        self._got_sigterm = True 
+        self._got_sigterm = True
         self._middleware.shutdown()
