@@ -432,9 +432,11 @@ class TestStorage(unittest.TestCase):
         batch = [["5","10"]]
         #top_path = os.path.join(self._dir, f"top_{self._k}.csv")
 
-        storage.add_batch_to_top(self._dir, batch, self._k)
+        #storage.add_batch_to_top(self._dir, batch, self._k)
+        storage.add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=self._k)
         
-        reader = storage.read_top(self._dir, self._k)
+        #reader = storage.read_top(self._dir, self._k)
+        reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
 
         self.assertEqual(len(read_records), 1)
@@ -444,10 +446,10 @@ class TestStorage(unittest.TestCase):
         batch1 = [["5","10"]]
         batch2 = [["6","15"]]
 
-        storage.add_batch_to_top(self._dir, batch1, self._k)
-        storage.add_batch_to_top(self._dir, batch2, self._k)
+        storage.add_batch_to_sorted_file(self._dir, batch1, ascending=False, limit=self._k)
+        storage.add_batch_to_sorted_file(self._dir, batch2, ascending=False, limit=self._k)
         
-        reader = storage.read_top(self._dir, self._k)
+        reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
 
         self.assertEqual(len(read_records), 2)
@@ -457,9 +459,9 @@ class TestStorage(unittest.TestCase):
     def test_add_batch_to_top_when_batch_len_is_higher_than_k(self):
         batch = [["5","10"], ["6","15"], ["7","5"], ["8","20"]] 
 
-        storage.add_batch_to_top(self._dir, batch, self._k)
+        storage.add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=self._k)
         
-        reader = storage.read_top(self._dir, self._k)
+        reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
 
         # The top 3 should be (in order of highest to lowest)
@@ -473,17 +475,17 @@ class TestStorage(unittest.TestCase):
         batch = [["5","10"]]
 
         with self.assertLogs(level="ERROR") as log:
-            storage.add_batch_to_top(self._dir, batch, 0)
+            storage.add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=0)
             self.assertIn("Error, K must be > 0", log.output[0])
 
     def test_top_remains_if_no_record_in_batch_is_less_than_a_given_record(self):
         batch = [["1","30"], ["3","20"], ["5","10"]]
         new_batch = [["7","5"], ["9", "2"]]
 
-        storage.add_batch_to_top(self._dir, batch, self._k)
-        storage.add_batch_to_top(self._dir, new_batch, self._k)
+        storage.add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=self._k)
+        storage.add_batch_to_sorted_file(self._dir, new_batch, ascending=False, limit=self._k)
 
-        reader = storage.read_top(self._dir, self._k)
+        reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
         
         self.assertEqual(read_records, batch)
@@ -492,10 +494,10 @@ class TestStorage(unittest.TestCase):
         top_records = [["1","50"], ["2","40"], ["3","30"]]
         new_records = [["5","60"], ["6","45"]]
 
-        storage.add_batch_to_top(self._dir, top_records, self._k)
-        storage.add_batch_to_top(self._dir, new_records, self._k)
+        storage.add_batch_to_sorted_file(self._dir, top_records, ascending=False, limit=self._k)
+        storage.add_batch_to_sorted_file(self._dir, new_records, ascending=False, limit=self._k)
 
-        reader = storage.read_top(self._dir, self._k)
+        reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
 
         expected_top = [["5","60"], ["1","50"], ["6","45"]]
