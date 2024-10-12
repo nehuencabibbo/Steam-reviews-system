@@ -32,30 +32,6 @@ def write_by_range(dir: str, range: int, record: list[str]):
         print(f"Received {key}, Expected a numerical type in its place")
         raise e
 
-def write_batch_by_range(dir: str, range: int, records: list[list[str]]):
-
-    #get the file for each record in the batch -> {"file": [record1, record2], ....}
-    #for each file, i save all the records like its here
-    os.makedirs(dir, exist_ok=True)
-
-    record_per_file = {}
-    #get the file_name for each record so i dont open the same file multiple times
-    for record in records:
-        try:
-            key = int(record[0])
-            file_path = os.path.join(dir, f"partition_{key//range}.csv")
-
-            record_per_file[file_path] = record_per_file.get(file_path, [])
-            record_per_file[file_path].append(record)
-        except ValueError as e:
-            print(f"Received {key}, Expected a numerical type in its place")
-            raise e
-
-    for file_name, records in record_per_file.items():
-        with open(file_name, "a", newline="") as f:
-            writer = csv.writer(f)
-            for record in records:
-                writer.writerow(record)
 
 
 def read_by_range(dir: str, range: int, key: int):
@@ -315,3 +291,74 @@ def read_sorted_file(dir: str):
         reader = csv.reader(f)
         for line in reader:
             yield line
+
+
+def group_by_file(file_prefix:str, range:int, records: list[list[str]]):
+    records_per_file = {}
+    for record in records:
+        try:
+            key = int(record[0])
+            file_name = f"{file_prefix}_{key//range}.csv"
+            records_per_file[file_name] = records_per_file.get(file_name, [])
+            records_per_file[file_name].append(record)
+        except ValueError as e:
+            print(f"Received {key}, Expected a numerical type in its place")
+            raise e
+    
+    return records_per_file
+
+
+def write_batch_by_range(dir: str, range: int, records: list[list[str]]):
+
+    os.makedirs(dir, exist_ok=True)
+    file_prefix = "partition"
+    #get the file for each record in the batch -> {"file_name": [record1, record2], ....}
+    records_per_file = group_by_file(file_prefix, range, records)
+
+    for file_name, records in records_per_file.items():
+        file_path = os.path.join(dir, file_name)
+        with open(file_path, "a", newline="") as f:
+            writer = csv.writer(f)
+            for record in records:
+                writer.writerow(record)
+
+#TODO: receive a dict instead of a list
+def sum_batch_to_records(dir: str, range: int, new_records: list[list[str]]):
+
+    os.makedirs(dir, exist_ok=True)
+    file_prefix = "partition"
+    #get the file for each record in the batch -> {"file": [record1, record2], ....}
+    records_per_file = group_by_file(file_prefix, range, new_records)
+
+    for file_name, records in records_per_file.items():
+        file_path = os.path.join(dir, file_name) 
+        if not os.path.exists(file_path):
+            write_batch_by_range(dir, range, records)
+            return
+        
+        temp_file = os.path.join(dir, f"temp_{file_name}")
+
+        with open(file_path, mode="r") as infile, open(temp_file, mode="w", newline="") as outfile:
+            reader = csv.reader(infile)
+            writer = csv.writer(outfile)
+
+            for row in reader:
+                record_was_updated = False
+                read_record_key = row[0]
+                read_record_value = int(row[1])
+
+                for i, record in enumerate(records):
+                    key = int(record[0])
+                    if read_record_key == str(key):
+                        writer.writerow([read_record_key, read_record_value + int(record[1])])
+                        record_was_updated = True
+                        records.pop(i)
+                        break
+                if not record_was_updated:
+                    writer.writerow(row)
+
+            for record in records:
+                writer.writerow(record)
+
+        os.replace(temp_file, file_path)
+

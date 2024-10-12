@@ -344,6 +344,43 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(records_partition_1[0], batch[0])
         self.assertEqual(records_partition_2[0], batch[1])
 
+    def test_sum_batch_to_record_one_partition(self):
+        partition_key = 5
+        batch = [["5", "1"], ["6", "1"]]
+
+        storage.sum_batch_to_records(self._dir, self._range,batch)
+        records = [r for r in storage.read_by_range(self._dir, self._range, partition_key)]
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0], batch[0])
+        self.assertEqual(records[1], batch[1])
+
+    def test_sum_batch_to_record_update_record(self):
+        partition_key = 5
+        batch1 = [["5", "1"], ["6", "1"]]
+        batch2 = [["5", "2"], ["7", "1"]]
+
+        storage.sum_batch_to_records(self._dir, self._range, batch1)
+        storage.sum_batch_to_records(self._dir, self._range, batch2)
+
+        records = [r for r in storage.read_by_range(self._dir, self._range, partition_key)]
+
+        self.assertEqual(len(records), 3)
+        self.assertEqual(records[0], ["5", "3"])
+        self.assertEqual(records[1], batch1[1])
+        self.assertEqual(records[2], batch2[1])
+
+    def test_sum_batch_to_record_one_record(self):
+        partition_key = 5
+        batch = [["5", "1"]]
+
+        storage.sum_batch_to_records(self._dir, self._range,batch)
+        storage.sum_batch_to_records(self._dir, self._range,batch)
+        records = [r for r in storage.read_by_range(self._dir, self._range, partition_key)]
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0], ["5", "2"])
+
 
 if __name__ == "__main__":
     unittest.main()
