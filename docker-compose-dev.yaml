@@ -12,9 +12,9 @@ services:
     logging:
       driver: none
     healthcheck:
-      test: '[''CMD'', ''curl'', ''-f'', ''http://localhost:15672'']'
-      interval: 20s
-      timeout: 15s
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 10s
       retries: '5'
   client1:
     container_name: client1

@@ -32,6 +32,31 @@ def write_by_range(dir: str, range: int, record: list[str]):
         print(f"Received {key}, Expected a numerical type in its place")
         raise e
 
+def write_batch_by_range(dir: str, range: int, records: list[list[str]]):
+
+    #get the file for each record in the batch -> {"file": [record1, record2], ....}
+    #for each file, i save all the records like its here
+    os.makedirs(dir, exist_ok=True)
+
+    record_per_file = {}
+    #get the file_name for each record so i dont open the same file multiple times
+    for record in records:
+        try:
+            key = int(record[0])
+            file_path = os.path.join(dir, f"partition_{key//range}.csv")
+
+            record_per_file[file_path] = record_per_file.get(file_path, [])
+            record_per_file[file_path].append(record)
+        except ValueError as e:
+            print(f"Received {key}, Expected a numerical type in its place")
+            raise e
+
+    for file_name, records in record_per_file.items():
+        with open(file_name, "a", newline="") as f:
+            writer = csv.writer(f)
+            for record in records:
+                writer.writerow(record)
+
 
 def read_by_range(dir: str, range: int, key: int):
     file_name = f"partition_{key//range}.csv"

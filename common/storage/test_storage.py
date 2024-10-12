@@ -318,5 +318,32 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(read_records[1], records[0])
         self.assertEqual(read_records[2], records[2])
 
+    def test_write_by_range_with_batches_one_partition(self):
+        partition_app_id = 1
+        batch = [["1", "test"], ["3", "test"]]
+
+        storage.write_batch_by_range(self._dir, self._range, batch)
+
+        records = [r for r in storage.read_by_range(self._dir, self._range, partition_app_id)]
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0], batch[0])
+        self.assertEqual(records[1], batch[1])
+
+    def test_write_by_range_with_batches_multiple_partition(self):
+        partition1_app_id = 1
+        partition2_app_id = 10
+        batch = [["1", "test"], ["10", "test"]]
+
+        storage.write_batch_by_range(self._dir, self._range, batch)
+
+        records_partition_1 = [r for r in storage.read_by_range(self._dir, self._range, partition1_app_id)]
+        records_partition_2 = [r for r in storage.read_by_range(self._dir, self._range, partition2_app_id)]
+
+        self.assertEqual(len(records_partition_1), 1)
+        self.assertEqual(len(records_partition_2), 1)
+        self.assertEqual(records_partition_1[0], batch[0])
+        self.assertEqual(records_partition_2[0], batch[1])
+
+
 if __name__ == "__main__":
     unittest.main()
