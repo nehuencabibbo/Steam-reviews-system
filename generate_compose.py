@@ -17,7 +17,7 @@ Q3_AMOUNT_OF_TOP_K_NODES = 3
 # Q4
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 1
 Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 1
-Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
+Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 1
 Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 1
 Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 1
 # Q5
@@ -487,7 +487,7 @@ def generate_q4(output: Dict):
         "column_number_to_use": 2,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
-        "columns_to_keep": "0,2",  # app_id, review
+        "columns_to_keep": "0,1",  # app_id, review
         "instances_of_myself": Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
         # "batch_size": ,
         "broadcasts": True,
@@ -582,7 +582,7 @@ def generate_q4(output: Dict):
         "query": "q4",
         "filter_name": "second_more_than_5000_",
         "input_queue_name": "q4_english_review_count",
-        "output_queue_name": "",
+        "output_queue_name": "q4_second_filter_more_than_5000",
         "amount_of_forwarding_queues": 1,
         "logging_level": "DEBUG",
         "column_number_to_use": 1,  # negative_english_review_count
@@ -600,7 +600,7 @@ def generate_q4(output: Dict):
         query="q4",
         num=2,
         input_games_queue_name="1_q4_action_games",
-        input_reviews_queue_name="0_q4_filter_second_more_than_5000_reviews",
+        input_reviews_queue_name="0_q4_second_filter_more_than_5000",
         output_queue_name="Q4",
         amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
         amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
