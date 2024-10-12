@@ -27,3 +27,10 @@ docker-down:
 docker-logs:
 	docker compose -f docker-compose-dev.yaml logs -f
 .PHONY: docker-compose-logs
+
+docker-restart:
+	docker compose -f docker-compose-dev.yaml stop -t 10
+	docker compose -f docker-compose-dev.yaml down
+	python3 generate_compose.py docker-compose-dev.yaml
+	docker compose -f docker-compose-dev.yaml up -d --build
+.PHONY: docker-restart

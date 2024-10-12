@@ -28,6 +28,7 @@ class Join:
     def start(self):
         # gotta check this as it could be the last node, then a prefix shouldn't be used
         self.__middleware.create_queue(self.__config["INPUT_GAMES_QUEUE_NAME"])
+        self.__middleware.create_queue(self.__config["INPUT_REVIEWS_QUEUE_NAME"])
 
         if not "Q" in self.__config["OUTPUT_QUEUE_NAME"]:
             for i in range(self.__config["AMOUNT_OF_FORWARDING_QUEUES"]):
@@ -125,7 +126,8 @@ class Join:
                 record_app_id, record_info = record[0].split(",", maxsplit=1)
                 if app_id == int(record_app_id):
                     # Get rid of the app_id from the review and append it to the original game record
-                    joined_message = [record_info] + review  # TODO: CHECK RECORD_INFO
+                    # TODO: QUE NO HAGA UNA LISTA!!
+                    joined_message = [record_app_id, record_info] + review[1:]
 
                     if (
                         "Q" in forwarding_queue_name

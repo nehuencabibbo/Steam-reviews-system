@@ -171,6 +171,7 @@ def add_filter_by_value(
     columns_to_keep: str,
     instances_of_myself: str,
     batch_size: int = 10,
+    broadcasts=False,
 ):
     output["services"][f"{query}_filter_{filter_name}{num}"] = {
         "image": "filter_by_column_value:latest",
@@ -187,6 +188,7 @@ def add_filter_by_value(
             f"COLUMNS_TO_KEEP={columns_to_keep}",
             f"INSTANCES_OF_MYSELF={instances_of_myself}",
             f"BATCH_SIZE={batch_size}",
+            f"BROADCASTS={broadcasts}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -467,6 +469,7 @@ def generate_q4(output: Dict):
         "criteria": "CONTAINS",
         "columns_to_keep": "0,1",  # app_id, name
         "instances_of_myself": Q4_AMOUNT_OF_ACTION_GAMES_FILTERS,
+        "broadcasts": True,
     }
 
     generate_filters_by_value(
@@ -487,6 +490,7 @@ def generate_q4(output: Dict):
         "columns_to_keep": "0,2",  # app_id, review
         "instances_of_myself": Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
         # "batch_size": ,
+        "broadcasts": True,
     }
 
     generate_filters_by_value(
@@ -495,8 +499,8 @@ def generate_q4(output: Dict):
 
     q4_negative_reviews_counter_args = {
         "output": output,
-        "query": "q4",
-        "consume_queue_sufix": "0_q4_negative_reviews",
+        "query": "q4_first_counter",
+        "consume_queue_sufix": "q4_negative_reviews",
         "publish_queue": "q4_negative_reviews_count",
     }
     generate_counters_by_app_id(
@@ -527,7 +531,7 @@ def generate_q4(output: Dict):
         num=0,
         input_games_queue_name="0_q4_action_games",
         input_reviews_queue_name="0_q4_filter_first_more_than_5000_reviews",
-        output_queue_name="0_q4_first_join",
+        output_queue_name="q4_first_join",
         amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
         amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
     )
@@ -536,8 +540,8 @@ def generate_q4(output: Dict):
         output=output,
         query="q4",
         num=1,
-        input_games_queue_name="0_q4_action_games",
-        input_reviews_queue_name="0_q4_first_join",
+        input_games_queue_name="0_q4_first_join",
+        input_reviews_queue_name="1_q4_negative_reviews",
         output_queue_name="q4_second_join",
         amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
         amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
@@ -565,7 +569,7 @@ def generate_q4(output: Dict):
 
     q4_english_reviews_counter_args = {
         "output": output,
-        "query": "q4",
+        "query": "q4_second_counter",
         "consume_queue_sufix": "q4_english_reviews",
         "publish_queue": "q4_english_review_count",
     }
@@ -683,15 +687,15 @@ def generate_output():
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output)
+    # generate_q1(output=output)
     # # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output)
+    # generate_q2(output=output)
     # # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output)
+    # generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
     generate_q4(output=output)
     # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output)
+    # generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
