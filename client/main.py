@@ -4,6 +4,7 @@ from configparser import ConfigParser
 import logging
 from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
+import time
 
 def get_config():
     config_params = {}
@@ -64,4 +65,6 @@ def main():
     client.run()
 
 
+start_time = time.time()
 main()
+print(f"--- {round(time.time() - start_time, 2)} seconds ---")
