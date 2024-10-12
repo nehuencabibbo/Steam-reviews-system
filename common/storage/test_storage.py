@@ -382,5 +382,49 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(records[0], ["5", "2"])
 
 
+
+    def test_add_batch_to_sorted_file_with_one_batch(self):
+        records = [["5", "10"], ["5", "50"], ["5", "20"]]
+
+        storage.add_batch_to_sorted_file(self._dir, records)
+
+        reader = storage.read_sorted_file(self._dir)
+        read_records = [row for row in reader]
+
+        self.assertEqual(len(read_records), 3)
+        self.assertEqual(read_records[0], records[0])
+        self.assertEqual(read_records[2], records[1])
+        self.assertEqual(read_records[1], records[2])
+
+    def test_add_batch_to_sorted_storage_when_values_are_equal(self):
+        records = [["b", "10"], ["a", "10"], ["c", "10"]]
+
+        storage.add_batch_to_sorted_file(self._dir, records)
+
+        reader = storage.read_sorted_file(self._dir)
+        read_records = [row for row in reader]
+
+        self.assertEqual(len(read_records), 3)
+        self.assertEqual(read_records[0], records[1])
+        self.assertEqual(read_records[1], records[0])
+        self.assertEqual(read_records[2], records[2])
+
+    def test_add_batch_to_sorted_storage_multiple_batches(self):
+        records1 = [["b", "10"], ["z", "11"]]
+        records2 = [["c", "11"], ["a", "4"]]
+
+        storage.add_batch_to_sorted_file(self._dir, records1)
+        storage.add_batch_to_sorted_file(self._dir, records2)
+
+        reader = storage.read_sorted_file(self._dir)
+        read_records = [row for row in reader]
+
+        self.assertEqual(len(read_records), 4)
+        self.assertEqual(read_records[0], records2[1])
+        self.assertEqual(read_records[1], records1[0])
+        self.assertEqual(read_records[2], records2[0])
+        self.assertEqual(read_records[3], records1[1])
+
+
 if __name__ == "__main__":
     unittest.main()

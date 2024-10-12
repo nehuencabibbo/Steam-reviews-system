@@ -362,3 +362,57 @@ def sum_batch_to_records(dir: str, range: int, new_records: list[list[str]]):
 
         os.replace(temp_file, file_path)
 
+
+def add_batch_to_sorted_file(dir: str, new_records: str):
+
+    sorted_records = sorted(new_records, key=lambda x: (int(x[1]), x[0])) #sort ascending order
+
+    file_path = os.path.join(dir, f"sorted_file.csv")
+    os.makedirs(dir, exist_ok=True)
+
+    if not os.path.exists(file_path):
+        with open(file_path, "w") as f:
+            writer = csv.writer(f)
+            for record in sorted_records:
+                writer.writerow(record)
+        return
+
+    temp_file = f"temp_sorted.csv"
+    with open(file_path, mode="r") as infile, open(temp_file, mode="w", newline="") as outfile:
+        reader = csv.reader(infile)
+        writer = csv.writer(outfile)
+        for line in reader:
+            old_line_saved = False
+            read_name = line[0]
+            read_value = int(line[1])
+
+            for i, new_record in enumerate(sorted_records):
+                new_record_value = int(new_record[1])
+                new_record_name = new_record[0]
+
+                if new_record_value < read_value:
+                    writer.writerow(new_record)
+                    continue
+                elif new_record_value == read_value and new_record_name < read_name:
+                    writer.writerow(new_record)
+                    continue
+                else:
+                    #new records are higher than the line
+                    writer.writerow(line)
+                    sorted_records = sorted_records[i:]
+                    old_line_saved = True
+                    break
+
+            if not old_line_saved:
+                #if old line was not saved, it means all new records are lower than the line
+                #so i have already saved all the new records, but not updated the list
+                writer.writerow(line)
+                sorted_records = []
+
+        for new_record in sorted_records:
+            #if there is at least one records left, save it here
+            writer.writerow(new_record)
+
+    os.makedirs(dir, exist_ok=True)
+    os.replace(temp_file, file_path)
+
