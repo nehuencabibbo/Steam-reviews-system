@@ -21,8 +21,8 @@ Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 1
 Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 1
 Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 1
 # Q5
-Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
-Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
+Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
+Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
 Q5_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
 
 
@@ -171,7 +171,7 @@ def add_filter_by_value(
     columns_to_keep: str,
     instances_of_myself: str,
     batch_size: int = 10,
-    broadcasts=False,
+    broadcasts: int = 0,
 ):
     output["services"][f"{query}_filter_{filter_name}{num}"] = {
         "image": "filter_by_column_value:latest",
@@ -469,7 +469,7 @@ def generate_q4(output: Dict):
         "criteria": "CONTAINS",
         "columns_to_keep": "0,1",  # app_id, name
         "instances_of_myself": Q4_AMOUNT_OF_ACTION_GAMES_FILTERS,
-        "broadcasts": True,
+        "broadcasts": 0,
     }
 
     generate_filters_by_value(
@@ -490,7 +490,7 @@ def generate_q4(output: Dict):
         "columns_to_keep": "0,1",  # app_id, review
         "instances_of_myself": Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
         # "batch_size": ,
-        "broadcasts": True,
+        "broadcasts": 1,
     }
 
     generate_filters_by_value(
@@ -613,14 +613,15 @@ def generate_q5(output: Dict):
         "query": "q5",
         "filter_name": "action_games",
         "input_queue_name": "q5_games",
-        "output_queue_name": "q5_shooter_games",
+        "output_queue_name": "q5_action_games",
         "amount_of_forwarding_queues": 1,
-        "logging_level": "INFO",
+        "logging_level": "DEBUG",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
         "columns_to_keep": "0,1",  # app_id, positive_review_count
         "instances_of_myself": Q5_AMOUNT_OF_ACTION_GAMES_FILTERS,
+        "broadcasts": 0,
     }
     generate_filters_by_value(
         Q5_AMOUNT_OF_ACTION_GAMES_FILTERS, **q5_filter_action_games_args
@@ -633,12 +634,13 @@ def generate_q5(output: Dict):
         "input_queue_name": "q5_reviews",
         "output_queue_name": "q5_negative_reviews",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
-        "logging_level": "INFO",
+        "logging_level": "DEBUG",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
         "columns_to_keep": "0",  # app_id, positive_review_count
         "instances_of_myself": Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
+        "broadcasts": 0,
     }
     generate_filters_by_value(
         Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS, **q5_filter_negative_reviews_args
@@ -659,7 +661,7 @@ def generate_q5(output: Dict):
         output=output,
         query="q5",
         num=0,
-        input_games_queue_name="0_q5_shooter_games",
+        input_games_queue_name="0_q5_action_games",
         input_reviews_queue_name="0_q5_counter",
         output_queue_name="q5_percentile",
         amount_of_behind_nodes=Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
@@ -687,15 +689,15 @@ def generate_output():
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    # generate_q1(output=output)
+    generate_q1(output=output)
     # # -------------------------------------------- Q2 -----------------------------------------
-    # generate_q2(output=output)
+    generate_q2(output=output)
     # # -------------------------------------------- Q3 -----------------------------------------
-    # generate_q3(output=output)
+    generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
     generate_q4(output=output)
     # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output)
+    generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

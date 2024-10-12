@@ -41,13 +41,16 @@ class Percentile:
         body = self._middleware.get_rows_from_message(body)
         logging.debug(f"body: {body}")
         for message in body:
-            logging.debug(f"GOT MSG: {message}")
 
             if len(message) == 1 and message[0] == "END":
+                logging.debug(f"GOT MSG: {message}")
                 self.persist_data()  # persist data that was not saved
                 self.handle_end_message()
                 self._middleware.ack(method.delivery_tag)
                 return
+            
+            message = message[1:] # TODO: Remove after fixing join
+            logging.debug(f"GOT MSG: {message}")
 
             self._tmp_record_list.append(message)
 

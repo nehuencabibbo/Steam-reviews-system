@@ -158,7 +158,8 @@ class FilterColumnByValue:
         Do not use to send END message as it is handled differently.
         """
         message = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], message)
-        if self._config["BROADCASTS"]:
+        if self._config["BROADCASTS"]:  
+             
             self.__broadcast(message=message)
             return
 
