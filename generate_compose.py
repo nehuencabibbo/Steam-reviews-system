@@ -3,9 +3,6 @@ import yaml
 from typing import *
 
 
-# logging
-LOGGING_LEVEL="DEBUG"
-
 AMOUNT_OF_DROP_FILTER_COLUMNS = 5
 AMOUNT_OF_DROP_NULLS = 5
 # Q2
@@ -18,10 +15,10 @@ Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 2
 Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
 Q3_AMOUNT_OF_TOP_K_NODES = 3
 # Q4
-Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
-Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
-Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 4
-Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 2
+Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 1
+Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 1
+Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 1
+Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 1
 Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
 # Q5
 Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
@@ -52,7 +49,6 @@ def add_filter_columns(output: Dict, num: int):
         "environment": [
             f"NODE_ID={num}",
             f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_FILTER_COLUMNS}",
-            f"LOGGING_LEVEL={LOGGING_LEVEL}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -68,7 +64,6 @@ def add_drop_nulls(output: Dict, num: int):
             f"NODE_ID={num}",
             "COUNT_BY_PLATFORM_NODES=1",  # TODO: change when scaling
             f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_NULLS}",
-            f"LOGGING_LEVEL={LOGGING_LEVEL}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -87,7 +82,6 @@ def add_counter_by_platform(
             f"NODE_ID={num}",
             f"CONSUME_QUEUE_SUFIX={consume_queue_sufix}",
             f"PUBLISH_QUEUE={publish_queue}",
-            f"LOGGING_LEVEL={LOGGING_LEVEL}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -106,7 +100,6 @@ def add_counter_by_app_id(
             f"NODE_ID={num}",
             f"CONSUME_QUEUE_SUFIX={consume_queue_sufix}",
             f"PUBLISH_QUEUE={publish_queue}",
-            f"LOGGING_LEVEL={LOGGING_LEVEL}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -131,7 +124,6 @@ def add_top_k(
             f"K={k}",
             f"NODE_ID={num}",
             f"AMOUNT_OF_RECEIVING_QUEUES=1",
-            f"LOGGING_LEVEL={LOGGING_LEVEL}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -157,7 +149,6 @@ def add_top_k_aggregator(
             f"K={k}",
             f"NODE_ID={num}",
             f"AMOUNT_OF_RECEIVING_QUEUES={amount_of_top_k_nodes}",
-            f"LOGGING_LEVEL={LOGGING_LEVEL}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -222,7 +213,6 @@ def add_join(
             f"OUTPUT_QUEUE_NAME={output_queue_name}",
             f"AMOUNT_OF_BEHIND_NODES={amount_of_behind_nodes}",
             f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
-            f"LOGGING_LEVEL={LOGGING_LEVEL}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -241,7 +231,6 @@ def add_percentile(
             f"NODE_ID={num}",
             f"CONSUME_QUEUE={consume_queue}",
             f"PUBLISH_QUEUE={publish_queue}",
-            f"LOGGING_LEVEL={LOGGING_LEVEL}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -281,9 +270,6 @@ def add_client(output: Dict):
         "container_name": "client1",
         "image": "client:latest",
         "entrypoint": "python3 /main.py",
-        "environment": [
-            f"LOGGING_LEVEL={LOGGING_LEVEL}",
-        ],
         "volumes": ["./data/:/data"],
         "networks": ["net"],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -328,7 +314,7 @@ def generate_q2(output=Dict):
         "input_queue_name": "q2_games",
         "output_queue_name": "q2_indie_games",
         "amount_of_forwarding_queues": 1,
-        "logging_level": LOGGING_LEVEL,
+        "logging_level": "INFO",
         "column_number_to_use": 4,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
@@ -344,7 +330,7 @@ def generate_q2(output=Dict):
         "input_queue_name": "0_q2_indie_games",
         "output_queue_name": "q2_indie_games_from_last_decade",
         "amount_of_forwarding_queues": Q2_AMOUNT_OF_TOP_K_NODES,
-        "logging_level": LOGGING_LEVEL,
+        "logging_level": "INFO",
         "column_number_to_use": 2,  # release date
         "value_to_filter_by": 201,
         "criteria": "CONTAINS",
@@ -386,7 +372,7 @@ def generate_q3(output: Dict):
         "input_queue_name": "q3_games",
         "output_queue_name": "q3_indie_games",
         "amount_of_forwarding_queues": 1,
-        "logging_level": LOGGING_LEVEL,
+        "logging_level": "INFO",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
@@ -405,7 +391,7 @@ def generate_q3(output: Dict):
         "input_queue_name": "q3_reviews",
         "output_queue_name": "q3_positive_reviews",
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
-        "logging_level": LOGGING_LEVEL,
+        "logging_level": "INFO",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": 1.0,  # positive_review
         "criteria": "EQUAL_FLOAT",
@@ -475,7 +461,7 @@ def generate_q4(output: Dict):
         "input_queue_name": "q4_games",
         "output_queue_name": "q4_action_games",
         "amount_of_forwarding_queues": 1,
-        "logging_level": LOGGING_LEVEL,
+        "logging_level": "DEBUG",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
@@ -494,7 +480,7 @@ def generate_q4(output: Dict):
         "input_queue_name": "q4_reviews",
         "output_queue_name": "q4_negative_reviews",
         "amount_of_forwarding_queues": 1,
-        "logging_level": LOGGING_LEVEL,
+        "logging_level": "DEBUG",
         "column_number_to_use": 2,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
@@ -514,8 +500,8 @@ def generate_q4(output: Dict):
         "input_queue_name": "0_q4_negative_reviews",
         "output_queue_name": "q4_english_reviews",
         "amount_of_forwarding_queues": 1,
-        "logging_level": LOGGING_LEVEL,
-        "column_number_to_use": 2,  # review_score
+        "logging_level": "DEBUG",
+        "column_number_to_use": 1,  # review
         "value_to_filter_by": "en",
         "criteria": "LANGUAGE",
         "columns_to_keep": "0,1",  # app_id, review_score
@@ -543,7 +529,7 @@ def generate_q4(output: Dict):
         "input_queue_name": "q4_english_review_count",
         "output_queue_name": "q4_filter_more_than_5000_reviews",
         "amount_of_forwarding_queues": 1,
-        "logging_level": LOGGING_LEVEL,
+        "logging_level": "DEBUG",
         "column_number_to_use": 1,  # positive_review_count
         "value_to_filter_by": 5000,
         "criteria": "GREATER_THAN",
@@ -574,7 +560,7 @@ def generate_q5(output: Dict):
         "input_queue_name": "q5_games",
         "output_queue_name": "q5_shooter_games",
         "amount_of_forwarding_queues": 1,
-        "logging_level": LOGGING_LEVEL,
+        "logging_level": "INFO",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
@@ -592,7 +578,7 @@ def generate_q5(output: Dict):
         "input_queue_name": "q5_reviews",
         "output_queue_name": "q5_negative_reviews",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
-        "logging_level": LOGGING_LEVEL,
+        "logging_level": "INFO",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",

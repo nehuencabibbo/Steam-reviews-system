@@ -77,16 +77,15 @@ class Middleware:
         queue_batch, amount_of_messages = self.__batchs_per_queue[queue_name]
         new_batch = self.__protocol.add_to_batch(queue_batch, message)
 
-        # if len(new_batch) > self.__max_batch_size:
-        if amount_of_messages + 1 >= self.__batch_size:
+        if amount_of_messages + 1 == self.__batch_size:
             self._channel.basic_publish(
                 exchange=exchange_name,
                 routing_key=queue_name,
-                body=queue_batch,
+                body=new_batch,
             )
             self.__batchs_per_queue[queue_name] = [
-                self.__protocol.add_to_batch(b"", message),
-                1,
+                b"",
+                0,
             ]
         else:
             self.__batchs_per_queue[queue_name] = [new_batch, amount_of_messages + 1]

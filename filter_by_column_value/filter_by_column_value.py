@@ -1,4 +1,7 @@
+import csv
 import sys, os
+
+from common.storage.storage import write_by_range
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -24,7 +27,9 @@ class FilterColumnByValue:
         self._middleware = middleware
         self._config = config
         self._got_sigterm = False
-
+        self.e = 0
+        self.r = 0
+        self.n = 0
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
@@ -109,6 +114,8 @@ class FilterColumnByValue:
         column_to_use = body[self._config["COLUMN_NUMBER_TO_USE"]]
         value_to_filter_by = self._config["VALUE_TO_FILTER_BY"]
         criteria = self._config["CRITERIA"]
+        self.r += 1
+        logging.debug(f"amount of reviews: {self.r}")
 
         if criteria == EQUAL_CRITERIA_KEYWORD:
             if column_to_use == value_to_filter_by:
@@ -129,11 +136,19 @@ class FilterColumnByValue:
                 self.__send_message(body)
 
         elif criteria == LANGUAGE_CRITERIA_KEYWORD:
-            logging.debug(f"Filtering by language... ")
             detected_language, _ = langid.classify(column_to_use)
             if detected_language == value_to_filter_by.lower():
+                with open("./english_output.csv", "a") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([body[0], body[1], detected_language])
                 logging.debug(f"English detected: {body}")
+                self.e += 1
+                logging.debug(f"amount of english: {self.e}")
                 self.__send_message(body)
+            else:
+                with open("./no_english_output.csv", "a") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([body[0], body[1], detected_language])
 
         elif criteria == EQUAL_FLOAT_CRITERIA_KEYWORD:
             try:
@@ -142,7 +157,10 @@ class FilterColumnByValue:
             except ValueError as e:
                 logging.debug(f"Failed float conversion: {e}")
 
+            logging.debug(f"Comparing: {column_to_use} with {value_to_filter_by}")
             if column_to_use == value_to_filter_by:
+                self.n += 1
+                logging.debug(f"Negatives sent: {self.n}")
                 self.__send_message(body)
         else:
             raise Exception(f"Unkown cirteria: {criteria}")
@@ -177,3 +195,25 @@ class FilterColumnByValue:
         logging.debug("Gracefully shutting down...")
         self._got_sigterm = True
         self._middleware.shutdown()
+
+
+# 1047 + 12554 + 13351 = 26952 -> Drop nulls a negative (Correcto)
+# Negative a english
+# 2733 + 2783 + 2774 + 2798 = 11088-> english totales (esto en el kaggle da despues de el filtro de negativos)
+
+
+# 1155685 / 150/s = 7704.56667 segundos
+
+
+#  1 - 60
+#      - 42780
+
+
+# received, english
+# 2788 + 2760 + 2719 + 2814
+
+# 2648 + 2558 + 2643 + 2628
+
+
+# enviados (desde negtive): 5536 + 5549
+# recibidos: 2748 + 2784 + 2778 + 2771
