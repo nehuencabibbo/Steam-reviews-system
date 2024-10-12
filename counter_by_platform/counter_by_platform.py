@@ -31,14 +31,14 @@ class CounterByPlatform:
             logging.debug("Starting to consume...")
             self._middleware.start_consuming()
         except MiddlewareError as e:
-                # TODO: If got_sigterm is showing any error needed?  
+            # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
 
     def handle_message(self, ch, method, properties, body):
         body = self._middleware.get_rows_from_message(body)
         for message in body:
-            message = [value.strip() for value in message]
+            # message = [value.strip() for value in message]
 
             logging.debug(f"GOT MSG: {message}")
 

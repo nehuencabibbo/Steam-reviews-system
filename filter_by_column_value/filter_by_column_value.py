@@ -96,7 +96,7 @@ class FilterColumnByValue:
     def __handle_message(self, delivery_tag: int, body: bytes):
         body = self._middleware.get_rows_from_message(body)
         for message in body:
-            message = [value.strip() for value in message]
+            # message = [value.strip() for value in message]
             logging.debug(f"Recived message: {message}")
 
             if message[0] == END_TRANSMISSION_MESSAGE:

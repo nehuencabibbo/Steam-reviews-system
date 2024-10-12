@@ -23,7 +23,7 @@ class FilterColumns:
         self._protocol = protocol
         self._middleware = middleware
         self._config = config
-        self._got_sigterm = False 
+        self._got_sigterm = False
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -55,10 +55,10 @@ class FilterColumns:
         )
 
         self._middleware.turn_fair_dispatch()
-        try: 
+        try:
             self._middleware.start_consuming()
         except MiddlewareError as e:
-            # TODO: If got_sigterm is showing any error needed?  
+            # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
 
@@ -82,9 +82,8 @@ class FilterColumns:
             if not self._config["NODE_ID"] in peers_that_recived_end:
                 peers_that_recived_end.append(self._config["NODE_ID"])
 
-            message += peers_that_recived_end 
+            message += peers_that_recived_end
             self._middleware.publish_message(message, reciving_queue_name)
-
 
     def __handle_message(
         self,
@@ -97,7 +96,7 @@ class FilterColumns:
         for message in body:
             logging.debug(f"Recived message: {message}")
 
-            message = [value.strip() for value in message]
+            # message = [value.strip() for value in message]
 
             if message[0] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived END from {message_type}: {message}")
@@ -119,7 +118,7 @@ class FilterColumns:
                 self._middleware.ack(delivery_tag)
 
                 return
-            
+
             logging.debug(
                 f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived {message_type}: {message}"
             )
@@ -150,5 +149,5 @@ class FilterColumns:
         logging.debug(
             f"[FILTER COLUMNS {self._config['NODE_ID']}] Gracefully shutting down..."
         )
-        self._got_sigterm = True 
+        self._got_sigterm = True
         self._middleware.shutdown()

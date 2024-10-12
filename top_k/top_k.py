@@ -53,7 +53,7 @@ class TopK:
 
         body = self.__middleware.get_rows_from_message(body)
         for message in body:
-            message = [value.strip() for value in message]
+            # message = [value.strip() for value in message]
             logging.debug(f"[INPUT GAMES] received: {message}")
 
             if len(message) == 1 and message[0] == END_TRANSMISSION_MESSAGE:
@@ -75,7 +75,7 @@ class TopK:
 
                 # if not delete_directory('/tmp'):
                 #     logging.debug(f"Couldn't delete directory: {'/tmp'}")
-                # else: 
+                # else:
                 #     logging.debug(f"Deleted directory: {'/tmp'}")
 
                 return

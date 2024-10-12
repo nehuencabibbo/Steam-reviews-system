@@ -135,7 +135,7 @@ class DropNulls:
         body = self._middleware.get_rows_from_message(message=body)
 
         for message in body:
-            message = [value.strip() for value in message]
+            # message = [value.strip() for value in message]
 
             if message[0] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived games END: {message}")
@@ -218,7 +218,7 @@ class DropNulls:
     def __handle_reviews(self, delivery_tag: int, body: bytes):
         body = self._middleware.get_rows_from_message(message=body)
         for message in body:
-            message = [value.strip() for value in message]
+            # message = [value.strip() for value in message]
 
             if message[0] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived reviews END: {message}")

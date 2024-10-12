@@ -91,7 +91,7 @@ class Client:
             try:
                 self._middleware.start_consuming()
             except MiddlewareError as e:
-                # TODO: If got_sigterm is showing any error needed?  
+                # TODO: If got_sigterm is showing any error needed?
                 if not self._got_sigterm:
                     logging.error(e)
 
@@ -101,7 +101,7 @@ class Client:
 
         body = self._middleware.get_rows_from_message(message=body)
         for message in body:
-            message = [value.strip() for value in message]
+            # message = [value.strip() for value in message]
 
             if len(message) == 1 and message[0] == FILE_END_MSG:
                 self._middleware.stop_consuming()
