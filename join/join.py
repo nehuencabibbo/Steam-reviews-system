@@ -75,9 +75,7 @@ class Join:
                 return
 
             try:
-                write_by_range(
-                    "tmp/", int(self.__config["PARTITION_RANGE"]), ",".join(message)
-                )
+                write_by_range("tmp/", int(self.__config["PARTITION_RANGE"]), message )
             except ValueError as e:
                 logging.error(
                     f"An error has occurred. {e}",
@@ -107,10 +105,7 @@ class Join:
                 logging.debug(
                     f"Amount of ends received up to now: {self._amount_of_ends_received} | Expecting: {self.__config['AMOUNT_OF_BEHIND_NODES']}"
                 )
-                if (
-                    self._amount_of_ends_received
-                    == self.__config["AMOUNT_OF_BEHIND_NODES"]
-                ):
+                if (self._amount_of_ends_received == self.__config["AMOUNT_OF_BEHIND_NODES"]):
                     self.__send_end_to_forward_queues()
 
                 self.__middleware.ack(delivery_tag)
@@ -122,10 +117,11 @@ class Join:
             for record in read_by_range(
                 "tmp/", int(self.__config["PARTITION_RANGE"]), app_id
             ):
-                record_app_id, record_info = record[0].split(",", maxsplit=1)
+                record_app_id, record_info = record[0] , record[1:]#.split(",", maxsplit=1)
                 if app_id == int(record_app_id):
                     # Get rid of the app_id from the review and append it to the original game record
-                    joined_message = [record_info, review[1]]
+                    #joined_message = [record_info, review[1]]
+                    joined_message = record_info + review[1:]
                     # encoded_message = self.__protocol.encode([joined_message])
 
                     if (

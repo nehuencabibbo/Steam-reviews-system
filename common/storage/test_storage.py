@@ -18,7 +18,7 @@ class TestStorage(unittest.TestCase):
 
     def test_partition_is_set(self):
         app_id = 5
-        record = f"{app_id},test"
+        record = ["5", "test"]
 
         storage.write_by_range(self._dir, self._range, record)
 
@@ -34,30 +34,29 @@ class TestStorage(unittest.TestCase):
 
     def test_partition_stores_csv_correctly(self):
         app_id = 5
-        original_record = f"{app_id},test"
+        original_record = ["5", "test"]
 
         storage.write_by_range(self._dir, self._range, original_record)
-        read_record = next(storage.read_by_range(self._dir, self._range, app_id))[0]
+        read_record = next(storage.read_by_range(self._dir, self._range, app_id))
 
         self.assertEqual(original_record, read_record)
 
     def test_partition_stores_mutliple_csv_lines_correctly(self):
         app_id_1 = 5
-        app_id_2 = 3
-        original_record_1 = f"{app_id_1},test"
-        original_record_2 = f"{app_id_2},test"
+        original_record_1 = ["5", "test"]
+        original_record_2 = ["3", "test"]
 
         storage.write_by_range(self._dir, self._range, original_record_1)
         storage.write_by_range(self._dir, self._range, original_record_2)
         records = [r for r in storage.read_by_range(self._dir, self._range, app_id_1)]
 
         self.assertEqual(len(records), 2)
-        self.assertEqual(records[0][0], original_record_1)
-        self.assertEqual(records[1][0], original_record_2)
+        self.assertEqual(records[0], original_record_1)
+        self.assertEqual(records[1], original_record_2)
 
     def test_partition_is_set_according_to_its_key(self):
         app_id = 10
-        record = f"{app_id},test"
+        record =["10", "test"]
 
         storage.write_by_range(self._dir, self._range, record)
 
@@ -74,8 +73,8 @@ class TestStorage(unittest.TestCase):
     def test_multiple_partitions_are_set(self):
         app_id_1 = 5
         app_id_2 = 10
-        record_1 = f"{app_id_1},test"
-        record_2 = f"{app_id_2},test"
+        record_1 = ["5", "test"]
+        record_2 = ["10", "test"]
 
         storage.write_by_range(self._dir, self._range, record_1)
         storage.write_by_range(self._dir, self._range, record_2)
@@ -106,7 +105,7 @@ class TestStorage(unittest.TestCase):
 
     def test_sum_to_record_creates_partition_file_if_not_found(self):
         app_id = 5
-        record = f"{app_id},10"
+        record = ["5", "10"]
 
         storage.sum_to_record(self._dir, self._range, record)
 
@@ -115,20 +114,19 @@ class TestStorage(unittest.TestCase):
         )
         self.assertTrue(os.path.exists(partition_path))
 
-        read_record = next(storage.read_by_range(self._dir, self._range, app_id))[0]
+        read_record = next(storage.read_by_range(self._dir, self._range, app_id))
         self.assertEqual(record, read_record)
 
     def test_sum_to_record_appends_if_key_not_found_in_existing_partition(self):
         app_id_1 = 5
-        app_id_2 = 6
-        record_1 = f"{app_id_1},1"
-        record_2 = f"{app_id_2},1"
+        record_1 = ["5", "1"]
+        record_2 = ["6", "1"]
 
         storage.write_by_range(self._dir, self._range, record_1)
         storage.sum_to_record(self._dir, self._range, record_2)
 
         records = [
-            r[0] for r in storage.read_by_range(self._dir, self._range, app_id_1)
+            r for r in storage.read_by_range(self._dir, self._range, app_id_1)
         ]
         self.assertEqual(len(records), 2)
         self.assertEqual(records[0], record_1)
@@ -136,14 +134,14 @@ class TestStorage(unittest.TestCase):
 
     def test_sum_to_record_updates_existing_record(self):
         app_id = 5
-        initial_record = f"{app_id},1"
+        initial_record = ["5", "1"]
 
         storage.sum_to_record(self._dir, self._range, initial_record)
         storage.sum_to_record(self._dir, self._range, initial_record)
 
-        records = [r[0] for r in storage.read_by_range(self._dir, self._range, app_id)]
+        records = [r for r in storage.read_by_range(self._dir, self._range, app_id)]
         self.assertEqual(len(records), 1)
-        self.assertEqual(records[0], f"{app_id},2")
+        self.assertEqual(records[0], ["5", "2"])
 
     def test_add_to_empty_top(self):
         record = ["5","10"]
@@ -262,18 +260,16 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(top_after_add, expected_top)
 
     def test_read_from_all_partitions(self):
-        app_id_1 = 5
-        app_id_2 = 10
-        original_record_1 = f"{app_id_1},test"
-        original_record_2 = f"{app_id_2},test"
+        original_record_1 = ["5", "test"]
+        original_record_2 = ["10", "test"]
 
         storage.write_by_range(self._dir, self._range, original_record_1)
         storage.write_by_range(self._dir, self._range, original_record_2)
         records = [r for r in storage.read_all_files(self._dir)]
 
         self.assertEqual(len(records), 2)
-        self.assertEqual(records[0][0], original_record_2)
-        self.assertEqual(records[1][0], original_record_1)
+        self.assertEqual(records[0], original_record_2)
+        self.assertEqual(records[1], original_record_1)
 
 
     def test_add_to_sorted_file_creates_file(self):

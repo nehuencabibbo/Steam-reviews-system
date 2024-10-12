@@ -55,7 +55,8 @@ class CounterByAppId:
                 self._middleware.ack(method.delivery_tag)
                 return
 
-            record = f"{message[0]},{1}"
+            #record = f"{message[0]},{1}"
+            record = [message[0], 1]
             storage.sum_to_record(
                 self._config["STORAGE_DIR"], self._config["RANGE_FOR_PARTITION"], record
             )
@@ -68,10 +69,10 @@ class CounterByAppId:
 
         reader = storage.read_all_files(self._config["STORAGE_DIR"])
         for record in reader:
-            message = record[0].split(",")
-            logging.debug(f"Sending: {message}")
+            #message = record #[0].split(",")
+            logging.debug(f"Sending: {record}")
             # encoded_msg = self._protocol.encode(message)
-            self._middleware.publish(message, queue_name)
+            self._middleware.publish(record, queue_name)
 
         self._middleware.publish_batch(queue_name)
 

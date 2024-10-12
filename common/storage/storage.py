@@ -16,16 +16,17 @@ def delete_directory(dir: str) -> bool:
     shutil.rmtree(dir)
     return True 
     
-def write_by_range(dir: str, range: int, record: str):
+def write_by_range(dir: str, range: int, record: list[str]):
     key = None
     try:
-        key = int(record.split(",", maxsplit=1)[0])
+        #key = int(record.split(",", maxsplit=1)[0])
+        key = int(record[0])
         file_path = os.path.join(dir, f"partition_{key//range}.csv")
         os.makedirs(dir, exist_ok=True)
 
         with open(file_path, "a", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([record])
+            writer.writerow(record)
 
     except ValueError as e:
         print(f"Received {key}, Expected a numerical type in its place")
@@ -47,8 +48,12 @@ def read_by_range(dir: str, range: int, key: int):
 
 
 # TODO: this could receive a batch of records
-def sum_to_record(dir: str, range: int, record: str):
-    key = int(record.split(",", maxsplit=1)[0])
+def sum_to_record(dir: str, range: int, record: list[str]):
+
+    #key = int(record.split(",", maxsplit=1)[0])
+    key = int(record[0])
+    value = int(record[1])
+
     file_path = os.path.join(dir, f"partition_{key//range}.csv")
     os.makedirs(dir, exist_ok=True)
 
@@ -73,19 +78,19 @@ def sum_to_record(dir: str, range: int, record: str):
         writer = csv.writer(outfile)
 
         for row in reader:
-            read_record = row[0].split(",", maxsplit=1)
+            read_record = row #[0].split(",", maxsplit=1)
             read_record_key = read_record[0]
             # TODO: validate
             read_record_value = int(read_record[1])
 
             if read_record_key == str(key):
                 key_was_found = True
-                writer.writerow([f"{read_record_key},{read_record_value+1}"])
+                writer.writerow([read_record_key, read_record_value + value])
                 continue
 
             writer.writerow(row)
         if not key_was_found:
-            writer.writerow([record])
+            writer.writerow(record)
 
     os.replace(temp_file, file_path)
 
