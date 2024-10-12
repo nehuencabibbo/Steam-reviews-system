@@ -125,8 +125,7 @@ class Join:
                 record_app_id, record_info = record[0].split(",", maxsplit=1)
                 if app_id == int(record_app_id):
                     # Get rid of the app_id from the review and append it to the original game record
-                    joined_message = [record_info, review[1]]
-                    # encoded_message = self.__protocol.encode([joined_message])
+                    joined_message = [record_info] + review  # TODO: CHECK RECORD_INFO
 
                     if (
                         "Q" in forwarding_queue_name
