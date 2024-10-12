@@ -292,6 +292,7 @@ def read_sorted_file(dir: str):
         for line in reader:
             yield line
 
+#------------------------ BATCHES -------------------------------------------
 
 def group_by_file(file_prefix:str, range:int, records: list[list[str]]):
     records_per_file = {}
@@ -392,10 +393,8 @@ def add_batch_to_sorted_file(dir: str, new_records: str):
 
                 if new_record_value < read_value:
                     writer.writerow(new_record)
-                    continue
                 elif new_record_value == read_value and new_record_name < read_name:
                     writer.writerow(new_record)
-                    continue
                 else:
                     #new records are higher than the line
                     writer.writerow(line)
@@ -413,6 +412,76 @@ def add_batch_to_sorted_file(dir: str, new_records: str):
             #if there is at least one records left, save it here
             writer.writerow(new_record)
 
+    os.replace(temp_file, file_path)
+
+
+def add_batch_to_top(dir: str, new_records: list[list[str]], k: int):
+    if k <= 0:
+        logging.error(f"Error, K must be > 0. Got: {k}")
+        return
+
+    sorted_records = sorted(new_records, key=lambda x: (-int(x[1]), x[0])) #sort descending order
+    
     os.makedirs(dir, exist_ok=True)
+    file_path = os.path.join(dir, f"top_{k}.csv")
+
+    if not os.path.exists(file_path):
+        with open(file_path, "w") as f:
+            writer = csv.writer(f)
+            for i, record in enumerate(sorted_records):
+                if i == k:
+                    break
+                writer.writerow(record)
+        return
+
+    temp_file = f"temp_top.csv"
+
+    amount_of_records_in_top = 0
+    with open(file_path, mode="r") as infile, open(temp_file, mode="w", newline="") as outfile:
+        reader = csv.reader(infile)
+        writer = csv.writer(outfile)
+
+        for line in reader:
+            if amount_of_records_in_top == k:
+                break
+            old_line_saved = False
+            read_name = line[0]
+            read_value = int(line[1])
+
+            for i, new_record in enumerate(sorted_records):
+                if amount_of_records_in_top == k:
+                    break
+
+                new_record_value = int(new_record[1])
+                new_record_name = new_record[0]
+
+                amount_of_records_in_top += 1
+
+                if new_record_value > read_value:
+                    writer.writerow(new_record)
+                elif new_record_value == read_value and new_record_name < read_name:
+                    writer.writerow(new_record)
+                else:
+                    #new records are lower than the line
+                    writer.writerow(line)
+                    sorted_records = sorted_records[i:]
+                    old_line_saved = True
+                    break
+
+            if not old_line_saved and amount_of_records_in_top < k:
+                #if old line was not saved, it means all new records are lower than the line
+                #so i have already saved all the new records, but not updated the list
+                writer.writerow(line)
+                sorted_records = []
+                amount_of_records_in_top += 1
+
+        if amount_of_records_in_top < k:
+            for new_record in sorted_records:
+                if amount_of_records_in_top == k:
+                    break
+                #if there is at least one records left, save it here
+                writer.writerow(new_record)
+                amount_of_records_in_top += 1
+
     os.replace(temp_file, file_path)
 
