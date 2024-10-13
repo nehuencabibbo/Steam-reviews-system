@@ -24,6 +24,7 @@ def get_config():
         config_params["INPUT_GAMES_QUEUE_NAME"] = os.getenv(
             "INPUT_GAMES_QUEUE_NAME", config["DEFAULT"]["INPUT_GAMES_QUEUE_NAME"]
         )
+        config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])
         config_params["INPUT_REVIEWS_QUEUE_NAME"] = os.getenv(
             "INPUT_REVIEWS_QUEUE_NAME", config["DEFAULT"]["INPUT_REVIEWS_QUEUE_NAME"]
         )
@@ -46,6 +47,7 @@ def get_config():
                 config["DEFAULT"]["AMOUNT_OF_FORWARDING_QUEUES"],
             )
         )
+
         games_columns_to_keep = os.getenv(
             "GAMES_COLUMNS_TO_KEEP", config["DEFAULT"]["GAMES_COLUMNS_TO_KEEP"]
         ).split(",")

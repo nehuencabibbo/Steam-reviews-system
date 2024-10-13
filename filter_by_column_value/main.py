@@ -66,11 +66,20 @@ def get_config():
                 config["DEFAULT"]["BATCH_SIZE"],
             )
         )
-        config_params["BROADCASTS"] = bool(int(
+        config_params["BROADCASTS"] = bool(
+            int(
+                os.getenv(
+                    "BROADCASTS",
+                    config["DEFAULT"]["BROADCASTS"],
+                )
+            )
+        )
+
+        config_params["PREFETCH_COUNT"] = int(
             os.getenv(
-                "BROADCASTS",
-                config["DEFAULT"]["BROADCASTS"],
-            ))
+                "PREFETCH_COUNT",
+                config["DEFAULT"]["PREFETCH_COUNT"],
+            )
         )
 
         # TODO: Raise an error if __REQUIRED__ is paresed anywhere here
@@ -98,7 +107,9 @@ def main():
 
     protocol = Protocol()
     middleware = Middleware(
-        config["RABBIT_IP"], prefetch_count=1, batch_size=config["BATCH_SIZE"]
+        config["RABBIT_IP"],
+        prefetch_count=config["PREFETCH_COUNT"],
+        batch_size=config["BATCH_SIZE"],
     )
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)

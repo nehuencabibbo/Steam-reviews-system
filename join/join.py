@@ -1,7 +1,12 @@
 import logging
 import signal
 from common.middleware.middleware import Middleware, MiddlewareError
-from common.storage.storage import read_by_range, write_by_range, delete_directory, write_batch_by_range
+from common.storage.storage import (
+    read_by_range,
+    write_by_range,
+    delete_directory,
+    write_batch_by_range,
+)
 from common.protocol.protocol import Protocol
 from utils.utils import node_id_to_send_to
 
@@ -61,6 +66,7 @@ class Join:
 
         if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of games received")
+
             reviews_callback = self.__middleware.generate_callback(
                 self.__reviews_callback,
                 self.__config["INPUT_REVIEWS_QUEUE_NAME"],

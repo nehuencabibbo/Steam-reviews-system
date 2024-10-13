@@ -4,8 +4,10 @@ import logging
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.protocol.protocol import Protocol
 from common.storage import storage
+from utils.utils import node_id_to_send_to
 
 END_TRANSMISSION_MESSAGE = "END"
+APP_ID = 0
 
 
 class CounterByAppId:
@@ -22,7 +24,8 @@ class CounterByAppId:
             f"{self._config['NODE_ID']}_{self._config['CONSUME_QUEUE_SUFIX']}"
         )
         self._middleware.create_queue(consume_queue_name)
-        self._middleware.create_queue(self._config["PUBLISH_QUEUE"])
+        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
+            self._middleware.create_queue(f'{i}_{self._config["PUBLISH_QUEUE"]}')
 
         self._middleware.attach_callback(consume_queue_name, self.handle_message)
 
@@ -30,10 +33,10 @@ class CounterByAppId:
             logging.debug("Starting to consume...")
             self._middleware.start_consuming()
         except MiddlewareError as e:
-                # TODO: If got_sigterm is showing any error needed?  
-                if not self._got_sigterm:
-                    logging.error(e)
-                
+            # TODO: If got_sigterm is showing any error needed?
+            if not self._got_sigterm:
+                logging.error(e)
+
         logging.info("Finished")
 
     def handle_message(self, ch, method, properties, body):
@@ -46,13 +49,17 @@ class CounterByAppId:
             self.send_results()
             self._middleware.ack(method.delivery_tag)
             return
-        
+
         count_per_record = {}
         for record in body:
             record_id = record[0]
             count_per_record[record_id] = count_per_record.get(record_id, 0) + 1
-        
-        storage.sum_batch_to_records(self._config["STORAGE_DIR"], self._config["RANGE_FOR_PARTITION"], count_per_record)
+
+        storage.sum_batch_to_records(
+            self._config["STORAGE_DIR"],
+            self._config["RANGE_FOR_PARTITION"],
+            count_per_record,
+        )
 
         self._middleware.ack(method.delivery_tag)
 
@@ -61,22 +68,34 @@ class CounterByAppId:
         queue_name = self._config["PUBLISH_QUEUE"]
 
         reader = storage.read_all_files(self._config["STORAGE_DIR"])
+
         for record in reader:
-            logging.debug(f"Sending: {record}")
-            self._middleware.publish(record, queue_name)
+            node_id = node_id_to_send_to(
+                "1", record[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+            )
+            queue = f"{node_id}_{queue_name}"
+            logging.debug(f"Sending message: {record} to queue: {queue}")
+            self._middleware.publish(record, queue)
 
-        self._middleware.publish_batch(queue_name)
+            # self._middleware.publish(record, queue_name)
 
-        logging.debug("SENDING END")
-        self._middleware.send_end(queue_name)
+        node_id = node_id_to_send_to(
+            "1", record[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+        )
+        self._middleware.publish_batch(f"{node_id}_{queue_name}")
+        self.__send_end_to_forwarding_queues(prefix_queue_name=queue_name)
 
         # if not delete_directory(self._config["STORAGE_DIR"]):
         #     logging.debug(f"Couldn't delete directory: {self._config["STORAGE_DIR"]}")
-        # else: 
+        # else:
         #     logging.debug(f"Deleted directory: {self._config["STORAGE_DIR"]}")
         # encoded_msg = self._protocol.encode([END_TRANSMISSION_MESSAGE])
         # self._middleware.publish(encoded_msg, queue_name=self._config["PUBLISH_QUEUE"])
         # logging.debug(f'END SENT TO: {self._config["PUBLISH_QUEUE"]}')
+
+    def __send_end_to_forwarding_queues(self, prefix_queue_name):
+        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
+            self._middleware.send_end(f"{i}_{prefix_queue_name}")
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
