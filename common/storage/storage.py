@@ -323,19 +323,35 @@ def write_batch_by_range(dir: str, range: int, records: list[list[str]]):
             for record in records:
                 writer.writerow(record)
 
+
+def group_by_file_dict(file_prefix:str, range:int, records: dict[str, int]) -> dict[str, list[str]]: 
+    records_per_file = {}
+    for record_id, value in records.items():
+        try:
+            key = int(record_id)
+            file_name = f"{file_prefix}_{key//range}.csv"
+            records_per_file[file_name] = records_per_file.get(file_name, [])
+            records_per_file[file_name].append([record_id, value])
+        except ValueError as e:
+            print(f"Received {key}, Expected a numerical type in its place")
+            raise e
+    
+    return records_per_file
+
 #TODO: receive a dict instead of a list
-def sum_batch_to_records(dir: str, range: int, new_records: list[list[str]]):
+def sum_batch_to_records(dir: str, range: int, new_records: dict[str, int]):
 
     os.makedirs(dir, exist_ok=True)
     file_prefix = "partition"
+
     #get the file for each record in the batch -> {"file": [record1, record2], ....}
-    records_per_file = group_by_file(file_prefix, range, new_records)
+    records_per_file = group_by_file_dict(file_prefix, range, new_records)
 
     for file_name, records in records_per_file.items():
         file_path = os.path.join(dir, file_name) 
         if not os.path.exists(file_path):
             write_batch_by_range(dir, range, records)
-            return
+            continue
         
         temp_file = os.path.join(dir, f"temp_{file_name}")
 

@@ -1,7 +1,7 @@
 import logging
 import signal
 from common.middleware.middleware import Middleware, MiddlewareError
-from common.storage.storage import add_to_top, read_top, delete_directory
+from common.storage.storage import add_to_top, read_top, delete_directory, add_batch_to_sorted_file, read_sorted_file
 from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
@@ -52,45 +52,43 @@ class TopK:
     def __callback(self, delivery_tag, body, message_type, forwarding_queue_name):
 
         body = self.__middleware.get_rows_from_message(body)
-        for message in body:
-            # message = [value.strip() for value in message]
-            logging.debug(f"[INPUT GAMES] received: {message}")
+        logging.debug(f"[INPUT GAMES] received: {body}")
 
-            if len(message) == 1 and message[0] == END_TRANSMISSION_MESSAGE:
-                self.__total_ends_received += 1
-                logging.debug("END of games received")
-                logging.debug(
-                    f"Amount of ends received up to now: {self.__total_ends_received} | Expecting: {self.__config['AMOUNT_OF_RECEIVING_QUEUES']}"
-                )
+        if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
+            self.__total_ends_received += 1
+            logging.debug("END of games received")
+            logging.debug(
+                f"Amount of ends received up to now: {self.__total_ends_received} | Expecting: {self.__config['AMOUNT_OF_RECEIVING_QUEUES']}"
+            )
 
-                if (
-                    self.__total_ends_received
-                    == self.__config["AMOUNT_OF_RECEIVING_QUEUES"]
-                ):
-                    # TODO: Aca manda el topk
-                    self.__send_top(forwarding_queue_name)
-                    self.__middleware.send_end(queue=forwarding_queue_name)
+            if (
+                self.__total_ends_received
+                == self.__config["AMOUNT_OF_RECEIVING_QUEUES"]
+            ):
+                # TODO: Aca manda el topk
+                self.__send_top(forwarding_queue_name)
+                self.__middleware.send_end(queue=forwarding_queue_name)
 
-                self.__middleware.ack(delivery_tag)
+            self.__middleware.ack(delivery_tag)
 
-                # if not delete_directory('/tmp'):
-                #     logging.debug(f"Couldn't delete directory: {'/tmp'}")
-                # else:
-                #     logging.debug(f"Deleted directory: {'/tmp'}")
+            # if not delete_directory('/tmp'):
+            #     logging.debug(f"Couldn't delete directory: {'/tmp'}")
+            # else:
+            #     logging.debug(f"Deleted directory: {'/tmp'}")
 
-                return
+            return
 
-            try:
-                add_to_top("/tmp", message, int(self.__config["K"]))
-            except ValueError as e:
-                logging.error(
-                    f"An error has occurred. {e}",
-                )
+        try:
+            add_batch_to_sorted_file("/tmp", body, ascending=False, limit=int(self.__config["K"]))
+        except ValueError as e:
+            logging.error(
+                f"An error has occurred. {e}",
+            )
 
         self.__middleware.ack(delivery_tag)
 
     def __send_top(self, forwarding_queue_name):
-        for record in read_top("tmp/", int(self.__config["K"])):
+        for record in read_sorted_file("tmp/"):
             self.__middleware.publish(record, forwarding_queue_name, "")
 
         self.__middleware.publish_batch(forwarding_queue_name)

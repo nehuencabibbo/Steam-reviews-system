@@ -1,7 +1,7 @@
 import logging
 import signal
 from common.middleware.middleware import Middleware, MiddlewareError
-from common.storage.storage import read_by_range, write_by_range, delete_directory
+from common.storage.storage import read_by_range, write_by_range, delete_directory, write_batch_by_range
 from common.protocol.protocol import Protocol
 from utils.utils import node_id_to_send_to
 
@@ -58,29 +58,28 @@ class Join:
 
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
         body = self.__middleware.get_rows_from_message(body)
-        for message in body:
-            logging.debug(f"Recived game: {message}")
-            if len(message) == 1 and message[0] == END_TRANSMISSION_MESSAGE:
-                logging.debug("END of games received")
-                reviews_callback = self.__middleware.generate_callback(
-                    self.__reviews_callback,
-                    self.__config["INPUT_REVIEWS_QUEUE_NAME"],
-                    self.__config["OUTPUT_QUEUE_NAME"],
-                )
 
-                self.__middleware.attach_callback(
-                    self.__config["INPUT_REVIEWS_QUEUE_NAME"], reviews_callback
-                )
-                self.__middleware.ack(delivery_tag)
+        if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
+            logging.debug("END of games received")
+            reviews_callback = self.__middleware.generate_callback(
+                self.__reviews_callback,
+                self.__config["INPUT_REVIEWS_QUEUE_NAME"],
+                self.__config["OUTPUT_QUEUE_NAME"],
+            )
 
-                return
+            self.__middleware.attach_callback(
+                self.__config["INPUT_REVIEWS_QUEUE_NAME"], reviews_callback
+            )
+            self.__middleware.ack(delivery_tag)
 
-            try:
-                write_by_range("tmp/", int(self.__config["PARTITION_RANGE"]), message)
-            except ValueError as e:
-                logging.error(
-                    f"An error has occurred. {e}",
-                )
+            return
+
+        try:
+            write_batch_by_range("tmp/", int(self.__config["PARTITION_RANGE"]), body)
+        except ValueError as e:
+            logging.error(
+                f"An error has occurred. {e}",
+            )
 
         self.__middleware.ack(delivery_tag)
 

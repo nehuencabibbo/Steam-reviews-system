@@ -1,9 +1,7 @@
 import signal
 import logging
 
-import pika
 from common.middleware.middleware import Middleware, MiddlewareError
-from common.storage.storage import *
 from common.protocol.protocol import Protocol
 from common.storage import storage
 
@@ -13,7 +11,6 @@ END_TRANSMISSION_MESSAGE = "END"
 class CounterByAppId:
 
     def __init__(self, config, middleware: Middleware, protocol: Protocol):
-        self._protocol = protocol
         self._config = config
         self._middleware = middleware
         self._got_sigterm = False
@@ -41,25 +38,21 @@ class CounterByAppId:
 
     def handle_message(self, ch, method, properties, body):
 
-        # body = self._protocol.decode(body)
-        # body = [value.strip() for value in body]
-    
         body = self._middleware.get_rows_from_message(body)
 
-        for message in body:
+        logging.debug(f"GOT MSG: {body}")
 
-            logging.debug(f"GOT MSG: {message}")
-
-            if len(message) == 1 and message[0] == "END":
-                self.send_results()
-                self._middleware.ack(method.delivery_tag)
-                return
-
-            #record = f"{message[0]},{1}"
-            record = [message[0], 1]
-            storage.sum_to_record(
-                self._config["STORAGE_DIR"], self._config["RANGE_FOR_PARTITION"], record
-            )
+        if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
+            self.send_results()
+            self._middleware.ack(method.delivery_tag)
+            return
+        
+        count_per_record = {}
+        for record in body:
+            record_id = record[0]
+            count_per_record[record_id] = count_per_record.get(record_id, 0) + 1
+        
+        storage.sum_batch_to_records(self._config["STORAGE_DIR"], self._config["RANGE_FOR_PARTITION"], count_per_record)
 
         self._middleware.ack(method.delivery_tag)
 
@@ -69,9 +62,7 @@ class CounterByAppId:
 
         reader = storage.read_all_files(self._config["STORAGE_DIR"])
         for record in reader:
-            #message = record #[0].split(",")
             logging.debug(f"Sending: {record}")
-            # encoded_msg = self._protocol.encode(message)
             self._middleware.publish(record, queue_name)
 
         self._middleware.publish_batch(queue_name)
