@@ -121,14 +121,14 @@ class Join:
             for record in read_by_range(
                 "tmp/", int(self.__config["PARTITION_RANGE"]), app_id
             ):
-                record_splitted = record[0].split(",", maxsplit=1)
-                record_app_id = record_splitted[0]
+                # record_splitted = record.split(",", maxsplit=1)
+                record_app_id = record[0]
                 if app_id == int(record_app_id):
                     # Get rid of the app_id from the review and append it to the original game record
                     # TODO: QUE NO HAGA UNA LISTA!!
                     # joined_message = [record_app_id, record_info] + review[1:]
                     joined_message = self.__games_columns_to_keep(
-                        record_splitted
+                        record
                     ) + self.__reviews_columns_to_keep(review)
 
                     if (
