@@ -205,6 +205,8 @@ def add_join(
     output_queue_name: str,
     amount_of_behind_nodes: int,
     amount_of_forwarding_queues: int,
+    games_columns_to_keep: str,
+    reviews_columns_to_keep: str,
 ):
     output["services"][f"{query}_join{num}"] = {
         "container_name": f"{query}_join{num}",
@@ -215,6 +217,8 @@ def add_join(
             f"OUTPUT_QUEUE_NAME={output_queue_name}",
             f"AMOUNT_OF_BEHIND_NODES={amount_of_behind_nodes}",
             f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
+            f"GAMES_COLUMNS_TO_KEEP={games_columns_to_keep}",
+            f"REVIEWS_COLUMNS_TO_KEEP={reviews_columns_to_keep}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -421,6 +425,8 @@ def generate_q3(output: Dict):
         input_games_queue_name="0_q3_indie_games",  # Prefixed as it comes from a filter
         input_reviews_queue_name="q3_positive_review_count",
         output_queue_name="q3_join_by_app_id_result",
+        games_columns_to_keep="1",  # name
+        reviews_columns_to_keep="1",  # positive_review_count
         amount_of_behind_nodes=Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
         amount_of_forwarding_queues=Q3_AMOUNT_OF_TOP_K_NODES,
     )
@@ -445,15 +451,6 @@ def generate_q3(output: Dict):
         amount_of_top_k_nodes=Q3_AMOUNT_OF_TOP_K_NODES,
     )
 
-    # add_top_k(
-    #     output=output,
-    #     query="q3",
-    #     num=0,
-    #     input_top_k_queue_name="q3_join_by_app_id_result",
-    #     output_top_k_queue_name="Q3",
-    #     k=5,
-    # )
-
 
 def generate_q4(output: Dict):
     q4_filter_action_games_args = {
@@ -469,7 +466,7 @@ def generate_q4(output: Dict):
         "criteria": "CONTAINS",
         "columns_to_keep": "0,1",  # app_id, name
         "instances_of_myself": Q4_AMOUNT_OF_ACTION_GAMES_FILTERS,
-        "broadcasts": 0,
+        "broadcasts": 1,
     }
 
     generate_filters_by_value(
@@ -534,6 +531,8 @@ def generate_q4(output: Dict):
         output_queue_name="q4_first_join",
         amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
         amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
+        games_columns_to_keep="0,1",  # app_id, name
+        reviews_columns_to_keep="",  #
     )
 
     add_join(
@@ -543,8 +542,10 @@ def generate_q4(output: Dict):
         input_games_queue_name="0_q4_first_join",
         input_reviews_queue_name="1_q4_negative_reviews",
         output_queue_name="q4_second_join",
-        amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
+        amount_of_behind_nodes=1,  # 1  as the filters work as a group (will receive only one end from them)
         amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
+        games_columns_to_keep="0",  # app_id
+        reviews_columns_to_keep="1",  # review
         # TODO: BATCHSIZE
     )
 
@@ -556,7 +557,7 @@ def generate_q4(output: Dict):
         "output_queue_name": "q4_english_reviews",
         "amount_of_forwarding_queues": 1,
         "logging_level": "DEBUG",
-        "column_number_to_use": 2,  # review
+        "column_number_to_use": 1,  # review
         "value_to_filter_by": "en",
         "criteria": "LANGUAGE",
         "columns_to_keep": "0",  # app_id
@@ -604,6 +605,8 @@ def generate_q4(output: Dict):
         output_queue_name="Q4",
         amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
         amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
+        games_columns_to_keep="0,1",  # app_id, name
+        reviews_columns_to_keep="1",  # count
     )
 
 
@@ -666,6 +669,8 @@ def generate_q5(output: Dict):
         output_queue_name="q5_percentile",
         amount_of_behind_nodes=Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
         amount_of_forwarding_queues=1,
+        games_columns_to_keep="1",  # app_id, name
+        reviews_columns_to_keep="1",  # count
     )
 
     add_percentile(
@@ -696,7 +701,7 @@ def generate_output():
     generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
     generate_q4(output=output)
-    # -------------------------------------------- Q5 -----------------------------------------
+    # # -------------------------------------------- Q5 -----------------------------------------
     generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 

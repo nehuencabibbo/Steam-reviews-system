@@ -46,6 +46,25 @@ def get_config():
                 config["DEFAULT"]["AMOUNT_OF_FORWARDING_QUEUES"],
             )
         )
+        games_columns_to_keep = os.getenv(
+            "GAMES_COLUMNS_TO_KEEP", config["DEFAULT"]["GAMES_COLUMNS_TO_KEEP"]
+        ).split(",")
+        games_columns_to_keep = (
+            [int(column) for column in games_columns_to_keep]
+            if games_columns_to_keep[0] != ""
+            else []
+        )
+        config_params["GAMES_COLUMNS_TO_KEEP"] = games_columns_to_keep
+
+        reviews_columns_to_keep = os.getenv(
+            "REVIEWS_COLUMNS_TO_KEEP", config["DEFAULT"]["REVIEWS_COLUMNS_TO_KEEP"]
+        ).split(",")
+        reviews_columns_to_keep = (
+            [int(column) for column in reviews_columns_to_keep]
+            if reviews_columns_to_keep[0] != ""
+            else []
+        )
+        config_params["REVIEWS_COLUMNS_TO_KEEP"] = reviews_columns_to_keep
 
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")

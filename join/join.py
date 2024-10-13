@@ -123,11 +123,15 @@ class Join:
             for record in read_by_range(
                 "tmp/", int(self.__config["PARTITION_RANGE"]), app_id
             ):
-                record_app_id, record_info = record[0].split(",", maxsplit=1)
+                record_splitted = record[0].split(",", maxsplit=1)
+                record_app_id = record_splitted[0]
                 if app_id == int(record_app_id):
                     # Get rid of the app_id from the review and append it to the original game record
                     # TODO: QUE NO HAGA UNA LISTA!!
-                    joined_message = [record_app_id, record_info] + review[1:]
+                    # joined_message = [record_app_id, record_info] + review[1:]
+                    joined_message = self.__games_columns_to_keep(
+                        record_splitted
+                    ) + self.__reviews_columns_to_keep(review)
 
                     if (
                         "Q" in forwarding_queue_name
@@ -171,5 +175,8 @@ class Join:
             self.__middleware.send_end(f"{i}_{forwarding_queue_name}")
             logging.debug(f"Sent end to: {i}_{forwarding_queue_name}")
 
+    def __games_columns_to_keep(self, games_record: list[str]):
+        return [games_record[i] for i in self.__config["GAMES_COLUMNS_TO_KEEP"]]
 
-# TODO: make sigterm handle
+    def __reviews_columns_to_keep(self, reviews_record: list[str]):
+        return [reviews_record[i] for i in self.__config["REVIEWS_COLUMNS_TO_KEEP"]]

@@ -9,6 +9,7 @@ END_TRANSMISSION_MESSAGE = ["END"]
 FILE_NAME = "percentile_data.csv"
 NO_RECORDS = 0
 
+
 class Percentile:
 
     def __init__(self, config: dict, middleware: Middleware, protocol: Protocol):
@@ -48,15 +49,17 @@ class Percentile:
                 self.handle_end_message()
                 self._middleware.ack(method.delivery_tag)
                 return
-            
-            message = message[1:] # TODO: Remove after fixing join
+
+            # message = message[1:] # TODO: Remove after fixing join
             logging.debug(f"GOT MSG: {message}")
 
             self._tmp_record_list.append(message)
 
             self._amount_msg_received += 1
-            
-            have_to_save_batch = (self._amount_msg_received % self._config["SAVE_AFTER_MESSAGES"]) == 0
+
+            have_to_save_batch = (
+                self._amount_msg_received % self._config["SAVE_AFTER_MESSAGES"]
+            ) == 0
             if have_to_save_batch:
                 logging.debug(f"Pesisting data in temporary storage")
                 self.persist_data()
@@ -103,7 +106,7 @@ class Percentile:
                 _, value = row
                 logging.debug(f"VALUE: {value}")
                 return int(value)
-        
+
         return NO_RECORDS
 
     def __sigterm_handler(self, signal, frame):
