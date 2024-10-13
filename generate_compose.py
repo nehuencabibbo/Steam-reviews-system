@@ -197,7 +197,7 @@ def add_filter_by_value(
         "environment": [
             f"NODE_ID={num}",
             f"RECIVING_QUEUE_NAME={input_queue_name}",
-            f"FORWARDING_QUEUE_NAME={output_queue_name}",
+            f"FORWARDING_QUEUE_NAMES={output_queue_name}",
             f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
             f"LOGGING_LEVEL={logging_level}",
             f"COLUMN_NUMBER_TO_USE={column_number_to_use}",
@@ -362,7 +362,7 @@ def generate_q2(output=Dict):
         "input_queue_name": "q2_games",
         "output_queue_name": "q2_indie_games",
         "amount_of_forwarding_queues": 1,
-        "logging_level": "INFO",
+        "logging_level": "DEBUG",
         "column_number_to_use": 4,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
@@ -784,6 +784,7 @@ def generate_q5(output: Dict):
         "query": "q5",
         "consume_queue_sufix": "q5_negative_reviews",
         "publish_queue": "0_q5_counter",
+        "amount_of_forwarding_queues": 1, # TODO: Change
     }
 
     generate_counters_by_app_id(
@@ -830,7 +831,7 @@ def generate_output():
     # # -------------------------------------------- Q3 -----------------------------------------
     generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output)
+    # generate_q4(output=output)
     # # # -------------------------------------------- Q5 -----------------------------------------
     # generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------

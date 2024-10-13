@@ -50,15 +50,25 @@ def get_config():
         )
 
         # Forwarding queues
-        config_params["FORWARDING_QUEUE_NAME"] = os.getenv(
-            "FORWARDING_QUEUE_NAME", config["DEFAULT"]["FORWARDING_QUEUE_NAME"]
-        )
-        config_params["AMOUNT_OF_FORWARDING_QUEUES"] = int(
-            os.getenv(
+        # This is a list of forwarding queues
+        forwarding_queues_env_var = os.getenv(
+                "FORWARDING_QUEUE_NAMES",
+                config["DEFAULT"]["FORWARDING_QUEUE_NAMES"],
+            )
+        config_params["FORWARDING_QUEUE_NAMES"] = forwarding_queues_env_var.split(',')
+        # This is a list of amount_of_forwarding queues, where
+        # the element 0 corresponds to the amount of forwarding queues in
+        # the first position of config_params["FORWARDING_QUEUE_NAME"],
+        # element 1 corresponds to the second position of the list, and
+        # so on
+        amount_of_forwarding_queues_env_var = os.getenv(
                 "AMOUNT_OF_FORWARDING_QUEUES",
                 config["DEFAULT"]["AMOUNT_OF_FORWARDING_QUEUES"],
             )
-        )
+        amount_of_forwarding_queues = [
+            int(value) for value in amount_of_forwarding_queues_env_var.split(',')
+        ]
+        config_params["AMOUNT_OF_FORWARDING_QUEUES"] = amount_of_forwarding_queues
 
         config_params["BATCH_SIZE"] = int(
             os.getenv(

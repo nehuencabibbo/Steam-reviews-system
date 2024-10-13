@@ -27,6 +27,19 @@ class FilterColumnByValue:
         self._middleware = middleware
         self._config = config
         self._got_sigterm = False
+        self._filter_by_criteria: Callable[[List[str]], None] = None
+
+        # Config variables 
+        # Config variables that are recurrently accesed in callback functions are 
+        # stored so there's no unnecesary key hashing for dictionary access each
+        # time the callback function is called 
+        self._forwarding_queue_names: List[str] = self._config["FORWARDING_QUEUE_NAMES"]
+        self._amount_of_forwarding_queues: List[int] = self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+        self._columns_to_keep: List[int] = self._config["COLUMNS_TO_KEEP"]
+        self._column_number_to_use: int = self._config["COLUMN_NUMBER_TO_USE"]
+        self._value_to_filter_by: str = self._config["VALUE_TO_FILTER_BY"]
+        self._node_id: str = self._config["NODE_ID"]
+
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
@@ -35,12 +48,10 @@ class FilterColumnByValue:
         self._middleware.create_queue(self._config["RECIVING_QUEUE_NAME"])
 
         # Forwarding queues
-        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            self._middleware.create_queue(
-                f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
-            )
+        self.__create_all_forwarding_queues()
 
         # Attaching callback functions
+        self.__set_callback_according_to_criteria()
         callback = self._middleware.__class__.generate_callback(
             self.__handle_message,
         )
@@ -52,6 +63,31 @@ class FilterColumnByValue:
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
+
+    def __create_all_forwarding_queues(self):
+        '''
+        If amount_of_forwarding_queues = [2, 3] and forwarding_queue_names = ['pablo', 'rabbit']
+        then the following queues will be created: 
+
+        - 0_pablo
+        - 1_pablo
+        - 0_rabbit
+        - 1_rabbit
+        - 2_rabbit
+        '''
+        for i in range(len(self._amount_of_forwarding_queues)):
+            queues_to_create = self._amount_of_forwarding_queues[i]
+            queue_name = self._forwarding_queue_names[i]
+
+            logging.info(f"CREATING_QUEUES: {queues_to_create}")
+            logging.info(f"OF TYPE: {queue_name}")
+            for queue_number in range(queues_to_create):
+                logging.info(f"IN LOOP: {queue_number}")
+                full_queue_name = f"{queue_number}_{queue_name}"
+                self._middleware.create_queue(
+                    full_queue_name
+                )
+
 
     def __handle_end_transmission(self, body: List[str]):
         # Si me llego un END...
@@ -68,8 +104,8 @@ class FilterColumnByValue:
         else:
 
             message = [END_TRANSMISSION_MESSAGE]
-            if not self._config["NODE_ID"] in peers_that_recived_end:
-                peers_that_recived_end.append(self._config["NODE_ID"])
+            if not self._node_id in peers_that_recived_end:
+                peers_that_recived_end.append(self._node_id)
 
             message += peers_that_recived_end
 
@@ -77,114 +113,147 @@ class FilterColumnByValue:
                 message, self._config["RECIVING_QUEUE_NAME"]
             )
 
-    def _send_last_batch_to_fowarding_queues(self):
-        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            queue_name = f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
-            self._middleware.publish_batch(queue_name)
+    def __send_last_batch_to_fowarding_queues(self):
+        # TODO: Repeated code between this and send end, remove
+        for i in range(len(self._amount_of_forwarding_queues)):
+            amount_of_current_queue = self._amount_of_forwarding_queues[i]
+            queue_name = self._forwarding_queue_names[i]
+                
+            logging.info(f"AMOUNT_OF_CURRENT_QUEUE: {amount_of_current_queue}")
+            for queue_number in range(amount_of_current_queue):
+                full_queue_name = f"{queue_number}_{queue_name}"
+                logging.debug(f'Sending last batch to queue: {full_queue_name}')
+
+                self._middleware.publish_batch(full_queue_name)
 
     def __send_end_transmission_to_all_forwarding_queues(self):
-        # TODO: Verify that EVERY queue is started at 0
-        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            self._middleware.send_end(
-                queue=f"{i}_{self._config['FORWARDING_QUEUE_NAME']}"
-            )
+        # TODO: Repeated code between this and send last batch, remove
+        for i in range(len(self._amount_of_forwarding_queues)):
+            amount_of_current_queue = self._amount_of_forwarding_queues[i]
+            queue_name = self._forwarding_queue_names[i]
 
-    def __handle_message(self, delivery_tag: int, body: bytes):
+            for queue_number in range(amount_of_current_queue):
+                full_queue_name = f"{queue_number}_{queue_name}"
+                logging.debug(f'Sending END to queue: {full_queue_name}')
+
+                self._middleware.send_end(
+                    queue=full_queue_name
+                )
+
+    def __handle_message(
+            self, 
+            delivery_tag: int, 
+            body: bytes
+        ):
         body = self._middleware.get_rows_from_message(body)
         for message in body:
-            # message = [value.strip() for value in message]
             logging.debug(f"Recived message: {message}")
 
             if message[0] == END_TRANSMISSION_MESSAGE:
-                self._send_last_batch_to_fowarding_queues()
+                self.__send_last_batch_to_fowarding_queues()
                 self.__handle_end_transmission(message)
                 self._middleware.ack(delivery_tag)
 
                 return
 
-            self.__filter_according_to_criteria(message)
+            self._filter_by_criteria(message)
 
         self._middleware.ack(delivery_tag)
 
-    def __filter_according_to_criteria(self, body: List[str]):
-        column_to_use = body[self._config["COLUMN_NUMBER_TO_USE"]]
-        value_to_filter_by = self._config["VALUE_TO_FILTER_BY"]
+    def __set_callback_according_to_criteria(self):
         criteria = self._config["CRITERIA"]
 
         if criteria == EQUAL_CRITERIA_KEYWORD:
-            if column_to_use == value_to_filter_by:
-                self.__send_message(body)
+            self._filter_by_criteria = self.__filter_equal
 
         elif criteria == GRATER_THAN_CRITERIA_KEYWORD:
-            try:
-                column_to_use = int(column_to_use)
-                value_to_filter_by = int(value_to_filter_by)
-            except ValueError as e:
-                logging.debug(f"Failed integer conversion: {e}")
-
-            if column_to_use > value_to_filter_by:
-                self.__send_message(body)
+            self._filter_by_criteria = self.__filter_greater_than
 
         elif criteria == CONTAINS_CRITERIA_KEYWORD:
-            if value_to_filter_by in column_to_use.lower():
-                self.__send_message(body)
+            self._filter_by_criteria = self.__filter_contains
 
         elif criteria == LANGUAGE_CRITERIA_KEYWORD:
-            detected_language, _ = langid.classify(column_to_use)
-            if detected_language == value_to_filter_by.lower():
-                self.__send_message(body)
+            self.__filter_language
 
         elif criteria == EQUAL_FLOAT_CRITERIA_KEYWORD:
-            try:
-                column_to_use = float(column_to_use)
-                value_to_filter_by = float(value_to_filter_by)
-            except ValueError as e:
-                logging.debug(f"Failed float conversion: {e}")
-
-            if column_to_use == value_to_filter_by:
-                self.__send_message(body)
+            self._filter_by_criteria = self.__filter_equal_float
         else:
             raise Exception(f"Unkown cirteria: {criteria}")
 
-    def __filter_columns(self, columns_to_keep: List[int], data: List[str]):
+    def __filter_equal(self, body: List[str]):
+        column_to_use = body[self._column_number_to_use]
+        if column_to_use == self._value_to_filter_by:
+            self.__send_message(body)
+
+    def __filter_greater_than(self, body: List[str]):
+        column_to_use = body[self._column_number_to_use]
+        try:
+            column_to_use = int(column_to_use)
+            value_to_filter_by = int(self._value_to_filter_by)
+        except ValueError as e:
+            logging.debug(f"Failed integer conversion: {e}")
+
+        if column_to_use > value_to_filter_by:
+            self.__send_message(body)
+
+    def __filter_contains(self, body: List[str]):
+        column_to_use = body[self._column_number_to_use]
+        if self._value_to_filter_by in column_to_use.lower():
+            self.__send_message(body)
+
+    def __filter_language(self, body: List[str]):
+        column_to_use = body[self._column_number_to_use]
+        detected_language, _ = langid.classify(column_to_use)
+        if detected_language == self._value_to_filter_by.lower():
+            self.__send_message(body)
+
+    def __filter_equal_float(self, body: List[str]): 
+        column_to_use = body[self._column_number_to_use]
+        try:
+            column_to_use = float(column_to_use)
+            value_to_filter_by = float(self._value_to_filter_by)
+        except ValueError as e:
+            logging.debug(f"Failed float conversion: {e}")
+
+        if column_to_use == value_to_filter_by:
+            self.__send_message(body)
+
+
+    def __filter_columns(self, data: List[str]):
         # No filter needed
-        if len(columns_to_keep) == 1 and columns_to_keep[0] == -1:
+        if len(self._columns_to_keep) == 1 and self._columns_to_keep[0] == -1:
             return data
 
-        return [data[i] for i in columns_to_keep]
+        return [data[i] for i in self._columns_to_keep]
 
     def __send_message(self, message: List[str]):
         """
         Do not use to send END message as it is handled differently.
         """
-        message = self.__filter_columns(self._config["COLUMNS_TO_KEEP"], message)
-        if self._config["BROADCASTS"]:
+        message = self.__filter_columns(message)
+        
+        for i in range(len(self._amount_of_forwarding_queues)):
+            amount_of_current_queue = self._amount_of_forwarding_queues[i]
+            queue_name = self._forwarding_queue_names[i]
 
-            self.__broadcast(message=message)
-            return
+            node_id = node_id_to_send_to(
+                "1", 
+                message[APP_ID], 
+                amount_of_current_queue
+            )
 
-        # TODO: Change with app id when available
-        # for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-        node_id = node_id_to_send_to(
-            "1", message[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
-        )
-        logging.debug(
-            f'Sending message: {message} to queue: {node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
-        )
-        self._middleware.publish(
-            message, f'{node_id}_{self._config["FORWARDING_QUEUE_NAME"]}'
-        )
+            queue_to_send_to = f"{node_id}_{queue_name}"
+
+            logging.debug(
+                f'Sending message: {message} to queue: {queue_to_send_to}'
+            )
+            # TODO: Use batches here? 
+            self._middleware.publish(
+                message, 
+                queue_to_send_to
+            )
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
         self._got_sigterm = True
         self._middleware.shutdown()
-
-    def __broadcast(self, message: list[str]):
-        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            logging.debug(
-                f'Sending message: {message} to queue: {i}_{self._config["FORWARDING_QUEUE_NAME"]}'
-            )
-            self._middleware.publish(
-                message, f'{i}_{self._config["FORWARDING_QUEUE_NAME"]}'
-            )
