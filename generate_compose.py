@@ -17,12 +17,12 @@ Q3_AMOUNT_OF_TOP_K_NODES = 3
 # Q4
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 1
 Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 1
+Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 1
 Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 1
 Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 1
-Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
 # Q5
-Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
-Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
+Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
+Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
 Q5_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
 
 
@@ -177,6 +177,7 @@ def add_filter_by_value(
     columns_to_keep: str,
     instances_of_myself: str,
     batch_size: int = 10,
+    broadcasts: int = 0,
 ):
     output["services"][f"{query}_filter_{filter_name}{num}"] = {
         "image": "filter_by_column_value:latest",
@@ -193,6 +194,7 @@ def add_filter_by_value(
             f"COLUMNS_TO_KEEP={columns_to_keep}",
             f"INSTANCES_OF_MYSELF={instances_of_myself}",
             f"BATCH_SIZE={batch_size}",
+            f"BROADCASTS={broadcasts}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -209,6 +211,8 @@ def add_join(
     output_queue_name: str,
     amount_of_behind_nodes: int,
     amount_of_forwarding_queues: int,
+    games_columns_to_keep: str,
+    reviews_columns_to_keep: str,
 ):
     output["services"][f"{query}_join{num}"] = {
         "container_name": f"{query}_join{num}",
@@ -220,6 +224,8 @@ def add_join(
             f"AMOUNT_OF_BEHIND_NODES={amount_of_behind_nodes}",
             f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
             "LOGGING_LEVEL=DEBUG",
+            f"GAMES_COLUMNS_TO_KEEP={games_columns_to_keep}",
+            f"REVIEWS_COLUMNS_TO_KEEP={reviews_columns_to_keep}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -430,6 +436,8 @@ def generate_q3(output: Dict):
         input_games_queue_name="0_q3_indie_games",  # Prefixed as it comes from a filter
         input_reviews_queue_name="q3_positive_review_count",
         output_queue_name="q3_join_by_app_id_result",
+        games_columns_to_keep="1",  # name
+        reviews_columns_to_keep="1",  # positive_review_count
         amount_of_behind_nodes=Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
         amount_of_forwarding_queues=Q3_AMOUNT_OF_TOP_K_NODES,
     )
@@ -454,15 +462,6 @@ def generate_q3(output: Dict):
         amount_of_top_k_nodes=Q3_AMOUNT_OF_TOP_K_NODES,
     )
 
-    # add_top_k(
-    #     output=output,
-    #     query="q3",
-    #     num=0,
-    #     input_top_k_queue_name="q3_join_by_app_id_result",
-    #     output_top_k_queue_name="Q3",
-    #     k=5,
-    # )
-
 
 def generate_q4(output: Dict):
     q4_filter_action_games_args = {
@@ -471,13 +470,14 @@ def generate_q4(output: Dict):
         "filter_name": "action_games",
         "input_queue_name": "q4_games",
         "output_queue_name": "q4_action_games",
-        "amount_of_forwarding_queues": 1,
+        "amount_of_forwarding_queues": 2,
         "logging_level": "INFO",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
         "columns_to_keep": "0,1",  # app_id, name
         "instances_of_myself": Q4_AMOUNT_OF_ACTION_GAMES_FILTERS,
+        "broadcasts": 1,
     }
 
     generate_filters_by_value(
@@ -490,32 +490,88 @@ def generate_q4(output: Dict):
         "filter_name": "negative",
         "input_queue_name": "q4_reviews",
         "output_queue_name": "q4_negative_reviews",
-        "amount_of_forwarding_queues": 1,
+        "amount_of_forwarding_queues": 2,
         "logging_level": "INFO",
         "column_number_to_use": 2,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
-        "columns_to_keep": "0,1,2",  # app_id, review_score, review
+        "columns_to_keep": "0,1",  # app_id, review
         "instances_of_myself": Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
-        "batch_size": 1,
+        # "batch_size": ,
+        "broadcasts": 1,
     }
 
     generate_filters_by_value(
         Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS, **q4_filter_negative_reviews_args
     )
 
+    q4_negative_reviews_counter_args = {
+        "output": output,
+        "query": "q4_first_counter",
+        "consume_queue_sufix": "q4_negative_reviews",
+        "publish_queue": "q4_negative_reviews_count",
+    }
+    generate_counters_by_app_id(
+        Q4_AMOUNT_OF_COUNTERS_BY_APP_ID, **q4_negative_reviews_counter_args
+    )
+
+    q4_filter_more_than_5000_args = {
+        "output": output,
+        "query": "q4",
+        "filter_name": "first_more_than_5000_",
+        "input_queue_name": "q4_negative_reviews_count",
+        "output_queue_name": "q4_filter_first_more_than_5000_reviews",
+        "amount_of_forwarding_queues": 1,
+        "logging_level": "DEBUG",
+        "column_number_to_use": 1,  # positive_review_count
+        "value_to_filter_by": 5000,
+        "criteria": "GREATER_THAN",
+        "columns_to_keep": "0",  # app_id
+        "instances_of_myself": Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS,
+    }
+    generate_filters_by_value(
+        Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS, **q4_filter_more_than_5000_args
+    )
+
+    add_join(
+        output=output,
+        query="q4",
+        num=0,
+        input_games_queue_name="0_q4_action_games",
+        input_reviews_queue_name="0_q4_filter_first_more_than_5000_reviews",
+        output_queue_name="q4_first_join",
+        amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
+        amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
+        games_columns_to_keep="0,1",  # app_id, name
+        reviews_columns_to_keep="",  #
+    )
+
+    add_join(
+        output=output,
+        query="q4",
+        num=1,
+        input_games_queue_name="0_q4_first_join",
+        input_reviews_queue_name="1_q4_negative_reviews",
+        output_queue_name="q4_second_join",
+        amount_of_behind_nodes=1,  # 1  as the filters work as a group (will receive only one end from them)
+        amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
+        games_columns_to_keep="0",  # app_id
+        reviews_columns_to_keep="1",  # review
+        # TODO: BATCHSIZE
+    )
+
     q4_filter_english_reviews_args = {
         "output": output,
         "query": "q4",
         "filter_name": "english",
-        "input_queue_name": "0_q4_negative_reviews",
+        "input_queue_name": "0_q4_second_join",
         "output_queue_name": "q4_english_reviews",
         "amount_of_forwarding_queues": 1,
         "logging_level": "INFO",
         "column_number_to_use": 1,  # review
         "value_to_filter_by": "en",
         "criteria": "LANGUAGE",
-        "columns_to_keep": "0,1",  # app_id, review_score
+        "columns_to_keep": "0",  # app_id
         "instances_of_myself": Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS,
     }
 
@@ -525,7 +581,7 @@ def generate_q4(output: Dict):
 
     q4_english_reviews_counter_args = {
         "output": output,
-        "query": "q4",
+        "query": "q4_second_counter",
         "consume_queue_sufix": "q4_english_reviews",
         "publish_queue": "q4_english_review_count",
     }
@@ -536,12 +592,12 @@ def generate_q4(output: Dict):
     q4_filter_more_than_5000_args = {
         "output": output,
         "query": "q4",
-        "filter_name": "more_than_5000",
+        "filter_name": "second_more_than_5000_",
         "input_queue_name": "q4_english_review_count",
-        "output_queue_name": "q4_filter_more_than_5000_reviews",
+        "output_queue_name": "q4_second_filter_more_than_5000",
         "amount_of_forwarding_queues": 1,
         "logging_level": "INFO",
-        "column_number_to_use": 1,  # positive_review_count
+        "column_number_to_use": 1,  # negative_english_review_count
         "value_to_filter_by": 5000,
         "criteria": "GREATER_THAN",
         "columns_to_keep": "0,1",  # app_id, positive_review_count
@@ -554,12 +610,14 @@ def generate_q4(output: Dict):
     add_join(
         output=output,
         query="q4",
-        num=0,
-        input_games_queue_name="0_q4_action_games",
-        input_reviews_queue_name="0_q4_filter_more_than_5000_reviews",
+        num=2,
+        input_games_queue_name="1_q4_action_games",
+        input_reviews_queue_name="0_q4_second_filter_more_than_5000",
         output_queue_name="Q4",
         amount_of_behind_nodes=1,  # 1 as the filters work as a group (will receive only one end from them)
         amount_of_forwarding_queues=1,  # 1 as the filters work as a group (will receive only one end from them)
+        games_columns_to_keep="0,1",  # app_id, name
+        reviews_columns_to_keep="1",  # count
     )
 
 
@@ -569,14 +627,15 @@ def generate_q5(output: Dict):
         "query": "q5",
         "filter_name": "action_games",
         "input_queue_name": "q5_games",
-        "output_queue_name": "q5_shooter_games",
+        "output_queue_name": "q5_action_games",
         "amount_of_forwarding_queues": 1,
-        "logging_level": "INFO",
+        "logging_level": "DEBUG",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
         "columns_to_keep": "0,1",  # app_id, positive_review_count
         "instances_of_myself": Q5_AMOUNT_OF_ACTION_GAMES_FILTERS,
+        "broadcasts": 0,
     }
     generate_filters_by_value(
         Q5_AMOUNT_OF_ACTION_GAMES_FILTERS, **q5_filter_action_games_args
@@ -589,12 +648,13 @@ def generate_q5(output: Dict):
         "input_queue_name": "q5_reviews",
         "output_queue_name": "q5_negative_reviews",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
-        "logging_level": "INFO",
+        "logging_level": "DEBUG",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
         "columns_to_keep": "0",  # app_id, positive_review_count
         "instances_of_myself": Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
+        "broadcasts": 0,
     }
     generate_filters_by_value(
         Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS, **q5_filter_negative_reviews_args
@@ -615,11 +675,13 @@ def generate_q5(output: Dict):
         output=output,
         query="q5",
         num=0,
-        input_games_queue_name="0_q5_shooter_games",
+        input_games_queue_name="0_q5_action_games",
         input_reviews_queue_name="0_q5_counter",
         output_queue_name="q5_percentile",
         amount_of_behind_nodes=Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
         amount_of_forwarding_queues=1,
+        games_columns_to_keep="1",  # app_id, name
+        reviews_columns_to_keep="1",  # count
     )
 
     add_percentile(
@@ -650,7 +712,7 @@ def generate_output():
     generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
     generate_q4(output=output)
-    # -------------------------------------------- Q5 -----------------------------------------
+    # # -------------------------------------------- Q5 -----------------------------------------
     generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
