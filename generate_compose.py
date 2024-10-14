@@ -816,15 +816,15 @@ def generate_output():
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    # generate_q1(output=output)
+    generate_q1(output=output)
     # # -------------------------------------------- Q2 -----------------------------------------
-    # generate_q2(output=output)
+    generate_q2(output=output)
     # # -------------------------------------------- Q3 -----------------------------------------
-    # generate_q3(output=output)
+    generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output)
+    # generate_q4(output=output)
     # # # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output)
+    generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

@@ -71,7 +71,7 @@ class CounterByAppId:
         reader = storage.read_all_files(self._config["STORAGE_DIR"])
 
         for record in reader:
-            self.__send_record_to_forwarding_queues()
+            self.__send_record_to_forwarding_queues(record)
 
             # self._middleware.publish(record, queue_name)
 
@@ -87,7 +87,7 @@ class CounterByAppId:
         # logging.debug(f'END SENT TO: {self._config["PUBLISH_QUEUE"]}')
 
     def __send_record_to_forwarding_queues(self, record: List[str]):
-        for queue_number in self._config["AMOUNT_OF_FORWARDING_QUEUES"]:
+        for queue_number in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
             full_queue_name = f'{queue_number}_{self._config["PUBLISH_QUEUE"]}'
 
             logging.debug(f"Sending record: {record} to queue: {full_queue_name}")
@@ -95,7 +95,7 @@ class CounterByAppId:
             self._middleware.publish(record, full_queue_name)
 
     def __send_last_batch_to_forwarding_queues(self):
-        for queue_number in self._config["AMOUNT_OF_FORWARDING_QUEUES"]:   
+        for queue_number in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):   
             full_queue_name = f'{queue_number}_{self._config["PUBLISH_QUEUE"]}'
 
             logging.debug(f'Sending last batch to queue: {full_queue_name}')
