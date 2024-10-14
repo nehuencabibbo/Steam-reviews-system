@@ -1,5 +1,6 @@
 import signal
 import logging
+from typing import * 
 
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.protocol.protocol import Protocol
@@ -70,19 +71,11 @@ class CounterByAppId:
         reader = storage.read_all_files(self._config["STORAGE_DIR"])
 
         for record in reader:
-            node_id = node_id_to_send_to(
-                "1", record[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
-            )
-            queue = f"{node_id}_{queue_name}"
-            logging.debug(f"Sending message: {record} to queue: {queue}")
-            self._middleware.publish(record, queue)
+            self.__send_record_to_forwarding_queues()
 
             # self._middleware.publish(record, queue_name)
 
-        node_id = node_id_to_send_to(
-            "1", record[APP_ID], self._config["AMOUNT_OF_FORWARDING_QUEUES"]
-        )
-        self._middleware.publish_batch(f"{node_id}_{queue_name}")
+        self.__send_last_batch_to_forwarding_queues()
         self.__send_end_to_forwarding_queues(prefix_queue_name=queue_name)
 
         # if not delete_directory(self._config["STORAGE_DIR"]):
@@ -93,9 +86,25 @@ class CounterByAppId:
         # self._middleware.publish(encoded_msg, queue_name=self._config["PUBLISH_QUEUE"])
         # logging.debug(f'END SENT TO: {self._config["PUBLISH_QUEUE"]}')
 
+    def __send_record_to_forwarding_queues(self, record: List[str]):
+        for queue_number in self._config["AMOUNT_OF_FORWARDING_QUEUES"]:
+            full_queue_name = f'{queue_number}_{self._config["PUBLISH_QUEUE"]}'
+
+            logging.debug(f"Sending record: {record} to queue: {full_queue_name}")
+
+            self._middleware.publish(record, full_queue_name)
+
+    def __send_last_batch_to_forwarding_queues(self):
+        for queue_number in self._config["AMOUNT_OF_FORWARDING_QUEUES"]:   
+            full_queue_name = f'{queue_number}_{self._config["PUBLISH_QUEUE"]}'
+
+            logging.debug(f'Sending last batch to queue: {full_queue_name}')
+
+            self._middleware.publish_batch(full_queue_name)
+
     def __send_end_to_forwarding_queues(self, prefix_queue_name):
         for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            self._middleware.send_end(f"{i}_{prefix_queue_name}")
+            self._middleware.send_end(f'{i}_{prefix_queue_name}')
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
