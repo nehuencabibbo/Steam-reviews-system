@@ -80,6 +80,7 @@ class Join:
 
             return
 
+        logging.debug(f"Recived game: {body}")
         try:
             write_batch_by_range("tmp/", int(self.__config["PARTITION_RANGE"]), body)
         except ValueError as e:
@@ -94,7 +95,6 @@ class Join:
     ):
         body = self.__middleware.get_rows_from_message(body)
         for review in body:
-            logging.debug(f"Recived review: {review}")
 
             if len(review) == 1 and review[0] == END_TRANSMISSION_MESSAGE:
 
@@ -121,6 +121,7 @@ class Join:
 
                 return
 
+            logging.debug(f"Recived review: {review}")
             # TODO: handle conversion error
             app_id = int(review[0])
             for record in read_by_range(
@@ -139,6 +140,8 @@ class Join:
                     if (
                         "Q" in forwarding_queue_name
                     ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
+                        # TODO: ???
+                        logging.debug(f"Q - Sending {joined_message} to queue {forwarding_queue_name}")
                         self.__middleware.publish(
                             joined_message,
                             forwarding_queue_name,

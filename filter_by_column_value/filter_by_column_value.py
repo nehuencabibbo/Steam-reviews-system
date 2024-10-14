@@ -100,7 +100,6 @@ class FilterColumnByValue:
         peers_that_recived_end = body[1:]
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
             self.__send_end_transmission_to_all_forwarding_queues()
-
         else:
 
             message = [END_TRANSMISSION_MESSAGE]
@@ -173,10 +172,11 @@ class FilterColumnByValue:
             self._filter_by_criteria = self.__filter_contains
 
         elif criteria == LANGUAGE_CRITERIA_KEYWORD:
-            self.__filter_language
+            self._filter_by_criteria = self.__filter_language
 
         elif criteria == EQUAL_FLOAT_CRITERIA_KEYWORD:
             self._filter_by_criteria = self.__filter_equal_float
+
         else:
             raise Exception(f"Unkown cirteria: {criteria}")
 

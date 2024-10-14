@@ -76,14 +76,6 @@ def get_config():
                 config["DEFAULT"]["BATCH_SIZE"],
             )
         )
-        config_params["BROADCASTS"] = bool(
-            int(
-                os.getenv(
-                    "BROADCASTS",
-                    config["DEFAULT"]["BROADCASTS"],
-                )
-            )
-        )
 
         config_params["PREFETCH_COUNT"] = int(
             os.getenv(
