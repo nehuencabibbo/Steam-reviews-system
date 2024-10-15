@@ -72,7 +72,7 @@ def add_drop_nulls(output: Dict, num: int):
             f"NODE_ID={num}",
             "COUNT_BY_PLATFORM_NODES=1",  # TODO: change when scaling
             f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_NULLS}",
-            "LOGGING_LEVEL=INFO",
+            "LOGGING_LEVEL=DEBUG",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],

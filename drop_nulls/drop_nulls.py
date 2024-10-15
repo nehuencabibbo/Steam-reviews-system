@@ -150,6 +150,7 @@ class DropNulls:
 
             logging.debug(f"Recived game: {message}")
             if NULL_FIELD_VALUE in message:
+                logging.debug("Dropped prev value")
                 continue
                 # self._middleware.ack(delivery_tag)
                 # return
