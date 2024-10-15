@@ -47,6 +47,7 @@ class CounterByAppId:
         logging.debug(f"GOT MSG: {body}")
 
         if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
+            logging.info(f"GOT END")
             self.send_results()
             self._middleware.ack(method.delivery_tag)
             return

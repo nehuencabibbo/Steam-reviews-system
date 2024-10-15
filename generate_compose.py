@@ -19,8 +19,9 @@ Q3_AMOUNT_OF_JOINS = 2
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
 Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
 Q4_AMOUNT_OF_COUNTERS_BY_APP_ID = 2
-Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 2
-Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS = 2
+Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS = 1
+Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS = 2
+Q4_AMOUNT_OF_SECOND_MORE_THAN_5000_FILTERS = 2
 Q4_AMOUNT_OF_FIRST_JOINS = 2
 Q4_AMOUNT_OF_SECOND_JOINS = 2
 Q4_AMOUNT_OF_THIRD_JOINS = 2
@@ -114,7 +115,7 @@ def add_counter_by_app_id(
             f"NODE_ID={num}",
             f"CONSUME_QUEUE_SUFIX={consume_queue_sufix}",
             f"PUBLISH_QUEUE={publish_queue}",
-            "LOGGING_LEVEL=DEBUG",
+            "LOGGING_LEVEL=INFO",
             f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -286,7 +287,7 @@ def add_rabbit(output: Dict):
         "logging": {"driver": "none"},
         "healthcheck": {
             "test": "rabbitmq-diagnostics -q ping",
-            "interval": "5s",
+            "interval": "20s",
             "timeout": "10s",
             "retries": "5",
         },
@@ -356,7 +357,7 @@ def generate_q2(output=Dict):
         "input_queue_name": "q2_games",
         "output_queue_name": "q2_indie_games",
         "amount_of_forwarding_queues": 1,
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 4,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
@@ -415,7 +416,7 @@ def generate_q3(output: Dict):
         "input_queue_name": "q3_games",
         "output_queue_name": "q3_indie_games",
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_JOINS,
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
@@ -434,7 +435,7 @@ def generate_q3(output: Dict):
         "input_queue_name": "q3_reviews",
         "output_queue_name": "q3_positive_reviews",
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": 1.0,  # positive_review
         "criteria": "EQUAL_FLOAT",
@@ -524,7 +525,7 @@ def generate_q4(output: Dict):
             f"{Q4_AMOUNT_OF_FIRST_JOINS}",
             f"{Q4_AMOUNT_OF_THIRD_JOINS}",
         ]),
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
@@ -549,7 +550,7 @@ def generate_q4(output: Dict):
             f"{Q4_AMOUNT_OF_COUNTERS_BY_APP_ID}",
             f"{Q4_AMOUNT_OF_SECOND_JOINS}",
         ]),
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 2,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
@@ -585,10 +586,10 @@ def generate_q4(output: Dict):
         "value_to_filter_by": 5000,
         "criteria": "GREATER_THAN",
         "columns_to_keep": "0",  # app_id
-        "instances_of_myself": Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS,
+        "instances_of_myself": Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS,
     }
     generate_filters_by_value(
-        Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS, **q4_filter_more_than_5000_args
+        Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS, **q4_filter_more_than_5000_args
     )
 
     q4_first_join_args = {
@@ -597,8 +598,8 @@ def generate_q4(output: Dict):
         "input_games_queue_name": "q4_action_games_for_join0",
         "input_reviews_queue_name": "q4_filter_first_more_than_5000_reviews",
         "output_queue_name": "q4_first_join",
-        "amount_of_behind_nodes": 1,  # 1 as the filters work as a group (will receive only one end from them)
-        "amount_of_forwarding_queues": 1,  # 1 as the filters work as a group (will receive only one end from them)
+        "amount_of_behind_nodes": Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS,  # 1 as the filters work as a group (will receive only one end from them)
+        "amount_of_forwarding_queues": Q4_AMOUNT_OF_SECOND_JOINS,  # 1 as the filters work as a group (will receive only one end from them)
         "games_columns_to_keep": "0,1",  # app_id, name
         "reviews_columns_to_keep": "",  #
     }
@@ -627,7 +628,7 @@ def generate_q4(output: Dict):
         "input_games_queue_name": "q4_first_join",
         "input_reviews_queue_name": "q4_negative_reviews_for_join1",
         "output_queue_name": "q4_second_join",
-        "amount_of_behind_nodes": 1,  # 1  as the filters work as a group (will receive only one end from them)
+        "amount_of_behind_nodes": Q4_AMOUNT_OF_FIRST_JOINS,  # 1  as the filters work as a group (will receive only one end from them)
         "amount_of_forwarding_queues": 1,  # 1 as the filters work as a group (will receive only one end from them)
         "games_columns_to_keep": "0",  # app_id
         "reviews_columns_to_keep": "1",  # review
@@ -648,7 +649,7 @@ def generate_q4(output: Dict):
         "input_queue_name": "0_q4_second_join",
         "output_queue_name": "q4_english_reviews",
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_COUNTERS_BY_APP_ID,
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 1,  # review
         "value_to_filter_by": "en",
         "criteria": "LANGUAGE",
@@ -679,15 +680,15 @@ def generate_q4(output: Dict):
         "input_queue_name": "0_q4_english_review_count",
         "output_queue_name": "q4_second_filter_more_than_5000",
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_THIRD_JOINS,
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 1,  # negative_english_review_count
         "value_to_filter_by": 5000,
         "criteria": "GREATER_THAN",
         "columns_to_keep": "0,1",  # app_id, positive_review_count
-        "instances_of_myself": Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS,
+        "instances_of_myself": Q4_AMOUNT_OF_SECOND_MORE_THAN_5000_FILTERS,
     }
     generate_filters_by_value(
-        Q4_AMOUNT_OF_MORE_THAN_5000_FILTERS, **q4_filter_more_than_5000_args
+        Q4_AMOUNT_OF_SECOND_MORE_THAN_5000_FILTERS, **q4_filter_more_than_5000_args
     )
 
     q4_third_join_args = {
@@ -729,7 +730,7 @@ def generate_q5(output: Dict):
         "input_queue_name": "q5_games",
         "output_queue_name": "q5_action_games",
         "amount_of_forwarding_queues": 1,
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
@@ -747,7 +748,7 @@ def generate_q5(output: Dict):
         "input_queue_name": "q5_reviews",
         "output_queue_name": "q5_negative_reviews",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS,
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
@@ -776,7 +777,7 @@ def generate_q5(output: Dict):
         "input_games_queue_name": "q5_action_games",
         "input_reviews_queue_name": "q5_counter",
         "output_queue_name": "q5_percentile",
-        "amount_of_behind_nodes": 1,  # 1 as the filters work as a group (will receive only one end from them)
+        "amount_of_behind_nodes": Q5_AMOUNT_OF_COUNTERS,  # 1 as the filters work as a group (will receive only one end from them)
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_PERCENTILES, 
         "games_columns_to_keep": "1",  # app_id, name
         "reviews_columns_to_keep": "1",  # count
@@ -815,7 +816,7 @@ def generate_output():
     # # -------------------------------------------- Q3 -----------------------------------------
     generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
-    # generate_q4(output=output)
+    generate_q4(output=output)
     # # # -------------------------------------------- Q5 -----------------------------------------
     generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------

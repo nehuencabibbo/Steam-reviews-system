@@ -21,6 +21,7 @@ class Join:
         self.__config = config
         self._amount_of_ends_received = 0
         self._got_sigterm = False
+        #self._got_end = False
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -65,8 +66,13 @@ class Join:
         body = self.__middleware.get_rows_from_message(body)
 
         if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
-            logging.debug("END of games received")
 
+            # if self._got_end:
+            #     self.__middleware.ack(delivery_tag)
+            #     return
+
+            logging.info("END of games received")
+            #self._got_end = True
             reviews_callback = self.__middleware.generate_callback(
                 self.__reviews_callback,
                 self.__config["INPUT_REVIEWS_QUEUE_NAME"],
@@ -106,7 +112,7 @@ class Join:
                 # else:
                 #     logging.debug(f"Deleted directory: {'/tmp'}")
 
-                logging.debug("END of reviews received")
+                logging.info("END of reviews received")
                 self._amount_of_ends_received += 1
                 logging.debug(
                     f"Amount of ends received up to now: {self._amount_of_ends_received} | Expecting: {self.__config['AMOUNT_OF_BEHIND_NODES']}"

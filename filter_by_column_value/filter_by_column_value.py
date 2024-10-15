@@ -133,7 +133,7 @@ class FilterColumnByValue:
 
             for queue_number in range(amount_of_current_queue):
                 full_queue_name = f"{queue_number}_{queue_name}"
-                logging.debug(f'Sending END to queue: {full_queue_name}')
+                logging.info(f'Sending END to queue: {full_queue_name}')
 
                 self._middleware.send_end(
                     queue=full_queue_name
@@ -149,6 +149,7 @@ class FilterColumnByValue:
             logging.debug(f"Recived message: {message}")
 
             if message[0] == END_TRANSMISSION_MESSAGE:
+                logging.info(f"GOT END: {body}")
                 self.__send_last_batch_to_fowarding_queues()
                 self.__handle_end_transmission(message)
                 self._middleware.ack(delivery_tag)

@@ -88,7 +88,7 @@ def main():
     config = get_config()
     init_logger(config["LOGGING_LEVEL"])
     logging.debug("Logging configuration:")
-    [logging.debug(f"{key}: {value}") for key, value in config.items()]
+    [logging.info(f"{key}: {value}") for key, value in config.items()]
 
     middleware = Middleware(config["RABBIT_IP"])
     config.pop("RABBIT_IP", None)
