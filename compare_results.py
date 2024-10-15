@@ -1,3 +1,4 @@
+import csv
 import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,21 +22,14 @@ def add_line_to_corresponding_expected_query_result(line, results: Set[str], que
 
     result = result.strip()
     result = result[1:len(result) - 1] # Removes [ and ] from start and end
-    result = result.replace("'", "") # Remove '
-    result = ','.join([value.strip() for value in result.split(',')])
+    result = [value.strip() for value in result.split(',')]
+    result = [value[1:-1] for value in result] # Removes '' from each word
+    result = ','.join(result)
 
     # TODO: Handelear esto mejor 
     if result in results: raise Exception(f"{result} was a duplicate for {query} Analisis")
 
     results.add(result)
-
-def add_line_to_corresponding_gotten_query_result(line, results: Set[str], query: str):
-    # TODO: Implement
-    # Every line output is similar to:
-    # ... Qi result: ...
-
-
-    return set()
 
 def get_all_expected_query_results(file_name: str, query: str) -> Dict[str, Set[str]]:
     expected_results = set()
@@ -48,9 +42,16 @@ def get_all_expected_query_results(file_name: str, query: str) -> Dict[str, Set[
 
 def get_all_gotten_query_results(file_name: str, query: str) -> Dict[str, Set[str]]:
     gotten_results = set()
-    with open(file_name) as myfile:
-        for line in myfile: 
-            add_line_to_corresponding_gotten_query_result(line, gotten_results, query)
+    with open(file_name) as csvfile:
+        csvreader = csv.reader(csvfile)
+        for result in csvreader:
+            result = ','.join(result)
+            if result in gotten_results: 
+                raise Exception((
+                    "There are duplicates in the results dataset\n"
+                    f"{result} was repeated for {query} analisis"
+                ))
+            gotten_results.add(result)
 
     return gotten_results
 
