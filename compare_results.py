@@ -22,7 +22,7 @@ def add_line_to_corresponding_expected_query_result(line, results: Set[str], que
 
     result = result.strip()
     result = result[1:len(result) - 1] # Removes [ and ] from start and end
-    result = [value.strip() for value in result.split(',')]
+    result = [value.strip() for value in result.rsplit(',', maxsplit=1)]
     result = [value[1:-1] for value in result] # Removes '' from each word
     result = ','.join(result)
 
