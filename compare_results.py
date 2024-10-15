@@ -22,10 +22,10 @@ def add_line_to_corresponding_expected_query_result(line, results: Set[str], que
     result = result.strip()
     result = result[1:len(result) - 1] # Removes [ and ] from start and end
     result = result.replace("'", "") # Remove '
-    result = ','.join(result.split(','))
+    result = ','.join([value.strip() for value in result.split(',')])
 
     # TODO: Handelear esto mejor 
-    if result in results: raise Exception(f"{result} was a duplicate in {query}")
+    if result in results: raise Exception(f"{result} was a duplicate for {query} Analisis")
 
     results.add(result)
 
