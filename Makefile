@@ -22,15 +22,12 @@ docker-run: docker-image
 docker-down:
 	docker compose -f docker-compose-dev.yaml stop -t 10
 	docker compose -f docker-compose-dev.yaml down
+	docker volume rm steam_reviews_system_rabbitmq_data
 .PHONY: docker-down
 
 docker-logs:
 	docker compose -f docker-compose-dev.yaml logs -f
 .PHONY: docker-compose-logs
 
-docker-restart:
-	docker compose -f docker-compose-dev.yaml stop -t 10
-	docker compose -f docker-compose-dev.yaml down
-	python3 generate_compose.py docker-compose-dev.yaml
-	docker compose -f docker-compose-dev.yaml up -d --build
+docker-restart: docker-down docker-run
 .PHONY: docker-restart
