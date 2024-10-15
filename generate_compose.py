@@ -115,7 +115,7 @@ def add_counter_by_app_id(
             f"NODE_ID={num}",
             f"CONSUME_QUEUE_SUFIX={consume_queue_sufix}",
             f"PUBLISH_QUEUE={publish_queue}",
-            "LOGGING_LEVEL=INFO",
+            "LOGGING_LEVEL=DEBUG",
             f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -249,7 +249,7 @@ def add_join(
 
 
 def add_percentile(
-    output: Dict, query: str, num: int, consume_queue: str, publish_queue: str
+    output: Dict, query: str, num: int, consume_queue: str, publish_queue: str, needed_ends_to_finish: int 
 ):
     output["services"][f"{query}_percentil_{num}"] = {
         "container_name": f"{query}_percentile_{num}",
@@ -259,7 +259,8 @@ def add_percentile(
             f"NODE_ID={num}",
             f"CONSUME_QUEUE={consume_queue}",
             f"PUBLISH_QUEUE={publish_queue}",
-            "LOGGING_LEVEL=INFO",
+            "LOGGING_LEVEL=DEBUG",
+            f"NEEDED_ENDS_TO_FINISH={needed_ends_to_finish}"
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -729,8 +730,8 @@ def generate_q5(output: Dict):
         "filter_name": "action_games",
         "input_queue_name": "q5_games",
         "output_queue_name": "q5_action_games",
-        "amount_of_forwarding_queues": 1,
-        "logging_level": "INFO",
+        "amount_of_forwarding_queues": Q5_AMOUNT_OF_JOINS,
+        "logging_level": "DEBUG",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
@@ -748,7 +749,7 @@ def generate_q5(output: Dict):
         "input_queue_name": "q5_reviews",
         "output_queue_name": "q5_negative_reviews",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS,
-        "logging_level": "INFO",
+        "logging_level": "DEBUG",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
@@ -795,6 +796,7 @@ def generate_q5(output: Dict):
         num=0,
         consume_queue="0_q5_percentile",  # TODO: Change if scalation of this node is implemented
         publish_queue="Q5",
+        needed_ends_to_finish=Q5_AMOUNT_OF_JOINS,
     )
 
 
@@ -816,7 +818,7 @@ def generate_output():
     # # -------------------------------------------- Q3 -----------------------------------------
     generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output)
+    # generate_q4(output=output)
     # # # -------------------------------------------- Q5 -----------------------------------------
     generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------

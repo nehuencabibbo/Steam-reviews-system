@@ -11,8 +11,9 @@ def get_config():
     config = ConfigParser(os.environ)
     config.read("config.ini")
     try:
-        # ID
-        # config_params["NODE_ID"] = int(os.getenv("NODE_ID"))
+        # Node related
+        # config_params["NODE_ID"] = os.getenv("NODE_ID")
+        config_params["NEEDED_ENDS_TO_FINISH"] = int(os.getenv('NEEDED_ENDS_TO_FINISH', config["DEFAULT"]["NEEDED_ENDS_TO_FINISH"]))
 
         # queues
         config_params["CONSUME_QUEUE"] = os.getenv("CONSUME_QUEUE", config["DEFAULT"]["CONSUME_QUEUE"])

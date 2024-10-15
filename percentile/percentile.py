@@ -17,6 +17,7 @@ class Percentile:
         self._middleware = middleware
         self._got_sigterm = False
         self._amount_msg_received = 0
+        self._recived_ends = 0
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
@@ -41,8 +42,11 @@ class Percentile:
         logging.debug(f"body: {body}")
 
         if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
-            logging.debug(f"GOT END")
-            self.handle_end_message()
+            self._recived_ends += 1
+            logging.debug(f"GOT END NUMBER: {self._recived_ends}")
+            if self._recived_ends == self._config["NEEDED_ENDS_TO_FINISH"]:
+                self.handle_end_message()
+
             self._middleware.ack(method.delivery_tag)
             return
 
