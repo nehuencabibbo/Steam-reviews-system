@@ -26,8 +26,10 @@ Q4_AMOUNT_OF_SECOND_JOINS = 2
 Q4_AMOUNT_OF_THIRD_JOINS = 2
 # Q5
 Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
-Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
-Q5_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
+Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
+Q5_AMOUNT_OF_COUNTERS = 2
+Q5_AMOUNT_OF_JOINS = 2
+Q5_AMOUNT_OF_PERCENTILES = 1
 
 
 def create_file(output, file_name):
@@ -224,8 +226,6 @@ def add_join(
     amount_of_forwarding_queues: int,
     games_columns_to_keep: str,
     reviews_columns_to_keep: str,
-    games_queue_starting_number: int = 0,
-    reviews_queue_starting_number: int = 0,
 ):
     output["services"][f"{query}_join{num}"] = {
         "container_name": f"{query}_join{num}",
@@ -327,8 +327,6 @@ def generate_tops_k(amount_of_tops_k: int, **kwargs):
 
 
 def generate_joins(
-    games_queue_starting_number: int,
-    reviews_queue_starting_number: int,
     amount_of_joins: int,
     **kwargs,
 ):
@@ -336,8 +334,6 @@ def generate_joins(
         add_join(
             **kwargs,
             num=i,
-            games_queue_starting_number=games_queue_starting_number + i,
-            reviews_queue_starting_number=reviews_queue_starting_number + i,
         )
 
 
@@ -473,8 +469,6 @@ def generate_q3(output: Dict):
     }
 
     generate_joins(
-        games_queue_starting_number=0,  # no offset
-        reviews_queue_starting_number=0,  # no offset
         amount_of_joins=Q3_AMOUNT_OF_JOINS,
         **q3_join_args,
     )
@@ -610,8 +604,6 @@ def generate_q4(output: Dict):
     }
 
     generate_joins(
-        games_queue_starting_number=0,
-        reviews_queue_starting_number=0,
         amount_of_joins=Q4_AMOUNT_OF_FIRST_JOINS,
         **q4_first_join_args,
     )
@@ -645,8 +637,6 @@ def generate_q4(output: Dict):
     }
 
     generate_joins(
-        games_queue_starting_number=0,
-        reviews_queue_starting_number=Q4_AMOUNT_OF_COUNTERS_BY_APP_ID,
         amount_of_joins=Q4_AMOUNT_OF_SECOND_JOINS,
         **q4_second_join_args,
     )
@@ -713,8 +703,6 @@ def generate_q4(output: Dict):
     }
 
     generate_joins(
-        games_queue_starting_number=Q4_AMOUNT_OF_THIRD_JOINS,  # Receives from filter games, that sends to first join first
-        reviews_queue_starting_number=0,  # as it receives from a filter that sends only to this join
         amount_of_joins=Q4_AMOUNT_OF_THIRD_JOINS,
         **q4_third_join_args,
     )
@@ -758,7 +746,7 @@ def generate_q5(output: Dict):
         "filter_name": "negative_reviews",
         "input_queue_name": "q5_reviews",
         "output_queue_name": "q5_negative_reviews",
-        "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
+        "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS,
         "logging_level": "DEBUG",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": -1.0,
@@ -774,27 +762,32 @@ def generate_q5(output: Dict):
         "output": output,
         "query": "q5",
         "consume_queue_sufix": "q5_negative_reviews",
-        "publish_queue": "0_q5_counter",
-        "amount_of_forwarding_queues": 1, # TODO: Change
+        "publish_queue": "q5_counter",
+        "amount_of_forwarding_queues": Q5_AMOUNT_OF_JOINS,
     }
 
     generate_counters_by_app_id(
-        Q5_AMOUNT_OF_COUNTERS_BY_APP_ID, **q5_negative_reviews_counter_args
+        Q5_AMOUNT_OF_COUNTERS, **q5_negative_reviews_counter_args
     )
 
-    add_join(
-        output=output,
-        query="q5",
-        num=0,
-        input_games_queue_name="0_q5_action_games",
-        input_reviews_queue_name="0_q5_counter",
-        output_queue_name="q5_percentile",
-        amount_of_behind_nodes=Q5_AMOUNT_OF_COUNTERS_BY_APP_ID,
-        amount_of_forwarding_queues=1,
-        games_columns_to_keep="1",  # app_id, name
-        reviews_columns_to_keep="1",  # count
+    q5_join = {
+        "output": output,
+        "query": "q5",
+        "input_games_queue_name": "q5_action_games",
+        "input_reviews_queue_name": "q5_counter",
+        "output_queue_name": "q5_percentile",
+        "amount_of_behind_nodes": 1,  # 1 as the filters work as a group (will receive only one end from them)
+        "amount_of_forwarding_queues": Q5_AMOUNT_OF_PERCENTILES, 
+        "games_columns_to_keep": "1",  # app_id, name
+        "reviews_columns_to_keep": "1",  # count
+    }
+
+    generate_joins(
+        amount_of_joins=Q5_AMOUNT_OF_JOINS,
+        **q5_join,
     )
 
+    # TODO: Add generate percentile so there can be more than one instance of this 
     add_percentile(
         output=output,
         query="q5",
