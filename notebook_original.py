@@ -28,8 +28,8 @@ import time
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_colwidth', 100)
 
-games_df = pd.read_csv('/data/games.csv', header=None, skiprows=1)
-reviews_df = pd.read_csv('/data/reviews.csv')
+games_df = pd.read_csv('./data/demo_game_sample.csv', header=None, skiprows=1)
+reviews_df = pd.read_csv('./data/demo_review_sample.csv')
 
 # Agrego columna "Unknown" ya que no viene nomenclada y genera un desfasaje en los indices de columnas
 games_df_column_names = ['AppID', 'Name', 'Release date', 'Estimated owners', 'Peak CCU',
@@ -41,7 +41,7 @@ games_df_column_names = ['AppID', 'Name', 'Release date', 'Estimated owners', 'P
                     'Recommendations', 'Notes', 'Average playtime forever',
                     'Average playtime two weeks', 'Median playtime forever',
                     'Median playtime two weeks', 'Developers', 'Publishers',
-                    'Categories', 'Genres', 'Tags', 'Screenshots', 'Movies']
+                    'Categories', 'Genres', 'Tags', 'Screenshots']
 games_df.columns = games_df_column_names
 
 games_df.shape
@@ -93,7 +93,7 @@ data = {
 }
 platform_df = pd.DataFrame(data)
 
-platform_df.to_csv('/data/q1_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
+platform_df.to_csv('./data/results/q1_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
 
 """## Q2: Nombre del top 10 de juegos del género "Indie" publicados en la década del 2010 con más tiempo promedio histórico de juego"""
 
@@ -109,7 +109,7 @@ q2_result = games_indie_2010_decade.sort_values(by='Average playtime forever', a
 
 q2_result[['Name', 'Average playtime forever']]
 
-q2_result[['Name', 'Average playtime forever']].to_csv('/data/q2_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
+q2_result[['Name', 'Average playtime forever']].to_csv('./data/results/q2_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
 
 """## Q3: Nombre de top 5 juegos del género "Indie" con más reseñas positivas"""
 
@@ -125,68 +125,72 @@ def positive_score(score):
 
 games_indie_reviews['positive_score'] = games_indie_reviews['review_score'].apply(positive_score)
 
-q3_result = games_indie_reviews.groupby('Name')['positive_score'].sum().sort_values(ascending=False).head(5)
+q3_result = games_indie_reviews.groupby('Name')['positive_score'].sum().sort_values(ascending=False)
 
-q3_result.to_csv('/data/q3_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
+q3_result = q3_result.reset_index()
+
+q3_result = q3_result.head(5)
+
+q3_result.to_csv('./data/results/q3_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
 
 
-"""## Q4: Nombre de juegos del género "action" con más de 5.000 reseñas negativas en idioma inglés"""
+# """## Q4: Nombre de juegos del género "action" con más de 5.000 reseñas negativas en idioma inglés"""
 
-# Juegos de acción
+# # Juegos de acción
 games_action = games_df_cleaned[games_df_cleaned["Genres"].str.contains("action")]
 games_action_reduced = games_action[["AppID", "Name"]]
 games_action_reduced.shape
 
-reviews_q4 = reviews_df_cleaned.copy()
+# reviews_q4 = reviews_df_cleaned.copy()
 
-# Reviews con mas de 5000 comentarios negativos
+# # Reviews con mas de 5000 comentarios negativos
 
 def negative_score(score):
     return 1 if score < 0 else 0
 
-reviews_q4["negative_score"] = reviews_q4["review_score"].apply(negative_score)
-reviews_q4_negatives = reviews_q4[reviews_q4["negative_score"] == 1].copy()
-reviews_count = reviews_q4_negatives.groupby('app_id').size().reset_index(name='count')
-reviews_count_more_than_5000 = reviews_count[reviews_count["count"] > 5000]
-reviews_count_more_than_5000.shape
+# reviews_q4["negative_score"] = reviews_q4["review_score"].apply(negative_score)
+# reviews_q4_negatives = reviews_q4[reviews_q4["negative_score"] == 1].copy()
+# reviews_count = reviews_q4_negatives.groupby('app_id').size().reset_index(name='count')
+# reviews_count_more_than_5000 = reviews_count[reviews_count["count"] > 5000]
+# reviews_count_more_than_5000.shape
 
-# De las reviews con mas de 5000 comentarios negativos, nos quedamos con aquellas que sean sobre juegos de acción
-games_action_with_5000_negative_reviews = pd.merge(games_action_reduced, reviews_count_more_than_5000, left_on='AppID', right_on="app_id", how='inner')
-games_action_with_5000_negative_reviews = games_action_with_5000_negative_reviews[["AppID", "Name"]]
-games_action_with_5000_negative_reviews.shape
+# # De las reviews con mas de 5000 comentarios negativos, nos quedamos con aquellas que sean sobre juegos de acción
+# games_action_with_5000_negative_reviews = pd.merge(games_action_reduced, reviews_count_more_than_5000, left_on='AppID', right_on="app_id", how='inner')
+# games_action_with_5000_negative_reviews = games_action_with_5000_negative_reviews[["AppID", "Name"]]
+# games_action_with_5000_negative_reviews.shape
 
-# Enriquecemos con el texto de la review
-reviews_count_more_than_5000_with_text = pd.merge(reviews_q4, games_action_with_5000_negative_reviews, left_on='app_id', right_on="AppID", how='inner')
-reviews_count_more_than_5000_with_text = reviews_count_more_than_5000_with_text[["app_id", "review_text"]]
-reviews_count_more_than_5000_with_text.shape
+# # Enriquecemos con el texto de la review
+# reviews_count_more_than_5000_with_text = pd.merge(reviews_q4, games_action_with_5000_negative_reviews, left_on='app_id', right_on="AppID", how='inner')
+# reviews_count_more_than_5000_with_text = reviews_count_more_than_5000_with_text[["app_id", "review_text"]]
+# reviews_count_more_than_5000_with_text.shape
 
-# CPU INTENSIVE #############################
-def detect_language(texto):
-    language, _ = langid.classify(texto)
-    return language
-#############################################
+# # CPU INTENSIVE #############################
+# def detect_language(texto):
+#     language, _ = langid.classify(texto)
+#     return language
+# #############################################
 
-# Calculo del idioma sobre las reviews
-start_time = time.time()
-reviews_count_more_than_5000_with_text["review_language"] = reviews_count_more_than_5000_with_text['review_text'].apply(detect_language)
-elapsed_time = time.time() - start_time
-print(f"Execution time on {reviews_count_more_than_5000_with_text.shape[0]} rows: {elapsed_time:.2f} seconds")
+# # Calculo del idioma sobre las reviews
+# start_time = time.time()
+# reviews_count_more_than_5000_with_text["review_language"] = reviews_count_more_than_5000_with_text['review_text'].apply(detect_language)
+# elapsed_time = time.time() - start_time
+# print(f"Execution time on {reviews_count_more_than_5000_with_text.shape[0]} rows: {elapsed_time:.2f} seconds")
 
-reviews_count_more_than_5000_with_text.shape
+# reviews_count_more_than_5000_with_text.shape
 
-# Nos quedamos con aquellas reviews que estan en idioma inglés
-reviews_count_more_than_5000_with_text_english = reviews_count_more_than_5000_with_text[reviews_count_more_than_5000_with_text["review_language"] == "en"]
-reviews_count_more_than_5000_with_text_english.shape
+# # Nos quedamos con aquellas reviews que estan en idioma inglés
+# reviews_count_more_than_5000_with_text_english = reviews_count_more_than_5000_with_text[reviews_count_more_than_5000_with_text["review_language"] == "en"]
+# reviews_count_more_than_5000_with_text_english.shape
 
-# Nos quedamos con aquellos juegos que tengan mas de 5000 reseñas negativas en inglés
-q4_results_app_ids = reviews_count_more_than_5000_with_text_english.groupby('app_id').size().reset_index(name='count')
-q4_results_app_ids = q4_results_app_ids[q4_results_app_ids["count"] > 5000]
-q4_results_app_ids.head(25)
+# # Nos quedamos con aquellos juegos que tengan mas de 5000 reseñas negativas en inglés
+# q4_results_app_ids = reviews_count_more_than_5000_with_text_english.groupby('app_id').size().reset_index(name='count')
+# q4_results_app_ids = q4_results_app_ids[q4_results_app_ids["count"] > 5000]
+# q4_results_app_ids.head(25)
 
-# Enriquecemos con el nombre de esos juegos
-q4_results_games_names = pd.merge(q4_results_app_ids, games_action_with_5000_negative_reviews, left_on='app_id', right_on="AppID", how='inner')["Name"]
+# # Enriquecemos con el nombre de esos juegos
+# q4_results_games_names = pd.merge(q4_results_app_ids, games_action_with_5000_negative_reviews, left_on='app_id', right_on="AppID", how='inner')["Name"]
 
-q4_results_games_names.to_csv('q4_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
+# q4_results_games_names.to_csv('q4_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
 
 """## Q5: Nombre de juegos del género "action" dentro del percentil 90 en cantidad de reseñas negativas"""
 
@@ -213,4 +217,4 @@ q5_result = reviews_q5_negative_score_action_by_app_id[reviews_q5_negative_score
 q5_result.shape
 
 q5_result_with_game_names = pd.merge(q5_result, games_action_reduced, left_on='app_id', right_on="AppID", how='inner')
-q5_result_with_game_names[["app_id", "Name"]].to_csv('q5_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
+q5_result_with_game_names[["Name", "count"]].to_csv('./data/results/q5_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
