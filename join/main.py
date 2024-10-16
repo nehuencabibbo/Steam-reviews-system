@@ -15,32 +15,27 @@ def get_config():
     config = ConfigParser(os.environ)
     config.read("./join/config.ini")
     try:
+        # General config 
         config_params["LOGGING_LEVEL"] = os.getenv(
             "LOGGING_LEVEL", config["DEFAULT"]["LOGGING_LEVEL"]
         )
         config_params["RABBIT_IP"] = os.getenv(
             "RABBIT_IP", config["DEFAULT"]["RABBIT_IP"]
         )
+        config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])
+
+        # Reciving queues 
         config_params["INPUT_GAMES_QUEUE_NAME"] = os.getenv(
             "INPUT_GAMES_QUEUE_NAME", config["DEFAULT"]["INPUT_GAMES_QUEUE_NAME"]
         )
-        config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])
         config_params["INPUT_REVIEWS_QUEUE_NAME"] = os.getenv(
             "INPUT_REVIEWS_QUEUE_NAME", config["DEFAULT"]["INPUT_REVIEWS_QUEUE_NAME"]
         )
+        
+        # Forwarding queues 
         config_params["OUTPUT_QUEUE_NAME"] = os.getenv(
             "OUTPUT_QUEUE_NAME", config["DEFAULT"]["OUTPUT_QUEUE_NAME"]
         )
-
-        config_params["PARTITION_RANGE"] = os.getenv(
-            "PARTITION_RANGE", config["DEFAULT"]["PARTITION_RANGE"]
-        )
-        config_params["AMOUNT_OF_BEHIND_NODES"] = int(
-            os.getenv(
-                "AMOUNT_OF_BEHIND_NODES", config["DEFAULT"]["AMOUNT_OF_BEHIND_NODES"]
-            )
-        )
-
         config_params["AMOUNT_OF_FORWARDING_QUEUES"] = int(
             os.getenv(
                 "AMOUNT_OF_FORWARDING_QUEUES",
@@ -48,6 +43,22 @@ def get_config():
             )
         )
 
+        # Functionality
+        config_params["PARTITION_RANGE"] = os.getenv(
+            "PARTITION_RANGE", config["DEFAULT"]["PARTITION_RANGE"]
+        )
+        config_params["NEEDED_REVIEWS_ENDS"] = int(
+            os.getenv(
+                "NEEDED_REVIEWS_ENDS", config["DEFAULT"]["NEEDED_REVIEWS_ENDS"]
+            )
+        )
+        config_params["NEEDED_GAMES_ENDS"] = int(
+            os.getenv(
+                "NEEDED_GAMES_ENDS", config["DEFAULT"]["NEEDED_GAMES_ENDS"]
+            )
+        )
+
+        # Games columns to keep 
         games_columns_to_keep = os.getenv(
             "GAMES_COLUMNS_TO_KEEP", config["DEFAULT"]["GAMES_COLUMNS_TO_KEEP"]
         ).split(",")
@@ -58,6 +69,7 @@ def get_config():
         )
         config_params["GAMES_COLUMNS_TO_KEEP"] = games_columns_to_keep
 
+        # Reviews columns to keep 
         reviews_columns_to_keep = os.getenv(
             "REVIEWS_COLUMNS_TO_KEEP", config["DEFAULT"]["REVIEWS_COLUMNS_TO_KEEP"]
         ).split(",")

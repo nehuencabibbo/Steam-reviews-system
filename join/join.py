@@ -19,7 +19,8 @@ class Join:
     ):
         self.__middleware = middleware
         self.__config = config
-        self._amount_of_ends_received = 0
+        self._amount_of_games_ends_recived = 0
+        self._amount_of_reviews_ends_recived = 0
         self._got_sigterm = False
         #self._got_end = False
 
@@ -66,22 +67,23 @@ class Join:
         body = self.__middleware.get_rows_from_message(body)
 
         if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
-
-            # if self._got_end:
-            #     self.__middleware.ack(delivery_tag)
-            #     return
-
+            self._amount_of_games_ends_recived += 1
             logging.info("END of games received")
-            #self._got_end = True
-            reviews_callback = self.__middleware.generate_callback(
-                self.__reviews_callback,
-                self.__config["INPUT_REVIEWS_QUEUE_NAME"],
-                self.__config["OUTPUT_QUEUE_NAME"],
-            )
+            logging.debug((
+                f"Amount of reviews ends received up to now: {self._amount_of_games_ends_recived}"
+                f"| Expecting: {self.__config['NEEDED_GAMES_ENDS']}"
+            ))
+            if self._amount_of_games_ends_recived == self.__config["NEEDED_GAMES_ENDS"]:
+                reviews_callback = self.__middleware.generate_callback(
+                    self.__reviews_callback,
+                    self.__config["INPUT_REVIEWS_QUEUE_NAME"],
+                    self.__config["OUTPUT_QUEUE_NAME"],
+                )
 
-            self.__middleware.attach_callback(
-                self.__config["INPUT_REVIEWS_QUEUE_NAME"], reviews_callback
-            )
+                self.__middleware.attach_callback(
+                    self.__config["INPUT_REVIEWS_QUEUE_NAME"], reviews_callback
+                )
+
             self.__middleware.ack(delivery_tag)
 
             return
@@ -113,13 +115,13 @@ class Join:
                 #     logging.debug(f"Deleted directory: {'/tmp'}")
 
                 logging.info("END of reviews received")
-                self._amount_of_ends_received += 1
+                self._amount_of_reviews_ends_recived += 1
                 logging.debug(
-                    f"Amount of ends received up to now: {self._amount_of_ends_received} | Expecting: {self.__config['AMOUNT_OF_BEHIND_NODES']}"
+                    f"Amount of reviews ends received up to now: {self._amount_of_reviews_ends_recived} | Expecting: {self.__config['NEEDED_REVIEWS_ENDS']}"
                 )
                 if (
-                    self._amount_of_ends_received
-                    == self.__config["AMOUNT_OF_BEHIND_NODES"]
+                    self._amount_of_reviews_ends_recived
+                    == self.__config["NEEDED_REVIEWS_ENDS"]
                 ):
                     self.__send_end_to_forward_queues()
 
