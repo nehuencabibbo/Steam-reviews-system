@@ -459,3 +459,17 @@ def add_batch_to_sorted_file(dir: str, new_records: str, ascending: bool = True,
                 amount_of_records_in_top += 1
 
     os.replace(temp_file, file_path)
+
+
+def delete_files_from_directory(dir: str) -> bool:
+    if not os.path.exists(dir):
+        return False 
+
+    for filename in os.listdir(dir):
+
+        if filename.startswith('sorted') or filename.startswith('partition'):
+            file_path = os.path.join(dir, filename)
+            try:
+                os.remove(file_path)
+            except FileNotFoundError:
+                logging.error(f"{file_path} does not exist.")

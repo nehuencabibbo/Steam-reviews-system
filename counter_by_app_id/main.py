@@ -23,6 +23,10 @@ def get_config():
             "PUBLISH_QUEUE", config["DEFAULT"]["PUBLISH_QUEUE"]
         )
 
+        config_params["NEEDED_ENDS"] = int(os.getenv(
+            "NEEDED_ENDS", config["DEFAULT"]["NEEDED_ENDS"]
+        ))
+
         # storage
         config_params["RANGE_FOR_PARTITION"] = int(
             os.getenv("RANGE_FOR_PARTITION", config["DEFAULT"]["RANGE_FOR_PARTITION"])

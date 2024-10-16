@@ -17,6 +17,7 @@ class CounterByAppId:
         self._config = config
         self._middleware = middleware
         self._got_sigterm = False
+        self._ends_received = 0
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
@@ -47,8 +48,13 @@ class CounterByAppId:
         logging.debug(f"GOT MSG: {body}")
 
         if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
-            logging.info(f"GOT END")
-            self.send_results()
+            self._ends_received += 1
+            logging.debug(
+                    f"Amount of ends received up to now: {self._ends_received} | Expecting: {self._config['NEEDED_ENDS']}"
+                )
+            if self._ends_received == self._config["NEEDED_ENDS"]:
+                self.send_results()
+
             self._middleware.ack(method.delivery_tag)
             return
 

@@ -25,7 +25,7 @@ Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS = 2
 Q4_AMOUNT_OF_SECOND_MORE_THAN_5000_FILTERS = 2
 Q4_AMOUNT_OF_FIRST_JOINS = 2
 Q4_AMOUNT_OF_SECOND_JOINS = 2
-Q4_AMOUNT_OF_THIRD_JOINS = 2
+Q4_AMOUNT_OF_THIRD_JOINS = 1 #TODO: NEEDS AGGREGATOR FOR SCALING THIS NODE 
 # Q5
 Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
 Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
@@ -73,7 +73,7 @@ def add_drop_nulls(output: Dict, num: int):
             f"NODE_ID={num}",
             "COUNT_BY_PLATFORM_NODES=1",  # TODO: change when scaling
             f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_NULLS}",
-            "LOGGING_LEVEL=DEBUG",
+            "LOGGING_LEVEL=INFO",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -107,6 +107,7 @@ def add_counter_by_app_id(
     consume_queue_sufix: str,
     publish_queue: str,
     amount_of_forwarding_queues: int,
+    needed_ends: int,
 ):
     output["services"][f"{query}_{num}"] = {
         "container_name": f"{query}_counter{num}",
@@ -118,6 +119,7 @@ def add_counter_by_app_id(
             f"PUBLISH_QUEUE={publish_queue}",
             "LOGGING_LEVEL=DEBUG",
             f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
+            f"NEEDED_ENDS={needed_ends}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -262,7 +264,7 @@ def add_percentile(
             f"NODE_ID={num}",
             f"CONSUME_QUEUE={consume_queue}",
             f"PUBLISH_QUEUE={publish_queue}",
-            "LOGGING_LEVEL=DEBUG",
+            "LOGGING_LEVEL=INFO",
             f"NEEDED_ENDS_TO_FINISH={needed_ends_to_finish}"
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -456,6 +458,7 @@ def generate_q3(output: Dict):
         "consume_queue_sufix": "q3_positive_reviews",
         "publish_queue": "q3_positive_review_count",
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_JOINS,
+        "needed_ends": 1, #filter sends only one end
     }
     generate_counters_by_app_id(
         Q3_AMOUNT_OF_COUNTERS_BY_APP_ID, **q3_counter_by_app_id_args
@@ -574,6 +577,7 @@ def generate_q4(output: Dict):
         "consume_queue_sufix": "q4_negative_reviews_for_counter0",
         "publish_queue": "q4_negative_reviews_count",
         "amount_of_forwarding_queues": 1,  # As it's a filter (working queue)
+        "needed_ends": 1, #onluy receives one end from the filter 
     }
     generate_counters_by_app_id(
         Q4_AMOUNT_OF_FIRST_COUNTER_BY_APP_ID, **q4_negative_reviews_counter_args
@@ -604,7 +608,7 @@ def generate_q4(output: Dict):
         "input_reviews_queue_name": "q4_filter_first_more_than_5000_reviews",
         "output_queue_name": "q4_first_join",
         "needed_games_ends": 1, #It recives from a filter that doesn't have a counter behind 
-        "needed_reviews_ends": Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS,
+        "needed_reviews_ends": Q4_AMOUNT_OF_FIRST_COUNTER_BY_APP_ID, #Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS,
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_SECOND_JOINS,
         "games_columns_to_keep": "0,1",  # app_id, name
         "reviews_columns_to_keep": "",  #
@@ -672,6 +676,7 @@ def generate_q4(output: Dict):
         "consume_queue_sufix": "q4_english_reviews",
         "publish_queue": "q4_english_review_count",
         "amount_of_forwarding_queues": 1, # Next node is a filter -> Filters consume from one queue exlusively
+        "needed_ends":  Q4_AMOUNT_OF_SECOND_JOINS,
     }
     generate_counters_by_app_id(
         Q4_AMOUNT_OF_SECOND_COUNTER_BY_APP_ID, **q4_english_reviews_counter_args
@@ -703,8 +708,8 @@ def generate_q4(output: Dict):
         "output_queue_name": "Q4",
         # Counter followed by filter breaks filter algorithm,
         # now filters sends as many ENDs as instances of itself there are
-        "needed_games_ends": Q4_AMOUNT_OF_SECOND_MORE_THAN_5000_FILTERS, 
-        "needed_reviews_ends": Q4_AMOUNT_OF_SECOND_MORE_THAN_5000_FILTERS,
+        "needed_games_ends": 1, #Q4_AMOUNT_OF_ACTION_GAMES_FILTERS, 
+        "needed_reviews_ends": Q4_AMOUNT_OF_SECOND_COUNTER_BY_APP_ID,
         "amount_of_forwarding_queues": 1,  # 1 as the filters work as a group (will receive only one end from them)
         "games_columns_to_keep": "0,1",  # app_id, name
         "reviews_columns_to_keep": "1",  # count
@@ -737,7 +742,7 @@ def generate_q5(output: Dict):
         "input_queue_name": "q5_games",
         "output_queue_name": "q5_action_games",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_JOINS,
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 2,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
@@ -755,7 +760,7 @@ def generate_q5(output: Dict):
         "input_queue_name": "q5_reviews",
         "output_queue_name": "q5_negative_reviews",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS,
-        "logging_level": "DEBUG",
+        "logging_level": "INFO",
         "column_number_to_use": 1,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
@@ -772,6 +777,7 @@ def generate_q5(output: Dict):
         "consume_queue_sufix": "q5_negative_reviews",
         "publish_queue": "q5_counter",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_JOINS,
+        "needed_ends": 1, #filter sends only one end
     }
 
     generate_counters_by_app_id(
@@ -819,15 +825,15 @@ def generate_output():
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output)
+    #generate_q1(output=output)
     # # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output)
+    #generate_q2(output=output)
     # # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output)
+    #generate_q3(output=output)
     # -------------------------------------------- Q4 -----------------------------------------
-    # generate_q4(output=output)
+    generate_q4(output=output)
     # # # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output)
+    #generate_q5(output=output)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

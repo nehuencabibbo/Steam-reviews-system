@@ -70,7 +70,7 @@ class Join:
             self._amount_of_games_ends_recived += 1
             logging.info("END of games received")
             logging.debug((
-                f"Amount of reviews ends received up to now: {self._amount_of_games_ends_recived}"
+                f"Amount of games ends received up to now: {self._amount_of_games_ends_recived}"
                 f"| Expecting: {self.__config['NEEDED_GAMES_ENDS']}"
             ))
             if self._amount_of_games_ends_recived == self.__config["NEEDED_GAMES_ENDS"]:
