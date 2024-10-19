@@ -1,6 +1,6 @@
 __pycache__/
 tmp/
-data
+data/*.csv
 rabbit.sh
 .venv/
 testing_basic_publish

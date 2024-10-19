@@ -22,7 +22,7 @@ class Join:
         self._amount_of_games_ends_recived = 0
         self._amount_of_reviews_ends_recived = 0
         self._got_sigterm = False
-        #self._got_end = False
+        # self._got_end = False
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -69,10 +69,12 @@ class Join:
         if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
             self._amount_of_games_ends_recived += 1
             logging.info("END of games received")
-            logging.debug((
-                f"Amount of games ends received up to now: {self._amount_of_games_ends_recived}"
-                f"| Expecting: {self.__config['NEEDED_GAMES_ENDS']}"
-            ))
+            logging.debug(
+                (
+                    f"Amount of games ends received up to now: {self._amount_of_games_ends_recived}"
+                    f"| Expecting: {self.__config['NEEDED_GAMES_ENDS']}"
+                )
+            )
             if self._amount_of_games_ends_recived == self.__config["NEEDED_GAMES_ENDS"]:
                 reviews_callback = self.__middleware.generate_callback(
                     self.__reviews_callback,
@@ -149,7 +151,9 @@ class Join:
                         "Q" in forwarding_queue_name
                     ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
                         # TODO: ???
-                        logging.debug(f"Q - Sending {joined_message} to queue {forwarding_queue_name}")
+                        logging.debug(
+                            f"Q - Sending {joined_message} to queue {forwarding_queue_name}"
+                        )
                         self.__middleware.publish(
                             joined_message,
                             forwarding_queue_name,
