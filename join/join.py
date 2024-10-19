@@ -3,8 +3,6 @@ import signal
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
     read_by_range,
-    write_by_range,
-    delete_directory,
     write_batch_by_range,
 )
 from common.protocol.protocol import Protocol
