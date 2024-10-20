@@ -4,6 +4,7 @@ import signal
 import logging
 
 import pika
+from common.client_middleware.client_middleware import ClientMiddleware
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.protocol.protocol import Protocol
 
@@ -13,11 +14,18 @@ AMMOUNT_OF_QUERIES = 5
 
 class Client:
 
-    def __init__(self, config: dict, middleware: Middleware, protocol: Protocol):
+    def __init__(
+        self,
+        config: dict,
+        client_middleware: ClientMiddleware,
+        middleware: Middleware,
+        protocol: Protocol,
+    ):
         self._protocol = protocol
         self._config = config
         self._middleware = middleware
-        self.__create_queues()
+        self._client_middleware = client_middleware
+        # self.__create_queues()
         self._got_sigterm = False
 
         self.__find_and_set_csv_field_size_limit()
@@ -37,10 +45,10 @@ class Client:
             except OverflowError:
                 max_int = int(max_int / 10)
 
-    def __create_queues(self):
+    def __create_queues(self, session_id: str):
         # declare queues for sending data
-        self._middleware.create_queue(self._config["GAMES_QUEUE"])
-        self._middleware.create_queue(self._config["REVIEWS_QUEUE"])
+        self._middleware.create_queue(f'{self._config["GAMES_QUEUE"]}_{session_id}')
+        self._middleware.create_queue(f'{self._config["REVIEWS_QUEUE"]}_{session_id}')
 
         # declare consumer queues
         for i in range(1, AMMOUNT_OF_QUERIES + 1):
@@ -48,12 +56,27 @@ class Client:
             self._middleware.create_queue(self._config[queue_name])
 
     def run(self):
-        self.__send_file(self._config["GAMES_QUEUE"], self._config["GAME_FILE_PATH"])
+        self._client_middleware.create_socket("REQ")
+        self._client_middleware.connect_to(
+            ip=self._config["SERVER_IP"], port=self._config["SERVER_PORT"]
+        )
+        self._client_middleware.send_string("")
+        session_id = self._client_middleware.recv_string()
+
+        logging.debug(f"Received session id: {session_id}")
+
+        self.__create_queues(session_id)
+
         self.__send_file(
-            self._config["REVIEWS_QUEUE"], self._config["REVIEWS_FILE_PATH"]
+            f'{self._config["GAMES_QUEUE"]}_{session_id}',
+            self._config["GAME_FILE_PATH"],
+        )
+        self.__send_file(
+            f'{self._config["REVIEWS_QUEUE"]}_{session_id}',
+            self._config["REVIEWS_FILE_PATH"],
         )
 
-        self.__get_results()
+        # self.__get_results()
 
         if not self._got_sigterm:
             self._middleware.shutdown()

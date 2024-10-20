@@ -1,6 +1,6 @@
 import signal
 import logging
-from typing import * 
+from typing import *
 
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.protocol.protocol import Protocol
@@ -50,8 +50,8 @@ class CounterByAppId:
         if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
             self._ends_received += 1
             logging.debug(
-                    f"Amount of ends received up to now: {self._ends_received} | Expecting: {self._config['NEEDED_ENDS']}"
-                )
+                f"Amount of ends received up to now: {self._ends_received} | Expecting: {self._config['NEEDED_ENDS']}"
+            )
             if self._ends_received == self._config["NEEDED_ENDS"]:
                 self.send_results()
 
@@ -102,16 +102,16 @@ class CounterByAppId:
             self._middleware.publish(record, full_queue_name)
 
     def __send_last_batch_to_forwarding_queues(self):
-        for queue_number in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):   
+        for queue_number in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
             full_queue_name = f'{queue_number}_{self._config["PUBLISH_QUEUE"]}'
 
-            logging.debug(f'Sending last batch to queue: {full_queue_name}')
+            logging.debug(f"Sending last batch to queue: {full_queue_name}")
 
             self._middleware.publish_batch(full_queue_name)
 
     def __send_end_to_forwarding_queues(self, prefix_queue_name):
         for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            self._middleware.send_end(f'{i}_{prefix_queue_name}')
+            self._middleware.send_end(f"{i}_{prefix_queue_name}")
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")

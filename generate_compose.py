@@ -1,7 +1,10 @@
+import logging
 import sys
 import yaml
 from typing import *
 
+
+CLIENTS_PORT = 7777
 
 AMOUNT_OF_DROP_FILTER_COLUMNS = 5
 AMOUNT_OF_DROP_NULLS = 5
@@ -315,17 +318,42 @@ def add_rabbit(output: Dict):
     }
 
 
-def add_client(output: Dict):
+def add_client(output: Dict, debug: bool):
     output["services"]["client1"] = {
         "container_name": "client1",
         "image": "client:latest",
         "entrypoint": "python3 /main.py",
         "environment": [
-            "LOGGING_LEVEL=INFO",
+            f"LOGGING_LEVEL={'DEBUG' if debug else 'INFO'}",
         ],
         "volumes": ["./data/:/data"],
         "networks": ["net"],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
+        "restart": "on-failure",
+    }
+
+
+def add_client_handler(output: Dict, num: int, debug: bool, port: int):
+    depends_on: dict[str, str] = {
+        "rabbitmq": {"condition": "service_healthy"},
+    }
+    for i in range(AMOUNT_OF_DROP_FILTER_COLUMNS):
+        depends_on[f"filter_columns{i}"] = {"condition": "service_started"}
+
+    logging.debug(f"depends_on: {depends_on}")
+
+    output["services"]["client_handler"] = {
+        "container_name": f"client_handler{num}",
+        "image": "client_handler:latest",
+        "entrypoint": "python3 /main.py",
+        "environment": [
+            f"LOGGING_LEVEL={'DEBUG' if debug else 'INFO'}",
+            f"CLIENTS_PORT={port}",
+            f"NEW_CLIENTS_EXCHANGE_NAME=new_clients",  # see filter_columns/config.ini
+        ],
+        "volumes": ["./data/:/data"],
+        "networks": ["net"],
+        "depends_on": depends_on,
         "restart": "on-failure",
     }
 
@@ -851,20 +879,21 @@ def generate_output():
 
     output["services"] = {}
     add_rabbit(output)
-    add_client(output)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS)
+    add_client(output, debug=True)
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=True)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
+    add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=False)
-    # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=False)
-    # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=True)
-    # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=False)
-    # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=False)
+    # generate_q1(output=output, debug=False)
+    # # -------------------------------------------- Q2 -----------------------------------------
+    # generate_q2(output=output, debug=False)
+    # # -------------------------------------------- Q3 -----------------------------------------
+    # generate_q3(output=output, debug=True)
+    # # -------------------------------------------- Q4 -----------------------------------------
+    # generate_q4(output=output, debug=False)
+    # # -------------------------------------------- Q5 -----------------------------------------
+    # generate_q5(output=output, debug=False)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

@@ -45,6 +45,10 @@ class Middleware:
         ]  # [messages encoded, amount of messages]
         self._channel.queue_declare(queue=name)
 
+    def create_anonymous_queue(self):
+        result = self._channel.queue_declare(queue="")
+        return result.method.queue
+
     def attach_callback(self, queue_name, callback):
         self._channel.basic_consume(
             queue=queue_name, on_message_callback=callback, auto_ack=False
@@ -133,3 +137,9 @@ class Middleware:
         return lambda ch, method, props, body: callback(
             method.delivery_tag, body, *args
         )
+
+    def bind_queue_to_exchange(
+        self, exchange_name: str, queue_name: str, exchange_type="fanout"
+    ):
+        self._channel.exchange_declare(exchange_name, exchange_type)
+        self._channel.queue_bind(exchange=exchange_name, queue=queue_name)

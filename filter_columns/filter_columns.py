@@ -30,8 +30,34 @@ class FilterColumns:
 
     def start(self):
         # Queues that the client uses to send data
-        self._middleware.create_queue(self._config["CLIENT_GAMES_QUEUE_NAME"])
-        self._middleware.create_queue(self._config["CLIENT_REVIEWS_QUEUE_NAME"])
+        anonymous_queue_name = self._middleware.create_anonymous_queue()
+        self._middleware.bind_queue_to_exchange(
+            exchange_name=self._config["NEW_CLIENTS_EXCHANGE_NAME"],
+            queue_name=anonymous_queue_name,
+        )
+
+        new_clients_callback = self._middleware.__class__.generate_callback(
+            self.__handle_new_clients
+        )
+        self._middleware.attach_callback(anonymous_queue_name, new_clients_callback)
+
+        try:
+            self._middleware.start_consuming()
+        except MiddlewareError as e:
+            # TODO: If got_sigterm is showing any error needed?
+            if not self._got_sigterm:
+                logging.error(e)
+
+    def __handle_new_clients(self, delivery_tag: int, body: List[str]):
+        session_id = self._middleware.get_rows_from_message(body)[0][0]
+        logging.debug(f"session_id: {session_id}")
+
+        self._middleware.create_queue(
+            f'{self._config["CLIENT_GAMES_QUEUE_NAME"]}_{session_id}'
+        )
+        self._middleware.create_queue(
+            f'{self._config["CLIENT_REVIEWS_QUEUE_NAME"]}_{session_id}'
+        )
         # Queues that filter columns uses to send data to null drop
         self._middleware.create_queue(self._config["NULL_DROP_GAMES_QUEUE_NAME"])
         self._middleware.create_queue(self._config["NULL_DROP_REVIEWS_QUEUE_NAME"])
@@ -42,7 +68,7 @@ class FilterColumns:
             self._config["NULL_DROP_GAMES_QUEUE_NAME"],
         )
         self._middleware.attach_callback(
-            self._config["CLIENT_GAMES_QUEUE_NAME"], games_callback
+            f'{self._config["CLIENT_GAMES_QUEUE_NAME"]}_{session_id}', games_callback
         )
 
         reviews_callback = self._middleware.__class__.generate_callback(
@@ -51,16 +77,11 @@ class FilterColumns:
             self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
         )
         self._middleware.attach_callback(
-            self._config["CLIENT_REVIEWS_QUEUE_NAME"], reviews_callback
+            f'{self._config["CLIENT_REVIEWS_QUEUE_NAME"]}_{session_id}',
+            reviews_callback,
         )
 
-        self._middleware.turn_fair_dispatch()
-        try:
-            self._middleware.start_consuming()
-        except MiddlewareError as e:
-            # TODO: If got_sigterm is showing any error needed?
-            if not self._got_sigterm:
-                logging.error(e)
+        self._middleware.ack(delivery_tag=delivery_tag)
 
     def __handle_end_transmission(
         self, body: List[str], reciving_queue_name: str, forwarding_queue_name: str
