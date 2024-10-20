@@ -885,7 +885,7 @@ def generate_output():
     add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    # generate_q1(output=output, debug=False)
+    generate_q1(output=output, debug=False)
     # # -------------------------------------------- Q2 -----------------------------------------
     # generate_q2(output=output, debug=False)
     # # -------------------------------------------- Q3 -----------------------------------------

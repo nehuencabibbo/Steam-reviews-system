@@ -97,8 +97,13 @@ class Middleware:
     def get_rows_from_message(self, message) -> list[list[str]]:
         return self.__protocol.decode_batch(message)
 
-    def send_end(self, queue, exchange_name="", end_message=END_TRANSMISSION_MESSAGE):
-        end_message = self.__protocol.add_to_batch(current_batch=b"", row=[end_message])
+    def send_end(
+        self,
+        queue,
+        exchange_name="",
+        end_message: list[str] = [END_TRANSMISSION_MESSAGE],
+    ):
+        end_message = self.__protocol.add_to_batch(current_batch=b"", row=end_message)
         self._channel.basic_publish(
             exchange=exchange_name, routing_key=queue, body=end_message
         )
