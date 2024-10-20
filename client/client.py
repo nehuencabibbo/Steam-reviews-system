@@ -6,7 +6,8 @@ import logging
 import pika
 from common.client_middleware.client_middleware import ClientMiddleware
 from common.middleware.middleware import Middleware, MiddlewareError
-from common.protocol.protocol import Protocol
+
+from typing import * 
 
 FILE_END_MSG = "END"
 AMMOUNT_OF_QUERIES = 5
@@ -19,16 +20,13 @@ class Client:
         config: dict,
         client_middleware: ClientMiddleware,
         middleware: Middleware,
-        protocol: Protocol,
     ):
-        self._protocol = protocol
         self._config = config
         self._middleware = middleware
         self._client_middleware = client_middleware
-        # self.__create_queues()
         self._got_sigterm = False
 
-        self._session_id: str = None
+        self._client_id: str = None
 
         self.__find_and_set_csv_field_size_limit()
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
@@ -47,14 +45,14 @@ class Client:
             except OverflowError:
                 max_int = int(max_int / 10)
 
-    def __create_queues(self, session_id: str):
-        # declare queues for sending data
-        self._middleware.create_queue(f'{self._config["GAMES_QUEUE"]}_{session_id}')
-        self._middleware.create_queue(f'{self._config["REVIEWS_QUEUE"]}_{session_id}')
+    def __create_queues(self, client_id: str):
+        # Forwarding data queues 
+        self._middleware.create_queue(f'{self._config["GAMES_QUEUE"]}_{client_id}')
+        self._middleware.create_queue(f'{self._config["REVIEWS_QUEUE"]}_{client_id}')
 
-        # declare consumer queues
+        # Queues for reciving results 
         for i in range(1, AMMOUNT_OF_QUERIES + 1):
-            queue_name = f"Q{i}_{session_id}"
+            queue_name = f"Q{i}_{client_id}"
             self._middleware.create_queue(queue_name)
 
     def run(self):
@@ -63,19 +61,19 @@ class Client:
             ip=self._config["SERVER_IP"], port=self._config["SERVER_PORT"]
         )
         self._client_middleware.send_string("")
-        session_id = self._client_middleware.recv_string()
+        client_id = self._client_middleware.recv_string()
 
-        logging.debug(f"Received session id: {session_id}")
+        logging.debug(f"Received client id: {client_id}")
 
-        self._session_id = session_id
-        self.__create_queues(session_id)
+        self._client_id = client_id
+        self.__create_queues(client_id)
 
         self.__send_file(
-            f'{self._config["GAMES_QUEUE"]}_{session_id}',
+            f'{self._config["GAMES_QUEUE"]}_{client_id}',
             self._config["GAME_FILE_PATH"],
         )
         self.__send_file(
-            f'{self._config["REVIEWS_QUEUE"]}_{session_id}',
+            f'{self._config["REVIEWS_QUEUE"]}_{client_id}',
             self._config["REVIEWS_FILE_PATH"],
         )
 
@@ -93,32 +91,31 @@ class Client:
                 if self._got_sigterm:
                     return
                 logging.debug(f"Sending appID {row[0]} to {queue_name}")
-                # encoded_message = self.protocol.encode(row)
 
                 self._middleware.publish(row, queue_name=queue_name)
                 time.sleep(self._config["SENDING_WAIT_TIME"])
 
         logging.debug("Sending file end")
-        # encoded_message = self.protocol.encode([FILE_END_MSG])
         self._middleware.publish_batch(queue_name)
         self._middleware.send_end(queue=queue_name)
-        # self.middleware.publish(encoded_message, queue_name=queue_name)
 
     def __get_results(self):
 
         for number_of_query in range(1, AMMOUNT_OF_QUERIES + 1):
-            # for number_of_query in range(4, 5):
             if self._got_sigterm:
                 return
             
-            queue_name = f"Q{number_of_query}_{self._session_id}"
+            queue_name = f"Q{number_of_query}_{self._client_id}"
             logging.debug((
-                f"Waiting for results of query {number_of_query},\n"
-                f"on queue {queue_name}"
+                f"Waiting for results of query {number_of_query}, on queue {queue_name}"
             ))
 
+            callback = self._middleware.__class__.generate_callback(
+                self.__handle_query_result,
+                number_of_query
+            )
 
-            self._middleware.attach_callback(queue_name, self.__handle_query_result)
+            self._middleware.attach_callback(queue_name, callback)
             try:
                 self._middleware.start_consuming()
             except MiddlewareError as e:
@@ -128,21 +125,18 @@ class Client:
 
             logging.info("Finished")
 
-    def __handle_query_result(self, ch, method, properties, body):
+    def __handle_query_result(self, delivery_tag: int, body: List[List[str]], query_number: int):
 
         body = self._middleware.get_rows_from_message(message=body)
-        logging.debug(body)
         for message in body:
-            # message = [value.strip() for value in message]
-
             if len(message) == 1 and message[0] == FILE_END_MSG:
                 self._middleware.stop_consuming()
-                self._middleware.ack(method.delivery_tag)
+                self._middleware.ack(delivery_tag)
                 return
 
-            logging.info(f"{method.routing_key} result: {message}")
+            logging.info(f"Q{query_number} result: {message}")
 
-        self._middleware.ack(method.delivery_tag)
+        self._middleware.ack(delivery_tag)
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
