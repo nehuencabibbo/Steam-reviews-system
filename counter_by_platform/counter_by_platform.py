@@ -3,14 +3,19 @@ import logging
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import *
 from common.protocol.protocol import Protocol
+from typing import * 
 
 END_TRANSMISSION_MESSAGE = "END"
 
+BOCA = 1
+END_TRANSMISSION_SESSION_ID = 0
+
+REGULAR_MESSAGE_SESSION_ID = 0
+REGULAR_MESSAGE_FIELD_TO_COUNT_BY = 1 
 
 class CounterByPlatform:
 
-    def __init__(self, config, middleware: Middleware, protocol: Protocol):
-        self._protocol = protocol
+    def __init__(self, config, middleware: Middleware):
         self._config = config
         self._middleware = middleware
         self._got_sigterm = False
@@ -25,7 +30,11 @@ class CounterByPlatform:
         self._middleware.create_queue(consume_queue_name)
         self._middleware.create_queue(self._config["PUBLISH_QUEUE"])
 
-        self._middleware.attach_callback(consume_queue_name, self.handle_message)
+        callback = self._middleware.generate_callback(
+            self.__handle_message
+        )
+
+        self._middleware.attach_callback(consume_queue_name, callback)
 
         try:
             logging.debug("Starting to consume...")
@@ -35,48 +44,66 @@ class CounterByPlatform:
             if not self._got_sigterm:
                 logging.error(e)
 
-    def handle_message(self, ch, method, properties, body):
+    def __handle_message(self, delivery_tag: int, body: List[List[str]]):
         body = self._middleware.get_rows_from_message(body)
         for message in body:
-            # message = [value.strip() for value in message]
 
             logging.debug(f"GOT MSG: {message}")
 
-            if len(message) == 1 and message[0] == "END":
-                self.send_results()
-                self._middleware.ack(method.delivery_tag)
+            if message[BOCA] == END_TRANSMISSION_MESSAGE:
+                logging.debug('Recived END transmssion')
+                session_id = message[END_TRANSMISSION_SESSION_ID]
+
+                self.__send_results(session_id)
+                self._middleware.ack(delivery_tag)
+
                 return
+            
+            logging.debug(message)
+            session_id = message[REGULAR_MESSAGE_SESSION_ID]
+            field_to_count = message[REGULAR_MESSAGE_FIELD_TO_COUNT_BY]
 
-            field_to_count = message[0]
-            self.count(field_to_count)
+            self.__count(field_to_count, session_id)
 
-        self._middleware.ack(method.delivery_tag)
+        self._middleware.ack(delivery_tag)
 
-    def send_results(self):
+
+    def __send_results(self, session_id: str):
         # TODO: READ FROM STORAGE
+        logging.debug(self._count_dict)
+        publish_queue = f'{self._config["PUBLISH_QUEUE"]}_{session_id}'
 
-        for key, value in self._count_dict.items():
+        logging.debug(self._count_dict[session_id].items())
+        self._middleware.create_queue(publish_queue)
+        for platform, count in self._count_dict[session_id].items():
+            logging.debug(f"{platform}, {count}")
             if self._got_sigterm:
                 return
 
             # encoded_msg = self.protocol.encode([key, str(value)])
             self._middleware.publish(
-                [key, str(value)], queue_name=self._config["PUBLISH_QUEUE"]
+                [platform, str(count)], queue_name=publish_queue
             )
 
         # encoded_msg = self.protocol.encode([END_TRANSMISSION_MESSAGE])
         # self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
-        self._middleware.publish_batch(self._config["PUBLISH_QUEUE"])
+        self._middleware.publish_batch(publish_queue)
         self._middleware.send_end(
-            queue=self._config["PUBLISH_QUEUE"],
+            queue=publish_queue,
         )
-        logging.debug("Sent results")
+        logging.debug(f"Sent results to queue {publish_queue}")
 
-    def count(self, field_to_count):
+    def __count(self, field_to_count: str, session_id: str):
         # TODO: SAVE AND UPDATE ON STORAGE
 
-        actual_count = self._count_dict.get(field_to_count, 0)
-        self._count_dict[field_to_count] = actual_count + 1
+        # session_id = {windows: algo, mac: algo, linux: algo}
+
+        if not session_id in self._count_dict: 
+            self._count_dict[session_id] = {}
+
+        session_id_field_count = self._count_dict[session_id].get(field_to_count, 0)
+
+        self._count_dict[session_id][field_to_count] = session_id_field_count + 1
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")

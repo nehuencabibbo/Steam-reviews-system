@@ -56,9 +56,8 @@ def main():
     
     broker_ip = config.pop("RABBIT_IP")
     middleware = Middleware(broker_ip)
-    protocol = Protocol()
     
-    counter = CounterByPlatform(config, middleware, protocol)
+    counter = CounterByPlatform(config, middleware)
     logging.info("RUNNING COUNTER")
     counter.run()
 

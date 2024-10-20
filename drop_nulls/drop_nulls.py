@@ -184,6 +184,7 @@ class DropNulls:
                         [client_id, platform],
                         f"{node_id}_{self._config['Q1_PLATFORM']}",
                     )
+                    logging.debug(f"Q1: Sent {[client_id, platform]} to {node_id}_{self._config['Q1_PLATFORM']}")
 
             # Q2 Games: app_id, name, release date, genre, avg playtime forever
             # encoded_message = self._protocol.encode(
@@ -276,7 +277,7 @@ class DropNulls:
             #     [message[REVIEW_APP_ID], message[REVIEW_TEXT], message[REVIEW_SCORE]]
             # )
             self.r += 1
-            logging.debug(f"amount of reviews sent to q4: {self.r}")
+            # logging.debug(f"amount of reviews sent to q4: {self.r}")
             self._middleware.publish(
                 [
                     client_id,

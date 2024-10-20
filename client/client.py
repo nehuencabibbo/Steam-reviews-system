@@ -28,6 +28,8 @@ class Client:
         # self.__create_queues()
         self._got_sigterm = False
 
+        self._session_id: str = None
+
         self.__find_and_set_csv_field_size_limit()
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -52,8 +54,8 @@ class Client:
 
         # declare consumer queues
         for i in range(1, AMMOUNT_OF_QUERIES + 1):
-            queue_name = f"Q{i}_RESULT_QUEUE"
-            self._middleware.create_queue(self._config[queue_name])
+            queue_name = f"Q{i}_{session_id}"
+            self._middleware.create_queue(queue_name)
 
     def run(self):
         self._client_middleware.create_socket("REQ")
@@ -65,6 +67,7 @@ class Client:
 
         logging.debug(f"Received session id: {session_id}")
 
+        self._session_id = session_id
         self.__create_queues(session_id)
 
         self.__send_file(
@@ -76,7 +79,7 @@ class Client:
             self._config["REVIEWS_FILE_PATH"],
         )
 
-        # self.__get_results()
+        self.__get_results()
 
         if not self._got_sigterm:
             self._middleware.shutdown()
@@ -107,9 +110,13 @@ class Client:
             # for number_of_query in range(4, 5):
             if self._got_sigterm:
                 return
-            logging.debug(f"Waiting for results of query {number_of_query}")
+            
+            queue_name = f"Q{number_of_query}_{self._session_id}"
+            logging.debug((
+                f"Waiting for results of query {number_of_query},\n"
+                f"on queue {queue_name}"
+            ))
 
-            queue_name = self._config[f"Q{number_of_query}_RESULT_QUEUE"]
 
             self._middleware.attach_callback(queue_name, self.__handle_query_result)
             try:
@@ -124,6 +131,7 @@ class Client:
     def __handle_query_result(self, ch, method, properties, body):
 
         body = self._middleware.get_rows_from_message(message=body)
+        logging.debug(body)
         for message in body:
             # message = [value.strip() for value in message]
 

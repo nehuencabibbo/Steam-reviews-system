@@ -2,6 +2,7 @@ __pycache__/
 tmp/
 data/*.csv
 rabbit.sh
+data/results 
 .venv/
 testing_basic_publish
 run_client.sh

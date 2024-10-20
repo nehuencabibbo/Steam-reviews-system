@@ -100,7 +100,7 @@ def add_counter_by_platform(
             f"NODE_ID={num}",
             f"CONSUME_QUEUE_SUFIX={consume_queue_sufix}",
             f"PUBLISH_QUEUE={publish_queue}",
-            f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
+            f"LOGGING_LEVEL={'DEBUG' if debug else 'INFO'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -386,7 +386,7 @@ def generate_joins(
         add_join(**kwargs, num=i, debug=debug)
 
 
-def generate_q1(output=Dict, debug=False):
+def generate_q1(output=Dict, debug=True):
     add_counter_by_platform(
         output=output,
         query="q1",
@@ -885,7 +885,7 @@ def generate_output():
     add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=False)
+    generate_q1(output=output, debug=True)
     # # -------------------------------------------- Q2 -----------------------------------------
     # generate_q2(output=output, debug=False)
     # # -------------------------------------------- Q3 -----------------------------------------
