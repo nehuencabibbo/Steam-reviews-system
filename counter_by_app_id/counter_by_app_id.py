@@ -8,7 +8,12 @@ from common.storage import storage
 from utils.utils import node_id_to_send_to
 
 END_TRANSMISSION_MESSAGE = "END"
-APP_ID = 0
+
+END_MESSAGE_CLIENT_ID = 0
+END_MESSAGE_END = 1
+
+REGULAR_MESSAGE_CLIENT_ID = 0
+REGULAR_MESSAGE_APP_ID = 1
 
 
 class CounterByAppId:
@@ -21,15 +26,22 @@ class CounterByAppId:
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
-
+        # Creating reciving queue
         consume_queue_name = (
             f"{self._config['NODE_ID']}_{self._config['CONSUME_QUEUE_SUFIX']}"
         )
         self._middleware.create_queue(consume_queue_name)
-        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
-            self._middleware.create_queue(f'{i}_{self._config["PUBLISH_QUEUE"]}')
 
-        self._middleware.attach_callback(consume_queue_name, self.handle_message)
+        # Creating forwarding queues
+        self.__create_all_forwarding_queues()
+
+        callback = self._middleware.__class__.generate_callback(
+            self.__handle_message
+        )
+        self._middleware.attach_callback(
+            consume_queue_name, 
+            callback
+        )
 
         try:
             logging.debug("Starting to consume...")
@@ -41,46 +53,61 @@ class CounterByAppId:
 
         logging.info("Finished")
 
-    def handle_message(self, ch, method, properties, body):
+    def __create_all_forwarding_queues(self):
+        for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
+            self._middleware.create_queue(f'{i}_{self._config["PUBLISH_QUEUE"]}')
+
+    def __handle_message(self, delivery_tag: int, body: List[List[str]]):
 
         body = self._middleware.get_rows_from_message(body)
 
         logging.debug(f"GOT MSG: {body}")
 
-        if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
+        if body[0][END_MESSAGE_END] == END_TRANSMISSION_MESSAGE:
             self._ends_received += 1
             logging.debug(
                 f"Amount of ends received up to now: {self._ends_received} | Expecting: {self._config['NEEDED_ENDS']}"
             )
             if self._ends_received == self._config["NEEDED_ENDS"]:
-                self.send_results()
+                client_id = body[END_MESSAGE_CLIENT_ID]
 
-            self._middleware.ack(method.delivery_tag)
+                self.__send_results(client_id)
+
+            self._middleware.ack(delivery_tag)
             return
 
-        count_per_record = {}
+        # client_id: {}
+        count_per_record_by_client_id = {}
         for record in body:
-            record_id = record[0]
-            count_per_record[record_id] = count_per_record.get(record_id, 0) + 1
+            client_id = record[REGULAR_MESSAGE_CLIENT_ID]
+            record_id = record[REGULAR_MESSAGE_APP_ID]
 
-        storage.sum_batch_to_records(
-            self._config["STORAGE_DIR"],
-            self._config["RANGE_FOR_PARTITION"],
-            count_per_record,
-        )
+            if not client_id in count_per_record_by_client_id:
+                count_per_record_by_client_id[client_id] = {}
 
-        self._middleware.ack(method.delivery_tag)
+            count_per_record_by_client_id[client_id][record_id] = count_per_record_by_client_id[client_id].get(record_id, 0) + 1
+        
+        # TODO: Optimize
+        for client_id in count_per_record_by_client_id: 
+            count = count_per_record_by_client_id[client_id]
+            storage_dir = f"{self._config["STORAGE_DIR"]}/{client_id}"
 
-    def send_results(self):
+            storage.sum_batch_to_records(
+                storage_dir,
+                self._config["RANGE_FOR_PARTITION"],
+                count,
+            )
 
+        self._middleware.ack(delivery_tag)
+
+    def __send_results(self, client_id: str):
         queue_name = self._config["PUBLISH_QUEUE"]
 
-        reader = storage.read_all_files(self._config["STORAGE_DIR"])
+        storage_dir = f"{self._config["STORAGE_DIR"]}/{client_id}"
+        reader = storage.read_all_files(storage_dir)
 
         for record in reader:
             self.__send_record_to_forwarding_queues(record)
-
-            # self._middleware.publish(record, queue_name)
 
         self.__send_last_batch_to_forwarding_queues()
         self.__send_end_to_forwarding_queues(prefix_queue_name=queue_name)
