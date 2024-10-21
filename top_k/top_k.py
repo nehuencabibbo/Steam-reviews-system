@@ -82,9 +82,15 @@ class TopK:
 
                 self.__middleware.create_queue(forwarding_queue_name)
                 self.__send_top(forwarding_queue_name, client_id=client_id)
+
+                end_message = (
+                    [END_TRANSMISSION_MESSAGE]
+                    if "Q" in forwarding_queue
+                    else [client_id, END_TRANSMISSION_MESSAGE]
+                )
                 self.__middleware.send_end(
                     queue=forwarding_queue_name,
-                    end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                    end_message=end_message,
                 )
 
             self.__middleware.ack(delivery_tag)

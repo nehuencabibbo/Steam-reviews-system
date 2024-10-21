@@ -470,10 +470,10 @@ def generate_q3(output: Dict, debug=False):
         "input_queue_name": "q3_games",
         "output_queue_name": "q3_indie_games",
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_JOINS,
-        "column_number_to_use": 2,  # genre
+        "column_number_to_use": 3,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
-        "columns_to_keep": "0,1",  # app_id, name
+        "columns_to_keep": "0,1,2",  # client_id, app_id, name
         "instances_of_myself": Q3_AMOUNT_OF_INDIE_GAMES_FILTERS,
     }
 
@@ -488,10 +488,10 @@ def generate_q3(output: Dict, debug=False):
         "input_queue_name": "q3_reviews",
         "output_queue_name": "q3_positive_reviews",
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
-        "column_number_to_use": 1,  # review_score
+        "column_number_to_use": 2,  # review_score
         "value_to_filter_by": 1.0,  # positive_review
         "criteria": "EQUAL_FLOAT",
-        "columns_to_keep": 0,  # app_id ,
+        "columns_to_keep": "0,1",  # client_id, app_id ,
         "instances_of_myself": Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS,
     }
     generate_filters_by_value(
@@ -516,12 +516,13 @@ def generate_q3(output: Dict, debug=False):
         "input_games_queue_name": "q3_indie_games",
         "input_reviews_queue_name": "q3_positive_review_count",
         "output_queue_name": "q3_join_by_app_id_result",
-        "games_columns_to_keep": "1",  # name
+        "games_columns_to_keep": "1",  # name 
         "reviews_columns_to_keep": "1",  # positive_review_count
         "needed_games_ends": 1,
         "needed_reviews_ends": Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_TOP_K_NODES,
     }
+    # See handle_reviews in join to see that client_id is not needed in reviews/games_columns_to_keep
 
     generate_joins(
         amount_of_joins=Q3_AMOUNT_OF_JOINS,
@@ -890,9 +891,9 @@ def generate_output():
     # -------------------------------------------- Q1 -----------------------------------------
     generate_q1(output=output, debug=False)
     # # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=True)
+    generate_q2(output=output, debug=False)
     # # -------------------------------------------- Q3 -----------------------------------------
-    # generate_q3(output=output, debug=True)
+    generate_q3(output=output, debug=True)
     # # -------------------------------------------- Q4 -----------------------------------------
     # generate_q4(output=output, debug=False)
     # # -------------------------------------------- Q5 -----------------------------------------

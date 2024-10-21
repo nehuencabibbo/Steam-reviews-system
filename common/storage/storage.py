@@ -218,7 +218,6 @@ def read_top(dir: str, k: int):
 
 
 def read_all_files(dir: str):
-
     if not os.path.exists(dir):
         return []  # No partitions on this dir.
 
@@ -229,7 +228,6 @@ def read_all_files(dir: str):
             continue
 
         file_path = os.path.join(dir, filename)
-
         with open(file_path, "r") as f:
             reader = csv.reader(f)
             for line in reader:
