@@ -406,10 +406,11 @@ def generate_q2(output=Dict, debug=False):
         "input_queue_name": "q2_games",
         "output_queue_name": "q2_indie_games",
         "amount_of_forwarding_queues": 1,
-        "column_number_to_use": 4,  # genre
+        # "column_number_to_use": 4,  # genre
+        "column_number_to_use": 5,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
-        "columns_to_keep": "0,1,2,3",
+        "columns_to_keep": "0,1,2,3,4",
         "instances_of_myself": Q2_AMOUNT_OF_INDIE_GAMES_FILTERS,
     }
     generate_filters_by_value(
@@ -423,10 +424,12 @@ def generate_q2(output=Dict, debug=False):
         "input_queue_name": "0_q2_indie_games",
         "output_queue_name": "q2_indie_games_from_last_decade",
         "amount_of_forwarding_queues": Q2_AMOUNT_OF_TOP_K_NODES,
-        "column_number_to_use": 2,  # release date
+        # "column_number_to_use": 2,  # release date
+        "column_number_to_use": 3,  # release date
         "value_to_filter_by": 201,
         "criteria": "CONTAINS",
-        "columns_to_keep": "1,3",  # name, avg_forever
+        # "columns_to_keep": "1,3",  # name, avg_forever
+        "columns_to_keep": "0,2,4",  # client_id, name, avg_forever
         "instances_of_myself": Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS,
     }
 
@@ -885,9 +888,9 @@ def generate_output():
     add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=True)
+    generate_q1(output=output, debug=False)
     # # -------------------------------------------- Q2 -----------------------------------------
-    # generate_q2(output=output, debug=False)
+    generate_q2(output=output, debug=True)
     # # -------------------------------------------- Q3 -----------------------------------------
     # generate_q3(output=output, debug=True)
     # # -------------------------------------------- Q4 -----------------------------------------

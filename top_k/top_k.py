@@ -1,7 +1,13 @@
 import logging
 import signal
 from common.middleware.middleware import Middleware, MiddlewareError
-from common.storage.storage import add_to_top, read_top, delete_directory, add_batch_to_sorted_file, read_sorted_file
+from common.storage.storage import (
+    add_to_top,
+    read_top,
+    delete_directory,
+    add_batch_to_sorted_file,
+    read_sorted_file,
+)
 from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
@@ -30,13 +36,13 @@ class TopK:
             f"{self.__config['NODE_ID']}_{self.__config['INPUT_TOP_K_QUEUE_NAME']}"
         )
 
-        self.__middleware.create_queue(self.__config["OUTPUT_TOP_K_QUEUE_NAME"])
+        # self.__middleware.create_queue(self.__config["OUTPUT_TOP_K_QUEUE_NAME"])
 
         # # callback, inputq, outputq
         games_callback = self.__middleware.generate_callback(
             self.__callback,
             f"{self.__config['NODE_ID']}_{self.__config['INPUT_TOP_K_QUEUE_NAME']}",
-            self.__config["OUTPUT_TOP_K_QUEUE_NAME"],
+            # self.__config["OUTPUT_TOP_K_QUEUE_NAME"],
         )
 
         self.__middleware.attach_callback(
@@ -49,12 +55,12 @@ class TopK:
             if not self._got_sigterm:
                 logging.error(e)
 
-    def __callback(self, delivery_tag, body, message_type, forwarding_queue_name):
+    def __callback(self, delivery_tag, body, message_type):
 
         body = self.__middleware.get_rows_from_message(body)
         logging.debug(f"[INPUT GAMES] received: {body}")
 
-        if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
+        if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
             self.__total_ends_received += 1
             logging.debug("END of games received")
             logging.debug(
@@ -65,9 +71,21 @@ class TopK:
                 self.__total_ends_received
                 == self.__config["AMOUNT_OF_RECEIVING_QUEUES"]
             ):
-                # TODO: Aca manda el topk
-                self.__send_top(forwarding_queue_name)
-                self.__middleware.send_end(queue=forwarding_queue_name)
+                client_id = body[0][0]
+                forwarding_queue = self.__config["OUTPUT_TOP_K_QUEUE_NAME"]
+                # Add the client id if its sink node
+                forwarding_queue_name = (
+                    f"{forwarding_queue}_{client_id}"
+                    if "Q" in forwarding_queue
+                    else forwarding_queue
+                )
+
+                self.__middleware.create_queue(forwarding_queue_name)
+                self.__send_top(forwarding_queue_name, client_id=client_id)
+                self.__middleware.send_end(
+                    queue=forwarding_queue_name,
+                    end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                )
 
             self.__middleware.ack(delivery_tag)
 
@@ -79,7 +97,17 @@ class TopK:
             return
 
         try:
-            add_batch_to_sorted_file("/tmp", body, ascending=False, limit=int(self.__config["K"]))
+            # TODO: optimize
+            for record in body:
+                client_id = record.pop(0)
+                storage_dir = f"/tmp/{client_id}"
+
+                add_batch_to_sorted_file(
+                    storage_dir,
+                    [record],
+                    ascending=False,
+                    limit=int(self.__config["K"]),
+                )
         except ValueError as e:
             logging.error(
                 f"An error has occurred. {e}",
@@ -87,8 +115,10 @@ class TopK:
 
         self.__middleware.ack(delivery_tag)
 
-    def __send_top(self, forwarding_queue_name):
-        for record in read_sorted_file("tmp/"):
+    def __send_top(self, forwarding_queue_name, client_id):
+        for record in read_sorted_file(f"tmp/{client_id}"):
+            if not "Q" in forwarding_queue_name:
+                record.insert(0, client_id)
             self.__middleware.publish(record, forwarding_queue_name, "")
 
         self.__middleware.publish_batch(forwarding_queue_name)

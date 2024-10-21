@@ -29,12 +29,14 @@ class FilterColumnByValue:
         self._got_sigterm = False
         self._filter_by_criteria: Callable[[List[str]], None] = None
 
-        # Config variables 
-        # Config variables that are recurrently accesed in callback functions are 
+        # Config variables
+        # Config variables that are recurrently accesed in callback functions are
         # stored so there's no unnecesary key hashing for dictionary access each
-        # time the callback function is called 
+        # time the callback function is called
         self._forwarding_queue_names: List[str] = self._config["FORWARDING_QUEUE_NAMES"]
-        self._amount_of_forwarding_queues: List[int] = self._config["AMOUNT_OF_FORWARDING_QUEUES"]
+        self._amount_of_forwarding_queues: List[int] = self._config[
+            "AMOUNT_OF_FORWARDING_QUEUES"
+        ]
         self._columns_to_keep: List[int] = self._config["COLUMNS_TO_KEEP"]
         self._column_number_to_use: int = self._config["COLUMN_NUMBER_TO_USE"]
         self._value_to_filter_by: str = self._config["VALUE_TO_FILTER_BY"]
@@ -65,29 +67,23 @@ class FilterColumnByValue:
                 logging.error(e)
 
     def __create_all_forwarding_queues(self):
-        '''
+        """
         If amount_of_forwarding_queues = [2, 3] and forwarding_queue_names = ['pablo', 'rabbit']
-        then the following queues will be created: 
+        then the following queues will be created:
 
         - 0_pablo
         - 1_pablo
         - 0_rabbit
         - 1_rabbit
         - 2_rabbit
-        '''
+        """
         for i in range(len(self._amount_of_forwarding_queues)):
             queues_to_create = self._amount_of_forwarding_queues[i]
             queue_name = self._forwarding_queue_names[i]
 
-            logging.info(f"CREATING_QUEUES: {queues_to_create}")
-            logging.info(f"OF TYPE: {queue_name}")
             for queue_number in range(queues_to_create):
-                logging.info(f"IN LOOP: {queue_number}")
                 full_queue_name = f"{queue_number}_{queue_name}"
-                self._middleware.create_queue(
-                    full_queue_name
-                )
-
+                self._middleware.create_queue(full_queue_name)
 
     def __handle_end_transmission(self, body: List[str]):
         # Si me llego un END...
@@ -97,12 +93,15 @@ class FilterColumnByValue:
         # Si no es asi => Checkeo si mi ID esta en la lista
         #     Si es asi => No agrego nada y reencolo
         #     Si no es asi => Agrego mi id a la lista y reencolo
-        peers_that_recived_end = body[1:]
+
+        peers_that_recived_end = body[2:]
+        client_id = body[0]
+
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
-            self.__send_end_transmission_to_all_forwarding_queues()
+            self.__send_end_transmission_to_all_forwarding_queues(client_id)
         else:
 
-            message = [END_TRANSMISSION_MESSAGE]
+            message = [client_id, END_TRANSMISSION_MESSAGE]
             if not self._node_id in peers_that_recived_end:
                 peers_that_recived_end.append(self._node_id)
 
@@ -117,15 +116,15 @@ class FilterColumnByValue:
         for i in range(len(self._amount_of_forwarding_queues)):
             amount_of_current_queue = self._amount_of_forwarding_queues[i]
             queue_name = self._forwarding_queue_names[i]
-                
+
             logging.info(f"AMOUNT_OF_CURRENT_QUEUE: {amount_of_current_queue}")
             for queue_number in range(amount_of_current_queue):
                 full_queue_name = f"{queue_number}_{queue_name}"
-                logging.debug(f'Sending last batch to queue: {full_queue_name}')
+                logging.debug(f"Sending last batch to queue: {full_queue_name}")
 
                 self._middleware.publish_batch(full_queue_name)
 
-    def __send_end_transmission_to_all_forwarding_queues(self):
+    def __send_end_transmission_to_all_forwarding_queues(self, client_id: str):
         # TODO: Repeated code between this and send last batch, remove
         for i in range(len(self._amount_of_forwarding_queues)):
             amount_of_current_queue = self._amount_of_forwarding_queues[i]
@@ -133,22 +132,19 @@ class FilterColumnByValue:
 
             for queue_number in range(amount_of_current_queue):
                 full_queue_name = f"{queue_number}_{queue_name}"
-                logging.info(f'Sending END to queue: {full_queue_name}')
+                logging.info(f"Sending END to queue: {full_queue_name}")
 
                 self._middleware.send_end(
-                    queue=full_queue_name
+                    queue=full_queue_name,
+                    end_message=[client_id, END_TRANSMISSION_MESSAGE],
                 )
 
-    def __handle_message(
-            self, 
-            delivery_tag: int, 
-            body: bytes
-        ):
+    def __handle_message(self, delivery_tag: int, body: bytes):
         body = self._middleware.get_rows_from_message(body)
         for message in body:
             logging.debug(f"Recived message: {message}")
 
-            if message[0] == END_TRANSMISSION_MESSAGE:
+            if message[1] == END_TRANSMISSION_MESSAGE:
                 logging.info(f"GOT END: {body}")
                 self.__send_last_batch_to_fowarding_queues()
                 self.__handle_end_transmission(message)
@@ -208,7 +204,7 @@ class FilterColumnByValue:
         if detected_language == self._value_to_filter_by.lower():
             self.__send_message(body)
 
-    def __filter_equal_float(self, body: List[str]): 
+    def __filter_equal_float(self, body: List[str]):
         column_to_use = body[self._column_number_to_use]
         try:
             column_to_use = float(column_to_use)
@@ -218,7 +214,6 @@ class FilterColumnByValue:
 
         if column_to_use == value_to_filter_by:
             self.__send_message(body)
-
 
     def __filter_columns(self, data: List[str]):
         # No filter needed
@@ -232,27 +227,21 @@ class FilterColumnByValue:
         Do not use to send END message as it is handled differently.
         """
         message = self.__filter_columns(message)
-        
+        client_id = message[CLIENT_ID]
+
         for i in range(len(self._amount_of_forwarding_queues)):
             amount_of_current_queue = self._amount_of_forwarding_queues[i]
             queue_name = self._forwarding_queue_names[i]
 
             node_id = node_id_to_send_to(
-                "1", 
-                message[APP_ID], 
-                amount_of_current_queue
+                client_id, message[APP_ID], amount_of_current_queue
             )
 
             queue_to_send_to = f"{node_id}_{queue_name}"
 
-            logging.debug(
-                f'Sending message: {message} to queue: {queue_to_send_to}'
-            )
-            # TODO: Use batches here? 
-            self._middleware.publish(
-                message, 
-                queue_to_send_to
-            )
+            logging.debug(f"Sending message: {message} to queue: {queue_to_send_to}")
+            # TODO: Use batches here?
+            self._middleware.publish(message, queue_to_send_to)
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
