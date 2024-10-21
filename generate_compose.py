@@ -803,10 +803,10 @@ def generate_q5(output: Dict, debug=False):
         "input_queue_name": "q5_games",
         "output_queue_name": "q5_action_games",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_JOINS,
-        "column_number_to_use": 2,  # genre
+        "column_number_to_use": 3,  # client_id, app_id, name, genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
-        "columns_to_keep": "0,1",  # app_id, positive_review_count
+        "columns_to_keep": "0,1,2",  # client_id, app_id, name, genre
         "instances_of_myself": Q5_AMOUNT_OF_ACTION_GAMES_FILTERS,
     }
     generate_filters_by_value(
@@ -820,10 +820,10 @@ def generate_q5(output: Dict, debug=False):
         "input_queue_name": "q5_reviews",
         "output_queue_name": "q5_negative_reviews",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS,
-        "column_number_to_use": 1,  # review_score
+        "column_number_to_use": 2,  # client_id, app_id, review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
-        "columns_to_keep": "0",  # app_id, positive_review_count
+        "columns_to_keep": "0,1",  # client_id, app_id,
         "instances_of_myself": Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
     }
     generate_filters_by_value(
@@ -895,9 +895,9 @@ def generate_output():
     # # -------------------------------------------- Q3 -----------------------------------------
     generate_q3(output=output, debug=False)
     # # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=True)
+    generate_q4(output=output, debug=False)
     # # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output, debug=False)
+    generate_q5(output=output, debug=True)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

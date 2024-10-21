@@ -16,7 +16,6 @@ class Percentile:
         self._config = config
         self._middleware = middleware
         self._got_sigterm = False
-        self._amount_msg_received = 0
         self._recived_ends = 0
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -26,7 +25,7 @@ class Percentile:
         self._middleware.create_queue(self._config["PUBLISH_QUEUE"])
 
         self._middleware.attach_callback(
-            self._config["CONSUME_QUEUE"], self.handle_message
+            self._config["CONSUME_QUEUE"], self._handle_message
         )
 
         try:
@@ -36,57 +35,76 @@ class Percentile:
             if not self._got_sigterm:
                 logging.error(e)
 
-    def handle_message(self, ch, method, properties, body):
+    def _handle_message(self, ch, method, properties, body):
 
         body = self._middleware.get_rows_from_message(body)
         logging.debug(f"body: {body}")
 
-        if len(body) == 1 and body[0][0] == END_TRANSMISSION_MESSAGE:
-            self._recived_ends += 1
+        if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
+            self._recived_ends += 1 # use hash when using multiple clients
             logging.debug(f"GOT END NUMBER: {self._recived_ends}")
+            
             if self._recived_ends == self._config["NEEDED_ENDS_TO_FINISH"]:
-                self.handle_end_message()
+                client_id = body[0][0]
+                #create queue for answering
+                self._middleware.create_queue(f'{self._config["PUBLISH_QUEUE"]}_{client_id}')
+                self._handle_end_message(client_id)
 
             self._middleware.ack(method.delivery_tag)
             return
 
-        logging.debug(f"GOT MSG: {body}")
+        records_per_client = {}
+        for record in body:
+            client_id = record.pop(0)
 
-        self._amount_msg_received += len(body) #this should be saved in case of failure?
-        storage.add_batch_to_sorted_file(self._config["STORAGE_DIR"], body)
+            if not client_id in records_per_client:
+                records_per_client[client_id] = []
+            
+            records_per_client[client_id].append(record)
+        
+        logging.debug(f"RECORD PER CLIENT: {records_per_client}")
+
+        #TODO: make storage handle batches from multiple clients
+        for client_id, records in records_per_client.items():
+            storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
+            storage.add_batch_to_sorted_file(storage_dir, records)
 
         self._middleware.ack(method.delivery_tag)
+        records_per_client = {}
 
+    def _handle_end_message(self, client_id):
 
-    def handle_end_message(self):
-
-        percentile = self.get_percentile()
+        percentile = self._get_percentile(client_id)
         logging.info(f"Percentile is: {percentile}")
 
-        reader = storage.read_sorted_file(self._config["STORAGE_DIR"])
+        forwarding_queue_name = f'{self._config["PUBLISH_QUEUE"]}_{client_id}'
+        storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
+
+        reader = storage.read_sorted_file(storage_dir)
         for row in reader:
 
             record_value = int(row[1])
             if record_value >= percentile:
                 logging.debug(f"Sending: {row}")
-                self._middleware.publish(row, self._config["PUBLISH_QUEUE"])
+                self._middleware.publish(row, forwarding_queue_name)
 
-        self._middleware.publish_batch(self._config["PUBLISH_QUEUE"])
-        self._middleware.send_end(self._config["PUBLISH_QUEUE"])
+        self._middleware.publish_batch(forwarding_queue_name)
+        self._middleware.send_end(forwarding_queue_name)
 
-        self._amount_msg_received = 0
+        #self._amount_msg_received = 0
         # if not storage.delete_directory(self._config["STORAGE_DIR"]):
         #     logging.debug(f"Couldn't delete directory: {self._config["STORAGE_DIR"]}")
         # else:
         #     logging.debug(f"Deleted directory: {self._config["STORAGE_DIR"]}")
 
-    def get_percentile(self):
-        rank = (self._config["PERCENTILE"] / 100) * self._amount_msg_received
-        rank = math.ceil(rank)  # instead of interpolating, round the number
+    def _get_percentile(self, client_id):
+        # to get the rank, i need to read the file if i do not have a countera (i need the amount of messages)
+        rank = self._get_rank(client_id)
 
         logging.debug(f"Ordinal rank is {rank}")
 
-        reader = storage.read_sorted_file(self._config["STORAGE_DIR"])
+        storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
+        reader = storage.read_sorted_file(storage_dir)
         for i, row in enumerate(reader):
             if (i + 1) == rank:
                 _, value = row
@@ -94,6 +112,19 @@ class Percentile:
                 return int(value)
 
         return NO_RECORDS
+    
+    def _get_rank(self, client_id):
+        amount_of_records = 0
+
+        storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
+        reader = storage.read_sorted_file(storage_dir)
+        for _ in reader:
+           amount_of_records += 1
+
+        rank = (self._config["PERCENTILE"] / 100) * amount_of_records
+        rank = math.ceil(rank)  # instead of interpolating, round the number
+
+        return rank
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
