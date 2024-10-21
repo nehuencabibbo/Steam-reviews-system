@@ -100,7 +100,6 @@ def main():
         config=config,
         client_middleware=client_middleware,
         middleware=middleware,
-        protocol=protocol,
     )
     client.run()
 
