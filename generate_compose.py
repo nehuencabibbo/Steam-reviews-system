@@ -516,7 +516,7 @@ def generate_q3(output: Dict, debug=False):
         "input_games_queue_name": "q3_indie_games",
         "input_reviews_queue_name": "q3_positive_review_count",
         "output_queue_name": "q3_join_by_app_id_result",
-        "games_columns_to_keep": "1",  # name 
+        "games_columns_to_keep": "1",  # name
         "reviews_columns_to_keep": "1",  # positive_review_count
         "needed_games_ends": 1,
         "needed_reviews_ends": Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
@@ -583,10 +583,10 @@ def generate_q4(output: Dict, debug=False):
                 f"{Q4_AMOUNT_OF_THIRD_JOINS}",
             ]
         ),
-        "column_number_to_use": 2,  # genre
+        "column_number_to_use": 3,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
-        "columns_to_keep": "0,1",  # app_id, name
+        "columns_to_keep": "0,1,2",  # client_id, app_id, name
         "instances_of_myself": Q4_AMOUNT_OF_ACTION_GAMES_FILTERS,
     }
 
@@ -608,10 +608,10 @@ def generate_q4(output: Dict, debug=False):
                 f"{Q4_AMOUNT_OF_SECOND_JOINS}",
             ]
         ),
-        "column_number_to_use": 2,  # review_score
+        "column_number_to_use": 3,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
-        "columns_to_keep": "0,1",  # app_id, review
+        "columns_to_keep": "0,1,2",  # client_id, app_id, review
         "instances_of_myself": Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
         # "batch_size": ,
     }
@@ -643,10 +643,10 @@ def generate_q4(output: Dict, debug=False):
         "input_queue_name": "0_q4_negative_reviews_count",
         "output_queue_name": "q4_filter_first_more_than_5000_reviews",
         "amount_of_forwarding_queues": f"{Q4_AMOUNT_OF_FIRST_JOINS}",
-        "column_number_to_use": 1,  # positive_review_count
+        "column_number_to_use": 2,  # positive_review_count
         "value_to_filter_by": 5000,
         "criteria": "GREATER_THAN",
-        "columns_to_keep": "0",  # app_id
+        "columns_to_keep": "0,1",  # client_id, app_id
         "instances_of_myself": Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS,
     }
     generate_filters_by_value(
@@ -713,10 +713,10 @@ def generate_q4(output: Dict, debug=False):
         "input_queue_name": "0_q4_second_join",
         "output_queue_name": "q4_english_reviews",
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_SECOND_COUNTER_BY_APP_ID,
-        "column_number_to_use": 1,  # review
+        "column_number_to_use": 2,  # review
         "value_to_filter_by": "en",
         "criteria": "LANGUAGE",
-        "columns_to_keep": "0",  # app_id
+        "columns_to_keep": "0,1",  # client_id, app_id
         "instances_of_myself": Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS,
         "prefetch_count": 1,
     }
@@ -748,10 +748,10 @@ def generate_q4(output: Dict, debug=False):
         "input_queue_name": "0_q4_english_review_count",
         "output_queue_name": "q4_second_filter_more_than_5000",
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_THIRD_JOINS,
-        "column_number_to_use": 1,  # negative_english_review_count
+        "column_number_to_use": 2,  # negative_english_review_count
         "value_to_filter_by": 5000,
         "criteria": "GREATER_THAN",
-        "columns_to_keep": "0,1",  # app_id, positive_review_count
+        "columns_to_keep": "0,1,2",  # client_id, app_id, positive_review_count
         "instances_of_myself": Q4_AMOUNT_OF_SECOND_MORE_THAN_5000_FILTERS,
     }
     generate_filters_by_value(
@@ -883,19 +883,19 @@ def generate_output():
 
     output["services"] = {}
     add_rabbit(output)
-    add_client(output, debug=True)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=True)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
-    add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT)
+    add_client(output, debug=False)
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
+    add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
 
     # -------------------------------------------- Q1 -----------------------------------------
     generate_q1(output=output, debug=False)
     # # -------------------------------------------- Q2 -----------------------------------------
     generate_q2(output=output, debug=False)
     # # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=True)
+    generate_q3(output=output, debug=False)
     # # -------------------------------------------- Q4 -----------------------------------------
-    # generate_q4(output=output, debug=False)
+    generate_q4(output=output, debug=True)
     # # -------------------------------------------- Q5 -----------------------------------------
     # generate_q5(output=output, debug=False)
     # -------------------------------------------- END OF QUERIES -----------------------------------------

@@ -41,8 +41,6 @@ class Join:
                 self.__middleware.create_queue(
                     f'{i}_{self.__config["OUTPUT_QUEUE_NAME"]}'
                 )
-        else:
-            self.__middleware.create_queue(self.__config["OUTPUT_QUEUE_NAME"])
 
         # callback, inputq, outputq
         games_callback = self.__middleware.generate_callback(
@@ -83,6 +81,10 @@ class Join:
 
                 self.__middleware.attach_callback(
                     self.__config["INPUT_REVIEWS_QUEUE_NAME"], reviews_callback
+                )
+                # Created here, otherwise each review that is joined must created the queue
+                self.__middleware.create_queue(
+                    f'{self.__config["OUTPUT_QUEUE_NAME"]}_{body[0][0]}'
                 )
 
             self.__middleware.ack(delivery_tag)
@@ -154,8 +156,6 @@ class Join:
                         record
                     ) + self.__reviews_columns_to_keep(review)
 
-                    joined_message.insert(0, client_id)
-
                     if (
                         "Q" in forwarding_queue_name
                     ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
@@ -169,6 +169,8 @@ class Join:
                         )
 
                     else:
+                        joined_message.insert(0, client_id)
+
                         node_id = node_id_to_send_to(
                             client_id,
                             record_app_id,
@@ -193,10 +195,9 @@ class Join:
             "Q" in forwarding_queue_name
         ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
             forwarding_queue_name = f"{forwarding_queue_name}_{client_id}"
+            # The only queue that has to be created here because of the client_id
             self.__middleware.publish_batch(forwarding_queue_name)
-            self.__middleware.send_end(
-                forwarding_queue_name, end_message=[client_id, END_TRANSMISSION_MESSAGE]
-            )
+            self.__middleware.send_end(forwarding_queue_name)
             logging.debug(f"Sent end to: {forwarding_queue_name}")
             return
 
