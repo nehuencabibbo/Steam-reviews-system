@@ -84,16 +84,10 @@ class CounterByAppId:
                 count_per_record_by_client_id[client_id].get(record_id, 0) + 1
             )
 
-        # TODO: Optimize
-        for client_id in count_per_record_by_client_id:
-            count = count_per_record_by_client_id[client_id]
-            storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
-
-            storage.sum_batch_to_records(
-                storage_dir,
-                self._config["RANGE_FOR_PARTITION"],
-                count,
-            )
+        storage.sum_batch_to_records_per_client(self._config["STORAGE_DIR"], 
+                                                self._config["RANGE_FOR_PARTITION"],
+                                                count_per_record_by_client_id,
+        )
 
         self._middleware.ack(delivery_tag)
 

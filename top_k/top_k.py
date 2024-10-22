@@ -5,8 +5,9 @@ from common.storage.storage import (
     add_to_top,
     read_top,
     delete_directory,
-    add_batch_to_sorted_file,
+    _add_batch_to_sorted_file,
     read_sorted_file,
+    add_batch_to_sorted_file_per_client,
 )
 from common.protocol.protocol import Protocol
 
@@ -103,17 +104,8 @@ class TopK:
             return
 
         try:
-            # TODO: optimize
-            for record in body:
-                client_id = record.pop(0)
-                storage_dir = f"/tmp/{client_id}"
+            add_batch_to_sorted_file_per_client("tmp", body,  ascending=False, limit=int(self.__config["K"]))
 
-                add_batch_to_sorted_file(
-                    storage_dir,
-                    [record],
-                    ascending=False,
-                    limit=int(self.__config["K"]),
-                )
         except ValueError as e:
             logging.error(
                 f"An error has occurred. {e}",

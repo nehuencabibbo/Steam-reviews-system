@@ -3,7 +3,7 @@ import signal
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
     read_by_range,
-    write_batch_by_range,
+    write_batch_by_range_per_client,
     write_by_range,
 )
 from common.protocol.protocol import Protocol
@@ -93,13 +93,8 @@ class Join:
 
         logging.debug(f"Recived game: {body}")
         try:
-            # write_batch_by_range("tmp/", int(self.__config["PARTITION_RANGE"]), body)
-            # TODO: optimize
-            for record in body:
-                client_id = record.pop(0)
-                write_by_range(
-                    f"/tmp/{client_id}", int(self.__config["PARTITION_RANGE"]), record
-                )
+            write_batch_by_range_per_client("tmp/", int(self.__config["PARTITION_RANGE"]), body)
+
         except ValueError as e:
             logging.error(
                 f"An error has occurred. {e}",

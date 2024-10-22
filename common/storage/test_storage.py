@@ -1,5 +1,6 @@
 import csv
 from pathlib import Path
+import shutil
 import unittest
 import storage
 import os
@@ -14,7 +15,7 @@ class TestStorage(unittest.TestCase):
         [f.unlink() for f in Path(self._dir).glob("*") if f.is_file()]
 
     def tearDown(self):
-        [f.unlink() for f in Path(self._dir).glob("*") if f.is_file()]
+        [f.unlink() if f.is_file() else shutil.rmtree(f) for f in Path(self._dir).glob("*")]
 
     def test_partition_is_set(self):
         app_id = 5
@@ -324,7 +325,7 @@ class TestStorage(unittest.TestCase):
         partition_app_id = 1
         batch = [["1", "test"], ["3", "test"]]
 
-        storage.write_batch_by_range(self._dir, self._range, batch)
+        storage._write_batch_by_range(self._dir, self._range, batch)
 
         records = [r for r in storage.read_by_range(self._dir, self._range, partition_app_id)]
         self.assertEqual(len(records), 2)
@@ -336,7 +337,7 @@ class TestStorage(unittest.TestCase):
         partition2_app_id = 10
         batch = [["1", "test"], ["10", "test"]]
 
-        storage.write_batch_by_range(self._dir, self._range, batch)
+        storage._write_batch_by_range(self._dir, self._range, batch)
 
         records_partition_1 = [r for r in storage.read_by_range(self._dir, self._range, partition1_app_id)]
         records_partition_2 = [r for r in storage.read_by_range(self._dir, self._range, partition2_app_id)]
@@ -346,11 +347,45 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(records_partition_1[0], batch[0])
         self.assertEqual(records_partition_2[0], batch[1])
 
+    def test_write_by_range_with_batches_with_one_clients(self):
+        partition_app_id = 1
+        client_id = "abc"
+        batch = [[f"{client_id}", "1", "test"], [f"{client_id}", "3", "test"]]
+
+        storage.write_batch_by_range_per_client(self._dir, self._range, batch)
+        client_dir = f"{self._dir}/{client_id}"
+
+        records = [r for r in storage.read_by_range(client_dir, self._range, partition_app_id)]
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0], ["1", "test"])
+        self.assertEqual(records[1], ["3", "test"])
+
+    def test_write_by_range_with_batches_with_multiple_clients(self):
+        partition_app_id = 1
+        client_id1 = "abc"
+        client_id2 = "def"
+        batch = [[f"{client_id1}", "1", "test"], [f"{client_id2}", "3", "test"]]
+
+        storage.write_batch_by_range_per_client(self._dir, self._range, batch)
+
+        client_dir1 = f"{self._dir}/{client_id1}"
+        records1 = [r for r in storage.read_by_range(client_dir1, self._range, partition_app_id)]
+
+        client_dir2 = f"{self._dir}/{client_id2}"
+        records2 = [r for r in storage.read_by_range(client_dir2, self._range, partition_app_id)]
+
+        self.assertEqual(len(records1), 1)
+        self.assertEqual(records1[0], ["1", "test"])
+
+        self.assertEqual(len(records2), 1)
+        self.assertEqual(records2[0], ["3", "test"])
+   
+
     def test_sum_batch_to_record_one_partition(self):
         partition_key = 5
         batch = {"5": 1, "6":1} #[["5", "1"], ["6", "1"]]
 
-        storage.sum_batch_to_records(self._dir, self._range,batch)
+        storage._sum_batch_to_records(self._dir, self._range,batch)
         records = [r for r in storage.read_by_range(self._dir, self._range, partition_key)]
 
         self.assertEqual(len(records), 2)
@@ -362,8 +397,8 @@ class TestStorage(unittest.TestCase):
         batch1 = {"5": 1, "6": 1}#[["5", "1"], ["6", "1"]]
         batch2 = {"5": 2, "7": 1}#[["5", "2"], ["7", "1"]]
 
-        storage.sum_batch_to_records(self._dir, self._range, batch1)
-        storage.sum_batch_to_records(self._dir, self._range, batch2)
+        storage._sum_batch_to_records(self._dir, self._range, batch1)
+        storage._sum_batch_to_records(self._dir, self._range, batch2)
 
         records = [r for r in storage.read_by_range(self._dir, self._range, partition_key)]
 
@@ -377,8 +412,8 @@ class TestStorage(unittest.TestCase):
         batch1 = {"15": 1, "6": 1}#[["5", "1"], ["6", "1"]]
         batch2 = {"15": 2, "7": 1}#[["5", "2"], ["7", "1"]]
 
-        storage.sum_batch_to_records(self._dir, self._range, batch1)
-        storage.sum_batch_to_records(self._dir, self._range, batch2)
+        storage._sum_batch_to_records(self._dir, self._range, batch1)
+        storage._sum_batch_to_records(self._dir, self._range, batch2)
 
         records = [r for r in storage.read_all_files(self._dir)]
 
@@ -391,18 +426,57 @@ class TestStorage(unittest.TestCase):
         partition_key = 5
         batch = {"5": 1} #[["5", "1"]]
 
-        storage.sum_batch_to_records(self._dir, self._range,batch)
-        storage.sum_batch_to_records(self._dir, self._range,batch)
+        storage._sum_batch_to_records(self._dir, self._range,batch)
+        storage._sum_batch_to_records(self._dir, self._range,batch)
         records = [r for r in storage.read_by_range(self._dir, self._range, partition_key)]
 
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0], ["5", "2"])
 
+    def test_sum_batch_for_one_client(self):
+        partition_key = 5
+        client_id = "abc"
+        batch_per_client = {}
+        batch_per_client[client_id] = {"5": 1}
+
+        client_dir = f"{self._dir}/{client_id}"
+
+        storage.sum_batch_to_records_per_client(self._dir, self._range, batch_per_client)
+
+        records = [r for r in storage.read_by_range(client_dir, self._range, partition_key)]
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0], ["5", "1"])
+
+    def test_sum_batch_for_multiple_clients(self):
+        partition_key1 = 5
+        client_id1 = "abc"
+
+        partition_key2 = 6
+        client_id2 = "def"
+
+        batch_per_client = {}
+        batch_per_client[client_id1] = {"5": 1}
+        batch_per_client[client_id2] = {"6": 1}
+
+        storage.sum_batch_to_records_per_client(self._dir, self._range, batch_per_client)
+
+        client1_dir = f"{self._dir}/{client_id1}"
+        client2_dir = f"{self._dir}/{client_id2}"
+
+        records1 = [r for r in storage.read_by_range(client1_dir, self._range, partition_key1)]
+        records2 = [r for r in storage.read_by_range(client2_dir, self._range, partition_key2)]
+
+        self.assertEqual(len(records1), 1)
+        self.assertEqual(records1[0], ["5", "1"])
+
+        self.assertEqual(len(records2), 1)
+        self.assertEqual(records2[0], ["6", "1"])
+
 
     def test_add_batch_to_sorted_file_with_one_batch(self):
         records = [["5", "10"], ["5", "50"], ["5", "20"]]
 
-        storage.add_batch_to_sorted_file(self._dir, records)
+        storage._add_batch_to_sorted_file(self._dir, records)
 
         reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
@@ -415,7 +489,7 @@ class TestStorage(unittest.TestCase):
     def test_add_batch_to_sorted_storage_when_values_are_equal(self):
         records = [["b", "10"], ["a", "10"], ["c", "10"]]
 
-        storage.add_batch_to_sorted_file(self._dir, records)
+        storage._add_batch_to_sorted_file(self._dir, records)
 
         reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
@@ -429,8 +503,8 @@ class TestStorage(unittest.TestCase):
         records1 = [["b", "10"], ["z", "11"]]
         records2 = [["c", "11"], ["a", "4"]]
 
-        storage.add_batch_to_sorted_file(self._dir, records1)
-        storage.add_batch_to_sorted_file(self._dir, records2)
+        storage._add_batch_to_sorted_file(self._dir, records1)
+        storage._add_batch_to_sorted_file(self._dir, records2)
 
         reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
@@ -447,7 +521,7 @@ class TestStorage(unittest.TestCase):
         #top_path = os.path.join(self._dir, f"top_{self._k}.csv")
 
         #storage.add_batch_to_top(self._dir, batch, self._k)
-        storage.add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=self._k)
+        storage._add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=self._k)
         
         #reader = storage.read_top(self._dir, self._k)
         reader = storage.read_sorted_file(self._dir)
@@ -460,8 +534,8 @@ class TestStorage(unittest.TestCase):
         batch1 = [["5","10"]]
         batch2 = [["6","15"]]
 
-        storage.add_batch_to_sorted_file(self._dir, batch1, ascending=False, limit=self._k)
-        storage.add_batch_to_sorted_file(self._dir, batch2, ascending=False, limit=self._k)
+        storage._add_batch_to_sorted_file(self._dir, batch1, ascending=False, limit=self._k)
+        storage._add_batch_to_sorted_file(self._dir, batch2, ascending=False, limit=self._k)
         
         reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
@@ -473,7 +547,7 @@ class TestStorage(unittest.TestCase):
     def test_add_batch_to_top_when_batch_len_is_higher_than_k(self):
         batch = [["5","10"], ["6","15"], ["7","5"], ["8","20"]] 
 
-        storage.add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=self._k)
+        storage._add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=self._k)
         
         reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
@@ -489,15 +563,15 @@ class TestStorage(unittest.TestCase):
         batch = [["5","10"]]
 
         with self.assertLogs(level="ERROR") as log:
-            storage.add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=0)
+            storage._add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=0)
             self.assertIn("Error, K must be > 0", log.output[0])
 
     def test_top_remains_if_no_record_in_batch_is_less_than_a_given_record(self):
         batch = [["1","30"], ["3","20"], ["5","10"]]
         new_batch = [["7","5"], ["9", "2"]]
 
-        storage.add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=self._k)
-        storage.add_batch_to_sorted_file(self._dir, new_batch, ascending=False, limit=self._k)
+        storage._add_batch_to_sorted_file(self._dir, batch, ascending=False, limit=self._k)
+        storage._add_batch_to_sorted_file(self._dir, new_batch, ascending=False, limit=self._k)
 
         reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
@@ -508,8 +582,8 @@ class TestStorage(unittest.TestCase):
         top_records = [["1","50"], ["2","40"], ["3","30"]]
         new_records = [["5","60"], ["6","45"]]
 
-        storage.add_batch_to_sorted_file(self._dir, top_records, ascending=False, limit=self._k)
-        storage.add_batch_to_sorted_file(self._dir, new_records, ascending=False, limit=self._k)
+        storage._add_batch_to_sorted_file(self._dir, top_records, ascending=False, limit=self._k)
+        storage._add_batch_to_sorted_file(self._dir, new_records, ascending=False, limit=self._k)
 
         reader = storage.read_sorted_file(self._dir)
         read_records = [row for row in reader]
@@ -517,6 +591,50 @@ class TestStorage(unittest.TestCase):
         expected_top = [["5","60"], ["1","50"], ["6","45"]]
         self.assertEqual(len(read_records), 3)
         self.assertEqual(read_records, expected_top)
+
+
+    def test_add_batch_to_partially_filled_top_with_one_client(self):
+        client_id = "damonte" 
+        batch1 = [[f"{client_id}", "5","10"]]
+        batch2 = [[f"{client_id}", "6","15"], [f"{client_id}", "1", "20"]]
+
+        storage.add_batch_to_sorted_file_per_client(self._dir, batch1, ascending=False, limit=self._k)
+        storage.add_batch_to_sorted_file_per_client(self._dir, batch2, ascending=False, limit=self._k)
+        
+        client_dir = f"{self._dir}/{client_id}"
+        reader = storage.read_sorted_file(client_dir)
+        read_records = [row for row in reader]
+
+        self.assertEqual(len(read_records), 3)
+        self.assertEqual(read_records[0], ["1", "20"])
+        self.assertEqual(read_records[1], ["6", "15"])
+        self.assertEqual(read_records[2], ["5", "10"])
+
+    def test_add_batch_to_partially_filled_top_with_one_client(self):
+        client_id1 = "damonte"
+        client_id2 = "gago" 
+        batch1 = [[f"{client_id1}", "5","10"], [f"{client_id2}", "2", "5"]]
+        batch2 = [[f"{client_id1}", "6","15"], [f"{client_id2}", "1", "20"]]
+
+        storage.add_batch_to_sorted_file_per_client(self._dir, batch1, ascending=False, limit=self._k)
+        storage.add_batch_to_sorted_file_per_client(self._dir, batch2, ascending=False, limit=self._k)
+        
+        client1_dir = f"{self._dir}/{client_id1}"
+        reader = storage.read_sorted_file(client1_dir)
+        read_records1 = [row for row in reader]
+
+        client2_dir = f"{self._dir}/{client_id2}"
+        reader = storage.read_sorted_file(client2_dir)
+        read_records2 = [row for row in reader]
+
+        self.assertEqual(len(read_records1), 2)
+        self.assertEqual(read_records1[0], ["6", "15"])
+        self.assertEqual(read_records1[1], ["5", "10"])
+
+        self.assertEqual(len(read_records2), 2)
+        self.assertEqual(read_records2[0], ["1", "20"])
+        self.assertEqual(read_records2[1], ["2", "5"])
+        
 
 
 if __name__ == "__main__":

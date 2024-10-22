@@ -53,24 +53,24 @@ class Percentile:
             self._middleware.ack(method.delivery_tag)
             return
 
-        records_per_client = {}
-        for record in body:
-            client_id = record.pop(0)
+        storage.add_batch_to_sorted_file_per_client(self._config["STORAGE_DIR"], body)
+        # records_per_client = {}
+        # for record in body:
+        #     client_id = record.pop(0)
 
-            if not client_id in records_per_client:
-                records_per_client[client_id] = []
+        #     if not client_id in records_per_client:
+        #         records_per_client[client_id] = []
             
-            records_per_client[client_id].append(record)
+        #     records_per_client[client_id].append(record)
         
-        logging.debug(f"RECORD PER CLIENT: {records_per_client}")
+        # logging.debug(f"RECORD PER CLIENT: {records_per_client}")
 
-        #TODO: make storage handle batches from multiple clients
-        for client_id, records in records_per_client.items():
-            storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
-            storage.add_batch_to_sorted_file(storage_dir, records)
+        # #TODO: make storage handle batches from multiple clients
+        # for client_id, records in records_per_client.items():
+        #     storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
+        #     storage.add_batch_to_sorted_file(storage_dir, records)
 
         self._middleware.ack(method.delivery_tag)
-        records_per_client = {}
 
     def _handle_end_message(self, client_id):
 

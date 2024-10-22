@@ -295,6 +295,41 @@ def read_sorted_file(dir: str):
 
 # ------------------------ BATCHES -------------------------------------------
 
+def _get_batch_per_client(records):
+    batch_per_client = {}
+
+    #Get the batch for every client
+    for record in records:
+        client_id = record[0]
+        record = record[1:]
+        if not client_id in batch_per_client:
+            batch_per_client[client_id] = []
+
+        batch_per_client[client_id].append(record)
+    return batch_per_client
+
+def write_batch_by_range_per_client(dir: str, range: int, records: list[list[str]]):
+
+    batch_per_client = _get_batch_per_client(records)
+
+    for client_id, batch in batch_per_client.items():
+        client_dir = os.path.join(dir, client_id)
+
+        _write_batch_by_range(client_dir, range, batch)
+
+def _write_batch_by_range(dir: str, range: int, records: list[list[str]]):
+
+    os.makedirs(dir, exist_ok=True)
+    file_prefix = "partition"
+    # get the file for each record in the batch -> {"file_name": [record1, record2], ....}
+    records_per_file = group_by_file(file_prefix, range, records)
+
+    for file_name, records in records_per_file.items():
+        file_path = os.path.join(dir, file_name)
+        with open(file_path, "a", newline="") as f:
+            writer = csv.writer(f)
+            for record in records:
+                writer.writerow(record)
 
 def group_by_file(
     file_prefix: str, range: int, records: list[list[str]]
@@ -312,23 +347,15 @@ def group_by_file(
 
     return records_per_file
 
+def sum_batch_to_records_per_client(dir: str, range: int, new_records_per_client: dict[str, dict[str, int]]):
 
-def write_batch_by_range(dir: str, range: int, records: list[list[str]]):
+    for client_id, new_records in new_records_per_client.items():
 
-    os.makedirs(dir, exist_ok=True)
-    file_prefix = "partition"
-    # get the file for each record in the batch -> {"file_name": [record1, record2], ....}
-    records_per_file = group_by_file(file_prefix, range, records)
-
-    for file_name, records in records_per_file.items():
-        file_path = os.path.join(dir, file_name)
-        with open(file_path, "a", newline="") as f:
-            writer = csv.writer(f)
-            for record in records:
-                writer.writerow(record)
+        client_dir = os.path.join(dir, client_id)
+        _sum_batch_to_records(client_dir, range, new_records)
 
 
-def group_by_file_dict(
+def _group_by_file_dict(
     file_prefix: str, range: int, records: dict[str, int]
 ) -> dict[str, list[str]]:
     records_per_file = {}
@@ -345,19 +372,18 @@ def group_by_file_dict(
     return records_per_file
 
 
-# TODO: receive a dict instead of a list
-def sum_batch_to_records(dir: str, range: int, new_records: dict[str, int]):
+def _sum_batch_to_records(dir: str, range: int, new_records: dict[str, int]):
 
     os.makedirs(dir, exist_ok=True)
     file_prefix = "partition"
 
     # get the file for each record in the batch -> {"file": [record1, record2], ....}
-    records_per_file = group_by_file_dict(file_prefix, range, new_records)
+    records_per_file = _group_by_file_dict(file_prefix, range, new_records)
 
     for file_name, records in records_per_file.items():
         file_path = os.path.join(dir, file_name)
         if not os.path.exists(file_path):
-            write_batch_by_range(dir, range, records)
+            _write_batch_by_range(dir, range, records)
             continue
 
         temp_file = os.path.join(dir, f"temp_{file_name}")
@@ -391,7 +417,18 @@ def sum_batch_to_records(dir: str, range: int, new_records: dict[str, int]):
         os.replace(temp_file, file_path)
 
 
-def add_batch_to_sorted_file(
+
+def add_batch_to_sorted_file_per_client(dir: str, new_records: list[str], ascending: bool = True, limit: int = float("inf")):
+
+    batch_per_client = _get_batch_per_client(new_records)
+
+    for client_id, batch in batch_per_client.items():
+        client_dir = os.path.join(dir, client_id)
+
+        _add_batch_to_sorted_file(client_dir, batch, ascending, limit)
+
+
+def _add_batch_to_sorted_file(
     dir: str,
     new_records: list[str],
     ascending: bool = True,
