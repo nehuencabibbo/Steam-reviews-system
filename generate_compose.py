@@ -883,6 +883,8 @@ def generate_output():
     add_client(
         output,
         num=1,
+        # games_file_path="data/games.csv",
+        # reviews_file_path="data/reviews_sample.csv",
         games_file_path="data/games_sample.csv",
         reviews_file_path="data/reviews_sample.csv",
         debug=False,
@@ -890,6 +892,8 @@ def generate_output():
     add_client(
         output,
         num=2,
+        # games_file_path="data/games.csv",
+        # reviews_file_path="data/reviews_sample.csv",
         games_file_path="data/games_sample.csv",
         reviews_file_path="data/reviews_sample.csv",
         debug=False,
@@ -903,11 +907,11 @@ def generate_output():
     # -------------------------------------------- Q2 -----------------------------------------
     generate_q2(output=output, debug=False)
     # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=True)
-    # # # -------------------------------------------- Q4 -----------------------------------------
-    # generate_q4(output=output, debug=False)
-    # # # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output, debug=False)
+    generate_q3(output=output, debug=False)
+    # -------------------------------------------- Q4 -----------------------------------------
+    generate_q4(output=output, debug=False)
+    # -------------------------------------------- Q5 -----------------------------------------
+    generate_q5(output=output, debug=True)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
