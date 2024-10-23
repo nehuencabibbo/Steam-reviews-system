@@ -41,6 +41,10 @@ class FilterColumns:
         )
         self._middleware.attach_callback(anonymous_queue_name, new_clients_callback)
 
+        # Queues that filter columns uses to send data to null drop
+        self._middleware.create_queue(self._config["NULL_DROP_GAMES_QUEUE_NAME"])
+        self._middleware.create_queue(self._config["NULL_DROP_REVIEWS_QUEUE_NAME"])
+
         try:
             self._middleware.start_consuming()
         except MiddlewareError as e:
@@ -50,40 +54,36 @@ class FilterColumns:
 
     def __handle_new_clients(self, delivery_tag: int, body: List[str]):
         session_id = self._middleware.get_rows_from_message(body)[0][0]
-        logging.debug(f"session_id: {session_id}")
-        self._config["CLIENT_REVIEWS_QUEUE_NAME"] = (
-            f'{self._config["CLIENT_REVIEWS_QUEUE_NAME"]}_{session_id}'
-        )
 
-        self._config["CLIENT_GAMES_QUEUE_NAME"] = (
+        logging.debug(f"session_id: {session_id}")
+
+        new_client_games_queue = (
             f'{self._config["CLIENT_GAMES_QUEUE_NAME"]}_{session_id}'
         )
 
-        self._middleware.create_queue(self._config["CLIENT_GAMES_QUEUE_NAME"])
-        self._middleware.create_queue(self._config["CLIENT_REVIEWS_QUEUE_NAME"])
+        new_client_reviews_queue = (
+            f'{self._config["CLIENT_REVIEWS_QUEUE_NAME"]}_{session_id}'
+        )
 
-        # Queues that filter columns uses to send data to null drop
-        self._middleware.create_queue(self._config["NULL_DROP_GAMES_QUEUE_NAME"])
-        self._middleware.create_queue(self._config["NULL_DROP_REVIEWS_QUEUE_NAME"])
+        self._middleware.create_queue(new_client_games_queue)
+        self._middleware.create_queue(new_client_reviews_queue)
 
         games_callback = self._middleware.__class__.generate_callback(
-            self.__handle_message,
-            GAMES_MESSAGE_TYPE,
+            self.__handle_games,
+            new_client_games_queue,
             self._config["NULL_DROP_GAMES_QUEUE_NAME"],
             session_id,
         )
-        self._middleware.attach_callback(
-            self._config["CLIENT_GAMES_QUEUE_NAME"], games_callback
-        )
+        self._middleware.attach_callback(new_client_games_queue, games_callback)
 
         reviews_callback = self._middleware.__class__.generate_callback(
-            self.__handle_message,
-            REVIEWS_MESSAGE_TYPE,
+            self.__handle_reviews,
+            new_client_reviews_queue,
             self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
             session_id,
         )
         self._middleware.attach_callback(
-            self._config["CLIENT_REVIEWS_QUEUE_NAME"],
+            new_client_reviews_queue,
             reviews_callback,
         )
 
@@ -108,8 +108,6 @@ class FilterColumns:
         # first
         peers_that_recived_end = body[1:] if len(body) == 1 else body[2:]
 
-        # if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
-        # + 1 because of the user id now
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
             logging.debug("Sending real END")
             self._middleware.send_end(
@@ -128,65 +126,92 @@ class FilterColumns:
             self._middleware.publish_message(message, reciving_queue_name)
             logging.debug(f"Publishing: {message} in {reciving_queue_name}")
 
-    def __handle_message(
+    def __handle_games(
         self,
         delivery_tag: int,
         body: bytes,
-        message_type: str,
+        input_queue_name: str,
         forwarding_queue_name: str,
         client_id: str,
     ):
         body = self._middleware.get_rows_from_message(body)
         for message in body:
-            logging.debug(f"Recived message: {message}")
 
-            # message = [value.strip() for value in message]
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
             if (message[0] == END_TRANSMISSION_MESSAGE) or (
                 len(message) > 1 and message[1] == END_TRANSMISSION_MESSAGE
             ):
-                logging.debug(f"Recived END from {message_type}: {message}")
-                if message_type == GAMES_MESSAGE_TYPE:
-                    self.__handle_end_transmission(
-                        message,
-                        self._config["CLIENT_GAMES_QUEUE_NAME"],
-                        self._config["NULL_DROP_GAMES_QUEUE_NAME"],
-                        client_id=client_id,
-                    )
-                elif message_type == REVIEWS_MESSAGE_TYPE:
-                    self.__handle_end_transmission(
-                        message,
-                        self._config["CLIENT_REVIEWS_QUEUE_NAME"],
-                        self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
-                        client_id=client_id,
-                    )
-                else:
-                    raise Exception(f"Unkown message type: {message_type}")
+                logging.debug(f"Recived END of games: {message}")
+                self.__handle_end_transmission(
+                    message,
+                    input_queue_name,
+                    self._config["NULL_DROP_GAMES_QUEUE_NAME"],
+                    client_id=client_id,
+                )
 
                 self._middleware.ack(delivery_tag)
 
                 return
 
             logging.debug(
-                f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived {message_type}: {message}"
+                f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived game: {message}"
             )
 
             columns_to_keep = []
-            if message_type == GAMES_MESSAGE_TYPE:
-                columns_to_keep = self._config["GAMES_COLUMNS_TO_KEEP"]
-            elif message_type == REVIEWS_MESSAGE_TYPE:
-                columns_to_keep = self._config["REVIEWS_COLUMNS_TO_KEEP"]
-            else:
-                # Message type was not set properly, unrecoverable error
-                raise Exception(f"[ERROR] Unkown message type {message_type}")
+            columns_to_keep = self._config["GAMES_COLUMNS_TO_KEEP"]
 
             filtered_body = self.__filter_columns(
                 columns_to_keep, message, client_id=client_id
             )
 
             logging.debug(
-                f"[FILTER COLUMNS {self._config['NODE_ID']}] Sending {message_type}: {message}"
+                f"[FILTER COLUMNS {self._config['NODE_ID']}] Sending games: {message}"
+            )
+
+            self._middleware.publish(filtered_body, forwarding_queue_name, "")
+
+        self._middleware.ack(delivery_tag)
+
+    def __handle_reviews(
+        self,
+        delivery_tag: int,
+        body: bytes,
+        input_queue_name: str,
+        forwarding_queue_name: str,
+        client_id: str,
+    ):
+        body = self._middleware.get_rows_from_message(body)
+        for message in body:
+
+            # Have to check both, the END from the client, and the consensus END, which has the client id as
+            # prefix
+            if (message[0] == END_TRANSMISSION_MESSAGE) or (
+                len(message) > 1 and message[1] == END_TRANSMISSION_MESSAGE
+            ):
+                self.__handle_end_transmission(
+                    message,
+                    input_queue_name,
+                    self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
+                    client_id=client_id,
+                )
+                self._middleware.ack(delivery_tag)
+
+                return
+
+            logging.debug(
+                f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived review: {message}"
+            )
+
+            columns_to_keep = []
+            columns_to_keep = self._config["REVIEWS_COLUMNS_TO_KEEP"]
+
+            filtered_body = self.__filter_columns(
+                columns_to_keep, message, client_id=client_id
+            )
+
+            logging.debug(
+                f"[FILTER COLUMNS {self._config['NODE_ID']}] Sending review: {message}"
             )
 
             self._middleware.publish(filtered_body, forwarding_queue_name, "")

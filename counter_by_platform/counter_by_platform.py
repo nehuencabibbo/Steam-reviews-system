@@ -3,15 +3,16 @@ import logging
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import *
 from common.protocol.protocol import Protocol
-from typing import * 
+from typing import *
 
 END_TRANSMISSION_MESSAGE = "END"
 
-BOCA = 1
+END_TRANSMISSION_MESSAGE_INDEX = 1
 END_TRANSMISSION_SESSION_ID = 0
 
 REGULAR_MESSAGE_SESSION_ID = 0
-REGULAR_MESSAGE_FIELD_TO_COUNT_BY = 1 
+REGULAR_MESSAGE_FIELD_TO_COUNT_BY = 1
+
 
 class CounterByPlatform:
 
@@ -30,9 +31,7 @@ class CounterByPlatform:
         self._middleware.create_queue(consume_queue_name)
         self._middleware.create_queue(self._config["PUBLISH_QUEUE"])
 
-        callback = self._middleware.generate_callback(
-            self.__handle_message
-        )
+        callback = self._middleware.generate_callback(self.__handle_message)
 
         self._middleware.attach_callback(consume_queue_name, callback)
 
@@ -50,15 +49,15 @@ class CounterByPlatform:
 
             logging.debug(f"GOT MSG: {message}")
 
-            if message[BOCA] == END_TRANSMISSION_MESSAGE:
-                logging.debug('Recived END transmssion')
+            if message[END_TRANSMISSION_MESSAGE_INDEX] == END_TRANSMISSION_MESSAGE:
+                logging.debug("Recived END transmssion")
                 session_id = message[END_TRANSMISSION_SESSION_ID]
 
                 self.__send_results(session_id)
                 self._middleware.ack(delivery_tag)
 
                 return
-            
+
             logging.debug(message)
             session_id = message[REGULAR_MESSAGE_SESSION_ID]
             field_to_count = message[REGULAR_MESSAGE_FIELD_TO_COUNT_BY]
@@ -66,7 +65,6 @@ class CounterByPlatform:
             self.__count(field_to_count, session_id)
 
         self._middleware.ack(delivery_tag)
-
 
     def __send_results(self, session_id: str):
         # TODO: READ FROM STORAGE
@@ -81,9 +79,7 @@ class CounterByPlatform:
                 return
 
             # encoded_msg = self.protocol.encode([key, str(value)])
-            self._middleware.publish(
-                [platform, str(count)], queue_name=publish_queue
-            )
+            self._middleware.publish([platform, str(count)], queue_name=publish_queue)
 
         # encoded_msg = self.protocol.encode([END_TRANSMISSION_MESSAGE])
         # self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
@@ -98,7 +94,7 @@ class CounterByPlatform:
 
         # session_id = {windows: algo, mac: algo, linux: algo}
 
-        if not session_id in self._count_dict: 
+        if not session_id in self._count_dict:
             self._count_dict[session_id] = {}
 
         session_id_field_count = self._count_dict[session_id].get(field_to_count, 0)

@@ -318,9 +318,9 @@ def add_rabbit(output: Dict):
     }
 
 
-def add_client(output: Dict, debug: bool):
-    output["services"]["client1"] = {
-        "container_name": "client1",
+def add_client(output: Dict, num: int, debug: bool):
+    output["services"][f"client{num}"] = {
+        "container_name": f"client{num}",
         "image": "client:latest",
         "entrypoint": "python3 /main.py",
         "environment": [
@@ -883,21 +883,22 @@ def generate_output():
 
     output["services"] = {}
     add_rabbit(output)
-    add_client(output, debug=False)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
+    add_client(output, num=1, debug=False)
+    add_client(output, num=2, debug=False)
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=True)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
     add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=False)
+    generate_q1(output=output, debug=True)
     # # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=False)
-    # # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=False)
-    # # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=False)
-    # # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=True)
+    # generate_q2(output=output, debug=False)
+    # # # -------------------------------------------- Q3 -----------------------------------------
+    # generate_q3(output=output, debug=False)
+    # # # -------------------------------------------- Q4 -----------------------------------------
+    # generate_q4(output=output, debug=False)
+    # # # -------------------------------------------- Q5 -----------------------------------------
+    # generate_q5(output=output, debug=False)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
