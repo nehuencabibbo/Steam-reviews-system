@@ -534,19 +534,6 @@ def generate_q3(output: Dict, debug=False):
         **q3_join_args,
     )
 
-    # add_join(
-    #     output=output,
-    #     query="q3",
-    #     num=0,
-    #     input_games_queue_name="0_q3_indie_games",  # Prefixed as it comes from a filter
-    #     input_reviews_queue_name="0_q3_positive_review_count",
-    #     output_queue_name="q3_join_by_app_id_result",
-    #     games_columns_to_keep="1",  # name
-    #     reviews_columns_to_keep="1",  # positive_review_count
-    #     amount_of_behind_nodes=Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
-    #     amount_of_forwarding_queues=Q3_AMOUNT_OF_TOP_K_NODES,
-    # )
-
     q3_tops_k_args = {
         "output": output,
         "query": "q3",
@@ -903,8 +890,8 @@ def generate_output():
     add_client(
         output,
         num=2,
-        games_file_path="data/games.csv",
-        reviews_file_path="data/filtered_reviews.csv",
+        games_file_path="data/games_sample.csv",
+        reviews_file_path="data/reviews_sample.csv",
         debug=False,
     )
     generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
@@ -914,9 +901,9 @@ def generate_output():
     # -------------------------------------------- Q1 -----------------------------------------
     generate_q1(output=output, debug=False)
     # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=True)
-    # # # -------------------------------------------- Q3 -----------------------------------------
-    # generate_q3(output=output, debug=False)
+    generate_q2(output=output, debug=False)
+    # -------------------------------------------- Q3 -----------------------------------------
+    generate_q3(output=output, debug=True)
     # # # -------------------------------------------- Q4 -----------------------------------------
     # generate_q4(output=output, debug=False)
     # # # -------------------------------------------- Q5 -----------------------------------------
@@ -943,3 +930,7 @@ def main():
 
 
 main()
+
+
+# bc9d972d-6988-4d81-be3f-d71def936737 este es el q funca
+# e487840a-3511-4291-a315-d65a5145114e este es el q no

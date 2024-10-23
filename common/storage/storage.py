@@ -6,6 +6,22 @@ import shutil
 # TODO: use threads for all functions or some parallelization tool (maybe)
 
 
+def save(path: str, record: list[str]):
+    with open(path, "a") as f:
+        writer = csv.writer(f)
+        writer.writerow(record)
+
+
+def read(path: str):
+    if not os.path.exists(path):
+        logging.error(f"Path {path} doesnt exists. No reviews accumulated")
+        return
+    with open(path, "r") as f:
+        reader = csv.reader(f)
+        for record in reader:
+            yield record
+
+
 def delete_directory(dir: str) -> bool:
     """
     Removes the specified directory along with all its contents
@@ -295,10 +311,11 @@ def read_sorted_file(dir: str):
 
 # ------------------------ BATCHES -------------------------------------------
 
+
 def _get_batch_per_client(records):
     batch_per_client = {}
 
-    #Get the batch for every client
+    # Get the batch for every client
     for record in records:
         client_id = record[0]
         record = record[1:]
@@ -308,6 +325,7 @@ def _get_batch_per_client(records):
         batch_per_client[client_id].append(record)
     return batch_per_client
 
+
 def write_batch_by_range_per_client(dir: str, range: int, records: list[list[str]]):
 
     batch_per_client = _get_batch_per_client(records)
@@ -316,6 +334,7 @@ def write_batch_by_range_per_client(dir: str, range: int, records: list[list[str
         client_dir = os.path.join(dir, client_id)
 
         _write_batch_by_range(client_dir, range, batch)
+
 
 def _write_batch_by_range(dir: str, range: int, records: list[list[str]]):
 
@@ -330,6 +349,7 @@ def _write_batch_by_range(dir: str, range: int, records: list[list[str]]):
             writer = csv.writer(f)
             for record in records:
                 writer.writerow(record)
+
 
 def group_by_file(
     file_prefix: str, range: int, records: list[list[str]]
@@ -347,7 +367,10 @@ def group_by_file(
 
     return records_per_file
 
-def sum_batch_to_records_per_client(dir: str, range: int, new_records_per_client: dict[str, dict[str, int]]):
+
+def sum_batch_to_records_per_client(
+    dir: str, range: int, new_records_per_client: dict[str, dict[str, int]]
+):
 
     for client_id, new_records in new_records_per_client.items():
 
@@ -417,8 +440,9 @@ def _sum_batch_to_records(dir: str, range: int, new_records: dict[str, int]):
         os.replace(temp_file, file_path)
 
 
-
-def add_batch_to_sorted_file_per_client(dir: str, new_records: list[str], ascending: bool = True, limit: int = float("inf")):
+def add_batch_to_sorted_file_per_client(
+    dir: str, new_records: list[str], ascending: bool = True, limit: int = float("inf")
+):
 
     batch_per_client = _get_batch_per_client(new_records)
 

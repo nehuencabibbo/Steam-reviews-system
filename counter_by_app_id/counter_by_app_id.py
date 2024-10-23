@@ -22,7 +22,7 @@ class CounterByAppId:
         self._config = config
         self._middleware = middleware
         self._got_sigterm = False
-        self._ends_received = 0
+        self._ends_received_per_client = {}
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
@@ -59,12 +59,15 @@ class CounterByAppId:
         logging.debug(f"GOT MSG: {body}")
 
         if body[0][END_MESSAGE_END] == END_TRANSMISSION_MESSAGE:
-            self._ends_received += 1
-            logging.debug(
-                f"Amount of ends received up to now: {self._ends_received} | Expecting: {self._config['NEEDED_ENDS']}"
+            client_id = body[0][END_MESSAGE_CLIENT_ID]
+            self._ends_received_per_client[client_id] = (
+                self._ends_received_per_client.get(client_id, 0) + 1
             )
-            if self._ends_received == self._config["NEEDED_ENDS"]:
-                client_id = body[0][END_MESSAGE_CLIENT_ID]
+
+            logging.debug(
+                f"Amount of ends received up to now: {self._ends_received_per_client[client_id]} | Expecting: {self._config['NEEDED_ENDS']}"
+            )
+            if self._ends_received_per_client[client_id] == self._config["NEEDED_ENDS"]:
 
                 self.__send_results(client_id)
 
@@ -84,9 +87,10 @@ class CounterByAppId:
                 count_per_record_by_client_id[client_id].get(record_id, 0) + 1
             )
 
-        storage.sum_batch_to_records_per_client(self._config["STORAGE_DIR"], 
-                                                self._config["RANGE_FOR_PARTITION"],
-                                                count_per_record_by_client_id,
+        storage.sum_batch_to_records_per_client(
+            self._config["STORAGE_DIR"],
+            self._config["RANGE_FOR_PARTITION"],
+            count_per_record_by_client_id,
         )
 
         self._middleware.ack(delivery_tag)
@@ -137,6 +141,7 @@ class CounterByAppId:
                 f"{i}_{prefix_queue_name}",
                 end_message=[client_id, END_TRANSMISSION_MESSAGE],
             )
+            logging.debug(f"Sent END of client: {client_id}")
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")

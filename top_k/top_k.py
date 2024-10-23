@@ -64,7 +64,6 @@ class TopK:
                 self.__total_ends_received_per_client[client_id]
                 == self.__config["AMOUNT_OF_RECEIVING_QUEUES"]
             ):
-                client_id = body[0][0]
                 forwarding_queue = self.__config["OUTPUT_TOP_K_QUEUE_NAME"]
                 # Add the client id if its sink node
                 forwarding_queue_name = (

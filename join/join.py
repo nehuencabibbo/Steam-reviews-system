@@ -1,10 +1,12 @@
 import logging
 import signal
+from time import sleep
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
+    read,
     read_by_range,
+    save,
     write_batch_by_range_per_client,
-    write_by_range,
 )
 from common.protocol.protocol import Protocol
 from utils.utils import node_id_to_send_to
@@ -18,10 +20,9 @@ class Join:
     ):
         self.__middleware = middleware
         self.__config = config
-        self._amount_of_games_ends_recived = 0
-        self._amount_of_reviews_ends_recived = 0
+        self._amount_of_games_ends_recived = {}
+        self._amount_of_reviews_ends_recived = {}
         self._got_sigterm = False
-        # self._got_end = False
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -53,6 +54,16 @@ class Join:
             self.__config["INPUT_GAMES_QUEUE_NAME"], games_callback
         )
 
+        reviews_callback = self.__middleware.generate_callback(
+            self.__reviews_callback,
+            self.__config["INPUT_REVIEWS_QUEUE_NAME"],
+            self.__config["OUTPUT_QUEUE_NAME"],
+        )
+
+        self.__middleware.attach_callback(
+            self.__config["INPUT_REVIEWS_QUEUE_NAME"], reviews_callback
+        )
+
         try:
             self.__middleware.start_consuming()
         except MiddlewareError as e:
@@ -64,27 +75,28 @@ class Join:
         body = self.__middleware.get_rows_from_message(body)
 
         if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
-            self._amount_of_games_ends_recived += 1
-            logging.info("END of games received")
+            client_id = body[0][0]
+            self._amount_of_games_ends_recived[client_id] = (
+                self._amount_of_games_ends_recived.get(client_id, 0) + 1
+            )
+            logging.info(f"END of games received from client: {client_id}")
             logging.debug(
                 (
-                    f"Amount of games ends received up to now: {self._amount_of_games_ends_recived}"
+                    f"Amount of games ends received up to now: {self._amount_of_games_ends_recived[client_id]}"
                     f"| Expecting: {self.__config['NEEDED_GAMES_ENDS']}"
                 )
             )
-            if self._amount_of_games_ends_recived == self.__config["NEEDED_GAMES_ENDS"]:
-                reviews_callback = self.__middleware.generate_callback(
-                    self.__reviews_callback,
-                    self.__config["INPUT_REVIEWS_QUEUE_NAME"],
-                    self.__config["OUTPUT_QUEUE_NAME"],
-                )
+            if (
+                self._amount_of_games_ends_recived[client_id]
+                == self.__config["NEEDED_GAMES_ENDS"]
+            ):
+                if "Q" in forwarding_queue_name:
+                    forwarding_queue_name = f"{forwarding_queue_name}_{client_id}"
+                    # Created here, otherwise each review that is joined must created the queue
+                    self.__middleware.create_queue(forwarding_queue_name)
 
-                self.__middleware.attach_callback(
-                    self.__config["INPUT_REVIEWS_QUEUE_NAME"], reviews_callback
-                )
-                # Created here, otherwise each review that is joined must created the queue
-                self.__middleware.create_queue(
-                    f'{self.__config["OUTPUT_QUEUE_NAME"]}_{body[0][0]}'
+                self.__send_stored_reviews(
+                    client_id, forwarding_queue_name=forwarding_queue_name
                 )
 
             self.__middleware.ack(delivery_tag)
@@ -93,7 +105,9 @@ class Join:
 
         logging.debug(f"Recived game: {body}")
         try:
-            write_batch_by_range_per_client("tmp/", int(self.__config["PARTITION_RANGE"]), body)
+            write_batch_by_range_per_client(
+                "tmp/", int(self.__config["PARTITION_RANGE"]), body
+            )
 
         except ValueError as e:
             logging.error(
@@ -109,8 +123,12 @@ class Join:
         for review in body:
             logging.debug(f"Recived review: {review}")
             client_id = review.pop(0)
+
             if len(review) == 1 and review[0] == END_TRANSMISSION_MESSAGE:
 
+                self._amount_of_reviews_ends_recived[client_id] = (
+                    self._amount_of_reviews_ends_recived.get(client_id, 0) + 1
+                )
                 # send rest of batch if there is any
                 # self.__middleware.publish_batch(forwarding_queue_name)
 
@@ -120,12 +138,11 @@ class Join:
                 #     logging.debug(f"Deleted directory: {'/tmp'}")
 
                 logging.info("END of reviews received")
-                self._amount_of_reviews_ends_recived += 1
                 logging.debug(
-                    f"Amount of reviews ends received up to now: {self._amount_of_reviews_ends_recived} | Expecting: {self.__config['NEEDED_REVIEWS_ENDS']}"
+                    f"Amount of reviews ends received up to now: {self._amount_of_reviews_ends_recived[client_id]} | Expecting: {self.__config['NEEDED_REVIEWS_ENDS']}"
                 )
                 if (
-                    self._amount_of_reviews_ends_recived
+                    self._amount_of_reviews_ends_recived[client_id]
                     == self.__config["NEEDED_REVIEWS_ENDS"]
                 ):
                     self.__send_end_to_forward_queues(client_id)
@@ -134,52 +151,15 @@ class Join:
 
                 return
 
-            # TODO: handle conversion error
-            app_id = int(review[0])
-            logging.debug(f"Looking into: tmp/{client_id}")
-            for record in read_by_range(
-                f"tmp/{client_id}", int(self.__config["PARTITION_RANGE"]), app_id
+            # Here we check for games ENDs, NOT for reviews
+            if not (
+                self._amount_of_games_ends_recived[client_id]
+                == self.__config["NEEDED_GAMES_ENDS"]
             ):
-                # record_splitted = record.split(",", maxsplit=1)
-                record_app_id = record[0]
-                logging.debug(f"app_id: {app_id} | record_app_id: {record_app_id}")
-                if app_id == int(record_app_id):
-                    # Get rid of the app_id from the review and append it to the original game record
-                    # TODO: QUE NO HAGA UNA LISTA!!
-                    # joined_message = [record_app_id, record_info] + review[1:]
-                    joined_message = self.__games_columns_to_keep(
-                        record
-                    ) + self.__reviews_columns_to_keep(review)
-
-                    if (
-                        "Q" in forwarding_queue_name
-                    ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
-                        forwarding_queue_name = f"{forwarding_queue_name}_{client_id}"
-                        logging.debug(
-                            f"Q - Sending {joined_message} to queue {forwarding_queue_name}"
-                        )
-                        self.__middleware.publish(
-                            joined_message,
-                            forwarding_queue_name,
-                        )
-
-                    else:
-                        joined_message.insert(0, client_id)
-
-                        node_id = node_id_to_send_to(
-                            client_id,
-                            record_app_id,
-                            self.__config["AMOUNT_OF_FORWARDING_QUEUES"],
-                        )
-
-                        logging.debug(
-                            f"Sending message: {joined_message} to queue: {node_id}_{forwarding_queue_name}"
-                        )
-
-                        self.__middleware.publish(
-                            joined_message,
-                            f"{node_id}_{forwarding_queue_name}",
-                        )
+                # Havent received all ends, save in disk
+                save(f"tmp/reviews_{client_id}.csv", review)
+            else:
+                self.__join_and_send(review, client_id, forwarding_queue_name)
 
         self.__middleware.ack(delivery_tag)
 
@@ -209,3 +189,59 @@ class Join:
 
     def __reviews_columns_to_keep(self, reviews_record: list[str]):
         return [reviews_record[i] for i in self.__config["REVIEWS_COLUMNS_TO_KEEP"]]
+
+    def __send_stored_reviews(self, client_id, forwarding_queue_name):
+        for record in read(f"tmp/reviews_{client_id}.csv"):
+            self.__join_and_send(
+                review=record,
+                client_id=client_id,
+                forwarding_queue_name=forwarding_queue_name,
+            )
+
+    def __join_and_send(self, review, client_id, forwarding_queue_name):
+        # TODO: handle conversion error
+        app_id = int(review[0])
+
+        for record in read_by_range(
+            f"tmp/{client_id}", int(self.__config["PARTITION_RANGE"]), app_id
+        ):
+            # record_splitted = record.split(",", maxsplit=1)
+            record_app_id = record[0]
+            logging.debug(f"app_id: {app_id} | record_app_id: {record_app_id}")
+            if app_id == int(record_app_id):
+                # Get rid of the app_id from the review and append it to the original game record
+                # TODO: QUE NO HAGA UNA LISTA!!
+                # joined_message = [record_app_id, record_info] + review[1:]
+                joined_message = self.__games_columns_to_keep(
+                    record
+                ) + self.__reviews_columns_to_keep(review)
+
+                if (
+                    "Q" in forwarding_queue_name
+                ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
+                    forwarding_queue_name = f"{forwarding_queue_name}_{client_id}"
+                    logging.debug(
+                        f"Q - Sending {joined_message} to queue {forwarding_queue_name}"
+                    )
+                    self.__middleware.publish(
+                        joined_message,
+                        forwarding_queue_name,
+                    )
+
+                else:
+                    joined_message.insert(0, client_id)
+
+                    node_id = node_id_to_send_to(
+                        client_id,
+                        record_app_id,
+                        self.__config["AMOUNT_OF_FORWARDING_QUEUES"],
+                    )
+
+                    logging.debug(
+                        f"Sending message: {joined_message} to queue: {node_id}_{forwarding_queue_name}"
+                    )
+
+                    self.__middleware.publish(
+                        joined_message,
+                        f"{node_id}_{forwarding_queue_name}",
+                    )
