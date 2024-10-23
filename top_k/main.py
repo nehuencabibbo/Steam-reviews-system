@@ -71,9 +71,7 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    protocol = Protocol()
-
-    top_k = TopK(protocol, middleware, config)
+    top_k = TopK(middleware, config)
     top_k.start()
 
 

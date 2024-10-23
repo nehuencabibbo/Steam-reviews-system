@@ -2,10 +2,6 @@ import logging
 import signal
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
-    add_to_top,
-    read_top,
-    delete_directory,
-    _add_batch_to_sorted_file,
     read_sorted_file,
     add_batch_to_sorted_file_per_client,
 )
@@ -15,13 +11,10 @@ END_TRANSMISSION_MESSAGE = "END"
 
 
 class TopK:
-    def __init__(
-        self, protocol: Protocol, middleware: Middleware, config: dict[str, str]
-    ):
-        self.__protocol = protocol
+    def __init__(self, middleware: Middleware, config: dict[str, str]):
         self.__middleware = middleware
         self.__config = config
-        self.__total_ends_received = 0
+        self.__total_ends_received_per_client = {}
         self._got_sigterm = False
 
         signal.signal(signal.SIGINT, self.__signal_handler)
@@ -37,13 +30,10 @@ class TopK:
             f"{self.__config['NODE_ID']}_{self.__config['INPUT_TOP_K_QUEUE_NAME']}"
         )
 
-        # self.__middleware.create_queue(self.__config["OUTPUT_TOP_K_QUEUE_NAME"])
-
         # # callback, inputq, outputq
         games_callback = self.__middleware.generate_callback(
             self.__callback,
             f"{self.__config['NODE_ID']}_{self.__config['INPUT_TOP_K_QUEUE_NAME']}",
-            # self.__config["OUTPUT_TOP_K_QUEUE_NAME"],
         )
 
         self.__middleware.attach_callback(
@@ -57,19 +47,21 @@ class TopK:
                 logging.error(e)
 
     def __callback(self, delivery_tag, body, message_type):
-
         body = self.__middleware.get_rows_from_message(body)
         logging.debug(f"[INPUT GAMES] received: {body}")
 
         if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
-            self.__total_ends_received += 1
-            logging.debug("END of games received")
-            logging.debug(
-                f"Amount of ends received up to now: {self.__total_ends_received} | Expecting: {self.__config['AMOUNT_OF_RECEIVING_QUEUES']}"
+            client_id = body[0][0]
+            self.__total_ends_received_per_client[client_id] = (
+                self.__total_ends_received_per_client.get(client_id, 0) + 1
             )
+            logging.debug("END of games received")
+            # logging.debug(
+            #     f"Amount of ends received up to now: {self.__total_ends_received_per_client[client_id]} | Expecting: {self.__config['AMOUNT_OF_RECEIVING_QUEUES']}"
+            # )
 
             if (
-                self.__total_ends_received
+                self.__total_ends_received_per_client[client_id]
                 == self.__config["AMOUNT_OF_RECEIVING_QUEUES"]
             ):
                 client_id = body[0][0]
@@ -104,7 +96,9 @@ class TopK:
             return
 
         try:
-            add_batch_to_sorted_file_per_client("tmp", body,  ascending=False, limit=int(self.__config["K"]))
+            add_batch_to_sorted_file_per_client(
+                "tmp", body, ascending=False, limit=int(self.__config["K"])
+            )
 
         except ValueError as e:
             logging.error(

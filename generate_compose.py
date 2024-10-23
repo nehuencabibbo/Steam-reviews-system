@@ -318,13 +318,17 @@ def add_rabbit(output: Dict):
     }
 
 
-def add_client(output: Dict, num: int, debug: bool):
+def add_client(
+    output: Dict, num: int, games_file_path: str, reviews_file_path: str, debug: bool
+):
     output["services"][f"client{num}"] = {
         "container_name": f"client{num}",
         "image": "client:latest",
         "entrypoint": "python3 /main.py",
         "environment": [
             f"LOGGING_LEVEL={'DEBUG' if debug else 'INFO'}",
+            f"GAME_FILE_PATH={games_file_path}",
+            f"REVIEWS_FILE_PATH={reviews_file_path}",
         ],
         "volumes": ["./data/:/data"],
         "networks": ["net"],
@@ -883,16 +887,34 @@ def generate_output():
 
     output["services"] = {}
     add_rabbit(output)
-    add_client(output, num=1, debug=False)
-    add_client(output, num=2, debug=False)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=True)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
+    # GAME_FILE_PATH=data/games_sample.csv
+    # REVIEWS_FILE_PATH=data/reviews_sample.csv
+
+    # ; GAME_FILE_PATH=data/filtered_games.csv
+    # ; REVIEWS_FILE_PATH=data/filtered_reviews.csv
+
+    add_client(
+        output,
+        num=1,
+        games_file_path="data/games_sample.csv",
+        reviews_file_path="data/reviews_sample.csv",
+        debug=False,
+    )
+    add_client(
+        output,
+        num=2,
+        games_file_path="data/games.csv",
+        reviews_file_path="data/filtered_reviews.csv",
+        debug=False,
+    )
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
     add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=True)
-    # # -------------------------------------------- Q2 -----------------------------------------
-    # generate_q2(output=output, debug=False)
+    generate_q1(output=output, debug=False)
+    # -------------------------------------------- Q2 -----------------------------------------
+    generate_q2(output=output, debug=True)
     # # # -------------------------------------------- Q3 -----------------------------------------
     # generate_q3(output=output, debug=False)
     # # # -------------------------------------------- Q4 -----------------------------------------
