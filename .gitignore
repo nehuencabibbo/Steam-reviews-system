@@ -7,3 +7,5 @@ data/results
 testing_basic_publish
 run_client.sh
 docker-compose-dev.yaml
+join_for_client.py
+join_sender.py

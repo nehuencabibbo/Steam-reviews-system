@@ -243,6 +243,7 @@ def add_join(
     games_columns_to_keep: str,
     reviews_columns_to_keep: str,
     debug: bool,
+    instances_of_myself: int
 ):
     output["services"][f"{query}_join{num}"] = {
         "container_name": f"{query}_join{num}",
@@ -258,6 +259,7 @@ def add_join(
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"GAMES_COLUMNS_TO_KEEP={games_columns_to_keep}",
             f"REVIEWS_COLUMNS_TO_KEEP={reviews_columns_to_keep}",
+            f"INSTANCES_OF_MYSELF={instances_of_myself}"
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -387,7 +389,7 @@ def generate_joins(
     **kwargs,
 ):
     for i in range(amount_of_joins):
-        add_join(**kwargs, num=i, debug=debug)
+        add_join(**kwargs, num=i, debug=debug, instances_of_myself=amount_of_joins)
 
 
 def generate_q1(output=Dict, debug=True):
@@ -656,7 +658,7 @@ def generate_q4(output: Dict, debug=False):
         "needed_reviews_ends": Q4_AMOUNT_OF_FIRST_COUNTER_BY_APP_ID,  # Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS,
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_SECOND_JOINS,
         "games_columns_to_keep": "0,1",  # app_id, name
-        "reviews_columns_to_keep": "",  #
+        "reviews_columns_to_keep": "", 
     }
 
     generate_joins(

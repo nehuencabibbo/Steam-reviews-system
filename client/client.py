@@ -25,6 +25,7 @@ class Client:
         self._middleware = middleware
         self._client_middleware = client_middleware
         self._got_sigterm = False
+        self._q4_ends_to_wait_for = 0 # TODO: Cambiar esto de alguna forma para que se envie un unico end, esta horrible asi
 
         self._client_id: str = None
 
@@ -126,15 +127,34 @@ class Client:
             logging.info("Finished")
 
     def __handle_query_result(self, delivery_tag: int, body: List[List[str]], query_number: int):
-
+        logging.info(f"Handling query {query_number}")
         body = self._middleware.get_rows_from_message(message=body)
-        for message in body:
-            if len(message) == 1 and message[0] == FILE_END_MSG:
-                self._middleware.stop_consuming()
+        logging.info(body)
+        # TODO: Tener handlers aparte en todo caso
+        if query_number == 4:
+            logging.info(f"Recived {self._q4_ends_to_wait_for} ENDS for q4")
+            for message in body:
+                if message[0] == FILE_END_MSG:
+                    self._q4_ends_to_wait_for += 1
+                    message, ends_to_wait_for = message
+                    logging.info(f"Need: {ends_to_wait_for} ends, Recived: {self._q4_ends_to_wait_for} ends")
+                    if self._q4_ends_to_wait_for == int(ends_to_wait_for):
+                        self._q4_ends_to_wait_for = 0
+                        logging.info("Finished reciving q4")
+                        self._middleware.stop_consuming()
+                        logging.info(f"Q{query_number} result: {message}")
+
                 self._middleware.ack(delivery_tag)
                 return
 
-            logging.info(f"Q{query_number} result: {message}")
+        else: 
+            for message in body:
+                if len(message) == 1 and message[0] == FILE_END_MSG:
+                    self._middleware.stop_consuming()
+                    self._middleware.ack(delivery_tag)
+                    return
+
+                logging.info(f"Q{query_number} result: {message}")
 
         self._middleware.ack(delivery_tag)
 

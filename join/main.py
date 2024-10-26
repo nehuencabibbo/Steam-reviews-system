@@ -55,6 +55,11 @@ def get_config():
             os.getenv("NEEDED_GAMES_ENDS", config["DEFAULT"]["NEEDED_GAMES_ENDS"])
         )
 
+        # For forwarding to the client 
+        config_params["INSTANCES_OF_MYSELF"] = int(
+            os.getenv("INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"])
+        )
+
         # Games columns to keep
         games_columns_to_keep = os.getenv(
             "GAMES_COLUMNS_TO_KEEP", config["DEFAULT"]["GAMES_COLUMNS_TO_KEEP"]

@@ -150,6 +150,9 @@ class Join:
                 self.__middleware.ack(delivery_tag)
 
                 return
+            
+            if not client_id in self._amount_of_games_ends_recived:
+                self._amount_of_games_ends_recived[client_id] = 0
 
             # Here we check for games ENDs, NOT for reviews
             if not (
@@ -172,7 +175,8 @@ class Join:
             forwarding_queue_name = f"{forwarding_queue_name}_{client_id}"
             # The only queue that has to be created here because of the client_id
             self.__middleware.publish_batch(forwarding_queue_name)
-            self.__middleware.send_end(forwarding_queue_name)
+            end_message = ['END', f'{self.__config["INSTANCES_OF_MYSELF"]}']
+            self.__middleware.send_end(forwarding_queue_name, end_message=end_message)
             logging.debug(f"Sent end to: {forwarding_queue_name}")
             return
 
