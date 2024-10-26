@@ -913,7 +913,7 @@ def generate_output():
     # -------------------------------------------- Q4 -----------------------------------------
     generate_q4(output=output, debug=False)
     # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=True)
+    generate_q5(output=output, debug=False)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

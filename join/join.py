@@ -87,8 +87,7 @@ class Join:
                 )
             )
             if (
-                self._amount_of_games_ends_recived[client_id]
-                == self.__config["NEEDED_GAMES_ENDS"]
+                self._amount_of_games_ends_recived[client_id] == self.__config["NEEDED_GAMES_ENDS"]
             ):
                 if "Q" in forwarding_queue_name:
                     forwarding_queue_name = f"{forwarding_queue_name}_{client_id}"
@@ -98,6 +97,12 @@ class Join:
                 self.__send_stored_reviews(
                     client_id, forwarding_queue_name=forwarding_queue_name
                 )
+
+                if not client_id in self._amount_of_reviews_ends_recived:
+                    self._amount_of_reviews_ends_recived[client_id] = 0
+
+                if (self._amount_of_reviews_ends_recived[client_id] == self.__config["NEEDED_REVIEWS_ENDS"]):
+                    self.__send_end_to_forward_queues(client_id)
 
             self.__middleware.ack(delivery_tag)
 
@@ -124,6 +129,9 @@ class Join:
             logging.debug(f"Recived review: {review}")
             client_id = review.pop(0)
 
+            if not client_id in self._amount_of_games_ends_recived:
+                self._amount_of_games_ends_recived[client_id] = 0
+
             if len(review) == 1 and review[0] == END_TRANSMISSION_MESSAGE:
 
                 self._amount_of_reviews_ends_recived[client_id] = (
@@ -141,9 +149,12 @@ class Join:
                 logging.debug(
                     f"Amount of reviews ends received up to now: {self._amount_of_reviews_ends_recived[client_id]} | Expecting: {self.__config['NEEDED_REVIEWS_ENDS']}"
                 )
+
+
                 if (
-                    self._amount_of_reviews_ends_recived[client_id]
-                    == self.__config["NEEDED_REVIEWS_ENDS"]
+                    self._amount_of_reviews_ends_recived[client_id] == self.__config["NEEDED_REVIEWS_ENDS"]
+                    and 
+                    self._amount_of_games_ends_recived[client_id] == self.__config["NEEDED_GAMES_ENDS"]
                 ):
                     self.__send_end_to_forward_queues(client_id)
 
@@ -151,9 +162,6 @@ class Join:
 
                 return
             
-            if not client_id in self._amount_of_games_ends_recived:
-                self._amount_of_games_ends_recived[client_id] = 0
-
             # Here we check for games ENDs, NOT for reviews
             if not (
                 self._amount_of_games_ends_recived[client_id]
