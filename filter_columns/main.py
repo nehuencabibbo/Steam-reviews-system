@@ -61,13 +61,6 @@ def get_config():
         config_params["RABBIT_IP"] = os.getenv(
             "RABBIT_IP", config["DEFAULT"]["RABBIT_IP"]
         )
-        config_params["NEW_CLIENTS_QUEUE_NAME"] = os.getenv(
-            "NEW_CLIENTS_QUEUE_NAME", config["DEFAULT"]["NEW_CLIENTS_QUEUE_NAME"]
-        )
-
-        config_params["NEW_CLIENTS_EXCHANGE_NAME"] = os.getenv(
-            "NEW_CLIENTS_EXCHANGE_NAME", config["DEFAULT"]["NEW_CLIENTS_EXCHANGE_NAME"]
-        )
 
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")

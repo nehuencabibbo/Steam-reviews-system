@@ -243,7 +243,7 @@ def add_join(
     games_columns_to_keep: str,
     reviews_columns_to_keep: str,
     debug: bool,
-    instances_of_myself: int
+    instances_of_myself: int,
 ):
     output["services"][f"{query}_join{num}"] = {
         "container_name": f"{query}_join{num}",
@@ -259,7 +259,7 @@ def add_join(
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"GAMES_COLUMNS_TO_KEEP={games_columns_to_keep}",
             f"REVIEWS_COLUMNS_TO_KEEP={reviews_columns_to_keep}",
-            f"INSTANCES_OF_MYSELF={instances_of_myself}"
+            f"INSTANCES_OF_MYSELF={instances_of_myself}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -355,7 +355,8 @@ def add_client_handler(output: Dict, num: int, debug: bool, port: int):
         "environment": [
             f"LOGGING_LEVEL={'DEBUG' if debug else 'INFO'}",
             f"CLIENTS_PORT={port}",
-            f"NEW_CLIENTS_EXCHANGE_NAME=new_clients",  # see filter_columns/config.ini
+            f"GAMES_QUEUE_NAME=games",  # see filter_columns/config.ini
+            f"REVIEWS_QUEUE_NAME=reviews",  # see filter_columns/config.ini
         ],
         "volumes": ["./data/:/data"],
         "networks": ["net"],
@@ -658,7 +659,7 @@ def generate_q4(output: Dict, debug=False):
         "needed_reviews_ends": Q4_AMOUNT_OF_FIRST_COUNTER_BY_APP_ID,  # Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS,
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_SECOND_JOINS,
         "games_columns_to_keep": "0,1",  # app_id, name
-        "reviews_columns_to_keep": "", 
+        "reviews_columns_to_keep": "",
     }
 
     generate_joins(
@@ -889,7 +890,7 @@ def generate_output():
         # reviews_file_path="data/reviews_sample.csv",
         games_file_path="data/games_sample.csv",
         reviews_file_path="data/reviews_sample.csv",
-        debug=False,
+        debug=True,
     )
     add_client(
         output,
@@ -898,23 +899,23 @@ def generate_output():
         # reviews_file_path="data/reviews_sample.csv",
         games_file_path="data/games_sample.csv",
         reviews_file_path="data/reviews_sample.csv",
-        debug=False,
+        debug=True,
     )
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
-    add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
+    add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT)
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=True)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=False)
+    generate_q1(output=output, debug=True)
     # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=False)
-    # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=False)
-    # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=False)
-    # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=False)
-    # -------------------------------------------- END OF QUERIES -----------------------------------------
+    generate_q2(output=output, debug=True)
+    # # -------------------------------------------- Q3 -----------------------------------------
+    # generate_q3(output=output, debug=False)
+    # # -------------------------------------------- Q4 -----------------------------------------
+    # generate_q4(output=output, debug=False)
+    # # -------------------------------------------- Q5 -----------------------------------------
+    # generate_q5(output=output, debug=False)
+    # # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
 

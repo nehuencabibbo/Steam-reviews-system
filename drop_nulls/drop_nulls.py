@@ -80,10 +80,10 @@ class DropNulls:
 
         peers_that_recived_end = body[2:]
         client_id = body[0]
-
+        
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
             # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-
+            logging.debug(f"Sending real END. {message_type}")
             if message_type == GAMES_MESSAGE_TYPE:
                 self.__handle_games_end_transmission_by_query(client_id)
             elif message_type == REVIEWS_MESSAGE_TYPE:
@@ -184,7 +184,9 @@ class DropNulls:
                         [client_id, platform],
                         f"{node_id}_{self._config['Q1_PLATFORM']}",
                     )
-                    logging.debug(f"Q1: Sent {[client_id, platform]} to {node_id}_{self._config['Q1_PLATFORM']}")
+                    logging.debug(
+                        f"Q1: Sent {[client_id, platform]} to {node_id}_{self._config['Q1_PLATFORM']}"
+                    )
 
             # Q2 Games: app_id, name, release date, genre, avg playtime forever
             # encoded_message = self._protocol.encode(

@@ -29,17 +29,35 @@ def get_config():
 
         # queues
 
-        # exchanges
-        config_params["NEW_CLIENTS_EXCHANGE_NAME"] = os.getenv(
-            "NEW_CLIENTS_EXCHANGE_NAME",
-            config["DEFAULT"]["NEW_CLIENTS_EXCHANGE_NAME"],
+        # queues for query results
+        config_params["Q1_RESULT_QUEUE"] = os.getenv(
+            "Q1_RESULT_QUEUE", config["DEFAULT"]["Q1_RESULT_QUEUE"]
+        )
+        config_params["Q2_RESULT_QUEUE"] = os.getenv(
+            "Q2_RESULT_QUEUE", config["DEFAULT"]["Q2_RESULT_QUEUE"]
+        )
+        config_params["Q3_RESULT_QUEUE"] = os.getenv(
+            "Q3_RESULT_QUEUE", config["DEFAULT"]["Q3_RESULT_QUEUE"]
+        )
+        config_params["Q4_RESULT_QUEUE"] = os.getenv(
+            "Q4_RESULT_QUEUE", config["DEFAULT"]["Q4_RESULT_QUEUE"]
+        )
+        config_params["Q5_RESULT_QUEUE"] = os.getenv(
+            "Q5_RESULT_QUEUE", config["DEFAULT"]["Q5_RESULT_QUEUE"]
         )
 
-        # # Forwarding queue
-        # config_params["FORWARDING_QUEUE_NAME"] = os.getenv(
-        #     "FORWARDING_QUEUE_NAME",
-        #     config["DEFAULT"]["FORWARDING_QUEUE_NAME"],
-        # )
+        # exchanges
+        config_params["GAMES_QUEUE_NAME"] = os.getenv(
+            "GAMES_QUEUE_NAME",
+            config["DEFAULT"]["GAMES_QUEUE_NAME"],
+        )
+
+        config_params["REVIEWS_QUEUE_NAME"] = os.getenv(
+            "REVIEWS_QUEUE_NAME",
+            config["DEFAULT"]["REVIEWS_QUEUE_NAME"],
+        )
+
+        # # Forwardig queue
 
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")

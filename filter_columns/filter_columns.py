@@ -30,20 +30,41 @@ class FilterColumns:
 
     def start(self):
         # Queues that the client uses to send data
-        anonymous_queue_name = self._middleware.create_anonymous_queue()
-        self._middleware.bind_queue_to_exchange(
-            exchange_name=self._config["NEW_CLIENTS_EXCHANGE_NAME"],
-            queue_name=anonymous_queue_name,
-        )
+        # anonymous_queue_name = self._middleware.create_anonymous_queue()
+        # self._middleware.bind_queue_to_exchange(
+        #     exchange_name=self._config["NEW_CLIENTS_EXCHANGE_NAME"],
+        #     queue_name=anonymous_queue_name,
+        # )
 
-        new_clients_callback = self._middleware.__class__.generate_callback(
-            self.__handle_new_clients
-        )
-        self._middleware.attach_callback(anonymous_queue_name, new_clients_callback)
+        # new_clients_callback = self._middleware.__class__.generate_callback(
+        #     self.__handle_new_clients
+        # )
+        # self._middleware.attach_callback(anonymous_queue_name, new_clients_callback)
 
+        self._middleware.create_queue(self._config["CLIENT_GAMES_QUEUE_NAME"])
+        self._middleware.create_queue(self._config["CLIENT_REVIEWS_QUEUE_NAME"])
         # Queues that filter columns uses to send data to null drop
         self._middleware.create_queue(self._config["NULL_DROP_GAMES_QUEUE_NAME"])
         self._middleware.create_queue(self._config["NULL_DROP_REVIEWS_QUEUE_NAME"])
+
+        games_callback = self._middleware.__class__.generate_callback(
+            self.__handle_games,
+            self._config["CLIENT_GAMES_QUEUE_NAME"],
+            self._config["NULL_DROP_GAMES_QUEUE_NAME"],
+        )
+        self._middleware.attach_callback(
+            self._config["CLIENT_GAMES_QUEUE_NAME"], games_callback
+        )
+
+        reviews_callback = self._middleware.__class__.generate_callback(
+            self.__handle_reviews,
+            self._config["CLIENT_REVIEWS_QUEUE_NAME"],
+            self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
+        )
+        self._middleware.attach_callback(
+            self._config["CLIENT_REVIEWS_QUEUE_NAME"],
+            reviews_callback,
+        )
 
         try:
             self._middleware.start_consuming()
@@ -106,7 +127,8 @@ class FilterColumns:
 
         # Have to check if it's a client end, in which case only "END" is received, otherwise, the client ID comes
         # first
-        peers_that_recived_end = body[1:] if len(body) == 1 else body[2:]
+        # peers_that_recived_end = body[1:] if len(body) == 1 else body[2:]
+        peers_that_recived_end = body[1:]
 
         if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
             logging.debug("Sending real END")
@@ -132,16 +154,21 @@ class FilterColumns:
         body: bytes,
         input_queue_name: str,
         forwarding_queue_name: str,
-        client_id: str,
     ):
         body = self._middleware.get_rows_from_message(body)
-        for message in body:
+        logging.debug(
+            f"[FILTER COLUMNS {self._config['NODE_ID']}] Recived games body: {body}"
+        )
+        if len(body) > 1:
+            client_id = body.pop(0)[0]  # Get client_id,
+        else:
+            client_id = body[0].pop(0)  # END message scenario
 
+        logging.debug(f"client_id: {client_id}")
+        for message in body:
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
-            if (message[0] == END_TRANSMISSION_MESSAGE) or (
-                len(message) > 1 and message[1] == END_TRANSMISSION_MESSAGE
-            ):
+            if message[0] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived END of games: {message}")
                 self.__handle_end_transmission(
                     message,
@@ -179,16 +206,23 @@ class FilterColumns:
         body: bytes,
         input_queue_name: str,
         forwarding_queue_name: str,
-        client_id: str,
     ):
         body = self._middleware.get_rows_from_message(body)
+
+        if len(body) > 1:
+            client_id = body.pop(0)[0]  # Get client_id,
+        else:
+            client_id = body[0].pop(0)  # END message scenario
+
+        logging.debug(f"client_id: {client_id}")
+
         for message in body:
 
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
-            if (message[0] == END_TRANSMISSION_MESSAGE) or (
-                len(message) > 1 and message[1] == END_TRANSMISSION_MESSAGE
-            ):
+            if message[0] == END_TRANSMISSION_MESSAGE:
+                logging.debug(f"Recived END of reviews: {message}")
+
                 self.__handle_end_transmission(
                     message,
                     input_queue_name,

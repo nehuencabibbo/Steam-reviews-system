@@ -30,6 +30,15 @@ class Protocol:
         return current_batch + encoded_row_length + encoded_row
 
     @staticmethod
+    def insert_before_batch(current_batch: bytes, row: List[str]) -> bytes:
+        encoded_row = Protocol.encode(row)
+        encoded_row_length = len(encoded_row).to_bytes(
+            FIELD_LENGTH_BYTES_AMOUNT, "big", signed=False
+        )
+
+        return encoded_row_length + encoded_row + current_batch
+
+    @staticmethod
     def decode_batch(message: bytes) -> list[list[str]]:
         res = []
         while len(message) > 0:

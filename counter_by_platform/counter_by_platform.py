@@ -68,24 +68,24 @@ class CounterByPlatform:
 
     def __send_results(self, session_id: str):
         # TODO: READ FROM STORAGE
-        logging.debug(self._count_dict)
-        publish_queue = f'{self._config["PUBLISH_QUEUE"]}_{session_id}'
-
-        logging.debug(self._count_dict[session_id].items())
+        publish_queue = self._config["PUBLISH_QUEUE"]
         self._middleware.create_queue(publish_queue)
+
         for platform, count in self._count_dict[session_id].items():
             logging.debug(f"{platform}, {count}")
             if self._got_sigterm:
                 return
 
             # encoded_msg = self.protocol.encode([key, str(value)])
-            self._middleware.publish([platform, str(count)], queue_name=publish_queue)
+            self._middleware.publish(
+                [session_id, platform, str(count)], queue_name=publish_queue
+            )
 
         # encoded_msg = self.protocol.encode([END_TRANSMISSION_MESSAGE])
         # self.middleware.publish(encoded_msg, queue_name=self.config["PUBLISH_QUEUE"])
         self._middleware.publish_batch(publish_queue)
         self._middleware.send_end(
-            queue=publish_queue,
+            queue=publish_queue, end_message=[session_id, END_TRANSMISSION_MESSAGE]
         )
         logging.debug(f"Sent results to queue {publish_queue}")
 

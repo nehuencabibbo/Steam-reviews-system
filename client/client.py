@@ -4,10 +4,11 @@ import signal
 import logging
 
 import pika
+import zmq
 from common.client_middleware.client_middleware import ClientMiddleware
 from common.middleware.middleware import Middleware, MiddlewareError
 
-from typing import * 
+from typing import *
 
 FILE_END_MSG = "END"
 AMMOUNT_OF_QUERIES = 5
@@ -18,14 +19,13 @@ class Client:
     def __init__(
         self,
         config: dict,
-        client_middleware: ClientMiddleware,
-        middleware: Middleware,
+        middleware: ClientMiddleware,
     ):
         self._config = config
         self._middleware = middleware
-        self._client_middleware = client_middleware
+        # self._client_middleware = client_middleware
         self._got_sigterm = False
-        self._q4_ends_to_wait_for = 0 # TODO: Cambiar esto de alguna forma para que se envie un unico end, esta horrible asi
+        self._q4_ends_to_wait_for = 0  # TODO: Cambiar esto de alguna forma para que se envie un unico end, esta horrible asi
 
         self._client_id: str = None
 
@@ -46,44 +46,42 @@ class Client:
             except OverflowError:
                 max_int = int(max_int / 10)
 
-    def __create_queues(self, client_id: str):
-        # Forwarding data queues 
-        self._middleware.create_queue(f'{self._config["GAMES_QUEUE"]}_{client_id}')
-        self._middleware.create_queue(f'{self._config["REVIEWS_QUEUE"]}_{client_id}')
+    # def __create_queues(self, client_id: str):
+    #     # Forwarding data queues
+    #     self._middleware.create_queue(f'{self._config["GAMES_QUEUE"]}_{client_id}')
+    #     self._middleware.create_queue(f'{self._config["REVIEWS_QUEUE"]}_{client_id}')
 
-        # Queues for reciving results 
-        for i in range(1, AMMOUNT_OF_QUERIES + 1):
-            queue_name = f"Q{i}_{client_id}"
-            self._middleware.create_queue(queue_name)
+    #     # Queues for reciving results
+    #     for i in range(1, AMMOUNT_OF_QUERIES + 1):
+    #         queue_name = f"Q{i}_{client_id}"
+    #         self._middleware.create_queue(queue_name)
 
     def run(self):
-        self._client_middleware.create_socket("REQ")
-        self._client_middleware.connect_to(
+        self._middleware.create_socket(zmq.DEALER)
+        self._middleware.connect_to(
             ip=self._config["SERVER_IP"], port=self._config["SERVER_PORT"]
         )
-        self._client_middleware.send_string("")
-        client_id = self._client_middleware.recv_string()
+        # self._middleware.send_string("INIT")
+        # response = self._middleware.recv_string()
 
-        logging.debug(f"Received client id: {client_id}")
+        # logging.debug(f"Received response id: {response}")
+        # self._client_id = client_id
+        # self.__create_queues(client_id)
 
-        self._client_id = client_id
-        self.__create_queues(client_id)
-
+        # if response == "OK":
         self.__send_file(
-            f'{self._config["GAMES_QUEUE"]}_{client_id}',
             self._config["GAME_FILE_PATH"],
         )
         self.__send_file(
-            f'{self._config["REVIEWS_QUEUE"]}_{client_id}',
             self._config["REVIEWS_FILE_PATH"],
         )
 
         self.__get_results()
 
-        if not self._got_sigterm:
-            self._middleware.shutdown()
+        # if not self._got_sigterm:
+        #     self._middleware.shutdown()
 
-    def __send_file(self, queue_name, file_path):
+    def __send_file(self, file_path):
         with open(file_path, "r") as file:
             reader = csv.reader(file)
             next(reader, None)  # skip header
@@ -91,58 +89,68 @@ class Client:
 
                 if self._got_sigterm:
                     return
-                logging.debug(f"Sending appID {row[0]} to {queue_name}")
+                logging.debug(f"Sending appID {row[0]}")
 
-                self._middleware.publish(row, queue_name=queue_name)
+                self._middleware.send(row)
                 time.sleep(self._config["SENDING_WAIT_TIME"])
 
         logging.debug("Sending file end")
-        self._middleware.publish_batch(queue_name)
-        self._middleware.send_end(queue=queue_name)
+        # self._middleware.publish_batch(queue_name)
+        self._middleware.send_end()
 
     def __get_results(self):
 
-        for number_of_query in range(1, AMMOUNT_OF_QUERIES + 1):
-            if self._got_sigterm:
-                return
-            
-            queue_name = f"Q{number_of_query}_{self._client_id}"
-            logging.debug((
-                f"Waiting for results of query {number_of_query}, on queue {queue_name}"
-            ))
+        while True:
+            logging.debug("Waiting for results...")
+            res = self._middleware.recv_string()
+            logging.debug(f"Results: {res}")
+            time.sleep(5)
+        # for number_of_query in range(1, AMMOUNT_OF_QUERIES + 1):
+        #     if self._got_sigterm:
+        #         return
 
-            callback = self._middleware.__class__.generate_callback(
-                self.__handle_query_result,
-                number_of_query
-            )
+        #     queue_name = f"Q{number_of_query}_{self._client_id}"
+        #     logging.debug(
+        #         (
+        #             f"Waiting for results of query {number_of_query}, on queue {queue_name}"
+        #         )
+        #     )
 
-            self._middleware.attach_callback(queue_name, callback)
-            try:
-                self._middleware.start_consuming()
-            except MiddlewareError as e:
-                # TODO: If got_sigterm is showing any error needed?
-                if not self._got_sigterm:
-                    logging.error(e)
+        #     callback = self._middleware.__class__.generate_callback(
+        #         self.__handle_query_result, number_of_query
+        #     )
 
-    def __handle_query_result(self, delivery_tag: int, body: List[List[str]], query_number: int):
+        #     self._middleware.attach_callback(queue_name, callback)
+        #     try:
+        #         self._middleware.start_consuming()
+        #     except MiddlewareError as e:
+        #         # TODO: If got_sigterm is showing any error needed?
+        #         if not self._got_sigterm:
+        #             logging.error(e)
+
+    def __handle_query_result(
+        self, delivery_tag: int, body: List[List[str]], query_number: int
+    ):
 
         body = self._middleware.get_rows_from_message(message=body)
-        
+
         # TODO: Tener handlers aparte en todo caso
         if query_number == 4:
             if len(body) == 1 and body[0][0] == FILE_END_MSG:
                 self._q4_ends_to_wait_for += 1
                 message, ends_to_wait_for = body[0]
 
-                #TODO: use logging.debug()
-                logging.info(f"Need: {ends_to_wait_for} ends, Recived: {self._q4_ends_to_wait_for} ends")
+                # TODO: use logging.debug()
+                logging.info(
+                    f"Need: {ends_to_wait_for} ends, Recived: {self._q4_ends_to_wait_for} ends"
+                )
                 if self._q4_ends_to_wait_for == int(ends_to_wait_for):
                     self._q4_ends_to_wait_for = 0
                     logging.info(f"Finished reciving q{query_number}")
                     self._middleware.stop_consuming()
                     self._middleware.ack(delivery_tag)
                     return
-            
+
         for message in body:
             if len(message) == 1 and message[0] == FILE_END_MSG:
                 self._middleware.stop_consuming()

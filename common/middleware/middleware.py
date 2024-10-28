@@ -148,3 +148,12 @@ class Middleware:
     ):
         self._channel.exchange_declare(exchange_name, exchange_type)
         self._channel.queue_bind(exchange=exchange_name, queue=queue_name)
+
+    def add_client_id_and_send_batch(
+        self, client_id: str, batch: bytes, queue_name: str = "", exchange_name=""
+    ):
+        self._channel.basic_publish(
+            exchange="",
+            routing_key=queue_name,
+            body=self.__protocol.insert_before_batch(batch, [client_id]),
+        ),

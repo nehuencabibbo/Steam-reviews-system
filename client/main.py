@@ -91,14 +91,14 @@ def main():
     logging_level = config.pop("LOGGING_LEVEL")
     init_logger(logging_level)
 
-    broker_ip = config.pop("RABBIT_IP")
-    middleware = Middleware(broker_ip)
-    client_middleware = ClientMiddleware()
-    protocol = Protocol()
+    # broker_ip = config.pop("RABBIT_IP")
+    # middleware = Middleware(broker_ip)
+    middleware = ClientMiddleware()
+    # protocol = Protocol()
 
     client = Client(
         config=config,
-        client_middleware=client_middleware,
+        # client_middleware=client_middleware,
         middleware=middleware,
     )
     client.run()
