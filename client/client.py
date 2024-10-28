@@ -108,15 +108,15 @@ class Client:
 
         query = results.pop(-1)[0]
 
+        if not query in self._query_results.keys():
+            self._query_results[query] = []
+
         if results[0][1] == "END":
             logging.debug(f"Results for query: {query}: ")
             self.__print_results_for_query(query)
             return
 
         for result in results:
-            if not query in self._query_results.keys():
-                self._query_results[query] = []
-
             self._query_results[query].append(
                 result[1:]
             )  # [1:] in order to remove client_id

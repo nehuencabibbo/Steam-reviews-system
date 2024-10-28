@@ -48,9 +48,9 @@ class Percentile:
 
             if self._recived_ends[client_id] == self._config["NEEDED_ENDS_TO_FINISH"]:
                 # create queue for answering
-                self._middleware.create_queue(
-                    f'{self._config["PUBLISH_QUEUE"]}_{client_id}'
-                )
+                # self._middleware.create_queue(
+                #     f'{self._config["PUBLISH_QUEUE"]}_{client_id}'
+                # )
                 self._handle_end_message(client_id)
 
             self._middleware.ack(method.delivery_tag)
@@ -80,7 +80,7 @@ class Percentile:
         percentile = self._get_percentile(client_id)
         logging.info(f"Percentile is: {percentile}")
 
-        forwarding_queue_name = f'{self._config["PUBLISH_QUEUE"]}_{client_id}'
+        forwarding_queue_name = self._config["PUBLISH_QUEUE"]
         storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
 
         reader = storage.read_sorted_file(storage_dir)
@@ -89,10 +89,13 @@ class Percentile:
             record_value = int(row[1])
             if record_value >= percentile:
                 logging.debug(f"Sending: {row}")
+                row.insert(0, client_id)
                 self._middleware.publish(row, forwarding_queue_name)
 
         self._middleware.publish_batch(forwarding_queue_name)
-        self._middleware.send_end(forwarding_queue_name)
+        self._middleware.send_end(
+            forwarding_queue_name, end_message=[client_id, END_TRANSMISSION_MESSAGE]
+        )
 
         # self._amount_msg_received = 0
         # if not storage.delete_directory(self._config["STORAGE_DIR"]):

@@ -21,7 +21,6 @@ class ClientMiddleware:
         self.__batch: list[bytes, int] = [b"", 0]
         self.__batch_size = batch_size
         self.__protocol = protocol
-        self.lock = threading.Lock()
 
     def create_socket(self, sock_type):
         self.__socket = self.__context.socket(sock_type)
@@ -44,14 +43,16 @@ class ClientMiddleware:
         return self.__protocol.decode_batch(res)
 
     def recv_multipart(self):
-        # with self.lock:
         return self.__socket.recv_multipart()
 
     def send_multipart(self, client_id, message):
         # Send a reply back to the client using its identifier
-        # with self.lock:
         logging.debug(f"Sending: {message} to {client_id}")
         self.__socket.send_multipart([client_id, b"", message])
+
+    def send_query_results(self, client_id, message, query):
+        message = self.__protocol.add_to_batch(message, [query])
+        self.send_multipart(client_id, message)
 
     def send(self, message: list[str]):
         current_batch, ammount_of_messages = self.__batch

@@ -29,16 +29,27 @@ class ClientHandler:
         self._forwarding_queues_per_client = {}
         # signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
-    def a(self):
-        parameters = pika.ConnectionParameters(host="rabbitmq")
-        connection = pika.SelectConnection(
-            parameters, on_open_callback=self.on_connected
+    def start_results_middleware(self):
+        self.results_middleware = Middleware(
+            "rabbitmq",
+            protocol=Protocol(),
         )
-        connection.ioloop.start()
+        self.results_middleware.create_queue(name="Q1")
+        self.results_middleware.create_queue(name="Q2")
+        self.results_middleware.create_queue(name="Q3")
+        self.results_middleware.create_queue(name="Q4")
+        self.results_middleware.create_queue(name="Q5")
+        self.results_middleware.attach_callback("Q1", self.on_message)
+        self.results_middleware.attach_callback("Q2", self.on_message)
+        self.results_middleware.attach_callback("Q3", self.on_message)
+        self.results_middleware.attach_callback("Q4", self.on_message)
+        self.results_middleware.attach_callback("Q5", self.on_message)
+        self.results_middleware.start_consuming()
 
     def run(self):
-        thread = threading.Thread(target=self.a)
+        thread = threading.Thread(target=self.start_results_middleware)
         thread.start()
+
         self._client_middleware.create_socket(zmq.ROUTER)
         self._client_middleware.bind(self._port)
         while True:
@@ -64,34 +75,11 @@ class ClientHandler:
 
     def on_message(self, channel, method_frame, header_frame, body):
         logging.debug(f"received results from queue: {method_frame.routing_key}")
-        protocol = Protocol()
-        client_id = bytes.fromhex(protocol.decode_batch(body)[0][0])
-        body = protocol.add_to_batch(body, [method_frame.routing_key])
-        # logging.debug(f"Results: {body}")
 
-        # actual = b""
-
-        # for message in body:
-        #     _ = message.pop(0)
-        #     actual = protocol.add_to_batch(actual, message)
-
-        self._client_middleware.send_multipart(client_id, body)
-        logging.debug(f"Sent: {body}")
-
+        client_id = bytes.fromhex(
+            self.results_middleware.get_rows_from_message(body)[0][0]
+        )
+        self._client_middleware.send_query_results(
+            client_id, message=body, query=method_frame.routing_key
+        )
         channel.basic_ack(delivery_tag=method_frame.delivery_tag)
-
-    def on_connected(self, connection):
-        connection.channel(on_open_callback=self.on_channel_open)
-
-    def on_channel_open(self, channel):
-        channel.queue_declare(queue="Q1")
-        channel.queue_declare(queue="Q2")
-        channel.queue_declare(queue="Q3")
-        channel.queue_declare(queue="Q4")
-        channel.queue_declare(queue="Q5")
-        channel.basic_consume("Q1", on_message_callback=self.on_message)
-        channel.basic_consume("Q2", on_message_callback=self.on_message)
-        channel.basic_consume("Q3", on_message_callback=self.on_message)
-        channel.basic_consume("Q4", on_message_callback=self.on_message)
-        channel.basic_consume("Q5", on_message_callback=self.on_message)
-        logging.debug("Consuming stuff")

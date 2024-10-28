@@ -26,10 +26,17 @@ class Middleware:
         protocol: Protocol = Protocol(),
         prefetch_count: int = 100,
         batch_size: int = 10,
+        is_async: bool = False,
+        on_connected_callback=None,
     ):
-        self._connection = self.__create_connection(broker_ip)
-        self._channel = self._connection.channel()
-        self._channel.basic_qos(prefetch_count=prefetch_count)
+        self._connection = (
+            self.__create_connection(broker_ip)
+            if not is_async
+            else self.__create_async_connection(broker_ip, on_connected_callback)
+        )
+        self._channel = self._connection.channel() if not is_async else None
+        if not is_async:
+            self._channel.basic_qos(prefetch_count=prefetch_count)
         self.__protocol = protocol
         self.__batch_size = batch_size
         self.__max_batch_size = 1 * 1024  # TODO: receive as param
@@ -37,6 +44,13 @@ class Middleware:
 
     def __create_connection(self, ip):
         return pika.BlockingConnection(pika.ConnectionParameters(host=ip))
+
+    def __create_async_connection(self, ip, on_connected_callback):
+        parameters = pika.ConnectionParameters(host=ip)
+        connection = pika.SelectConnection(
+            parameters, on_open_callback=on_connected_callback
+        )
+        return connection
 
     def create_queue(self, name):
         self.__batchs_per_queue[name] = [
@@ -122,6 +136,9 @@ class Middleware:
             raise MiddlewareError(f"A connection error ocurred with the broker: {e}")
         except OSError as e:
             raise MiddlewareError("Attempted to send data to a closed socket")
+
+    def start_async_ioloop(self):
+        self._connection.ioloop.start()
 
     def stop_consuming(self):
         self._channel.stop_consuming()

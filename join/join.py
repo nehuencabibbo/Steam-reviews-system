@@ -79,7 +79,6 @@ class Join:
             self._amount_of_games_ends_recived[client_id] = (
                 self._amount_of_games_ends_recived.get(client_id, 0) + 1
             )
-            logging.info(f"END of games received from client: {client_id}")
             logging.debug(
                 (
                     f"Amount of games ends received up to now: {self._amount_of_games_ends_recived[client_id]}"
@@ -87,10 +86,10 @@ class Join:
                 )
             )
             if (
-                self._amount_of_games_ends_recived[client_id] == self.__config["NEEDED_GAMES_ENDS"]
+                self._amount_of_games_ends_recived[client_id]
+                == self.__config["NEEDED_GAMES_ENDS"]
             ):
                 if "Q" in forwarding_queue_name:
-                    forwarding_queue_name = f"{forwarding_queue_name}_{client_id}"
                     # Created here, otherwise each review that is joined must created the queue
                     self.__middleware.create_queue(forwarding_queue_name)
 
@@ -101,7 +100,10 @@ class Join:
                 if not client_id in self._amount_of_reviews_ends_recived:
                     self._amount_of_reviews_ends_recived[client_id] = 0
 
-                if (self._amount_of_reviews_ends_recived[client_id] == self.__config["NEEDED_REVIEWS_ENDS"]):
+                if (
+                    self._amount_of_reviews_ends_recived[client_id]
+                    == self.__config["NEEDED_REVIEWS_ENDS"]
+                ):
                     self.__send_end_to_forward_queues(client_id)
 
             self.__middleware.ack(delivery_tag)
@@ -150,18 +152,18 @@ class Join:
                     f"Amount of reviews ends received up to now: {self._amount_of_reviews_ends_recived[client_id]} | Expecting: {self.__config['NEEDED_REVIEWS_ENDS']}"
                 )
 
-
                 if (
-                    self._amount_of_reviews_ends_recived[client_id] == self.__config["NEEDED_REVIEWS_ENDS"]
-                    and 
-                    self._amount_of_games_ends_recived[client_id] == self.__config["NEEDED_GAMES_ENDS"]
+                    self._amount_of_reviews_ends_recived[client_id]
+                    == self.__config["NEEDED_REVIEWS_ENDS"]
+                    and self._amount_of_games_ends_recived[client_id]
+                    == self.__config["NEEDED_GAMES_ENDS"]
                 ):
                     self.__send_end_to_forward_queues(client_id)
 
                 self.__middleware.ack(delivery_tag)
 
                 return
-            
+
             # Here we check for games ENDs, NOT for reviews
             if not (
                 self._amount_of_games_ends_recived[client_id]
@@ -180,10 +182,8 @@ class Join:
         if (
             "Q" in forwarding_queue_name
         ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
-            forwarding_queue_name = f"{forwarding_queue_name}_{client_id}"
-            # The only queue that has to be created here because of the client_id
             self.__middleware.publish_batch(forwarding_queue_name)
-            end_message = ['END', f'{self.__config["INSTANCES_OF_MYSELF"]}']
+            end_message = [client_id, "END", f'{self.__config["INSTANCES_OF_MYSELF"]}']
             self.__middleware.send_end(forwarding_queue_name, end_message=end_message)
             logging.debug(f"Sent end to: {forwarding_queue_name}")
             return
@@ -228,10 +228,11 @@ class Join:
                     record
                 ) + self.__reviews_columns_to_keep(review)
 
+                joined_message.insert(0, client_id)
+
                 if (
                     "Q" in forwarding_queue_name
                 ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
-                    forwarding_queue_name = f"{forwarding_queue_name}_{client_id}"
                     logging.debug(
                         f"Q - Sending {joined_message} to queue {forwarding_queue_name}"
                     )
@@ -241,7 +242,6 @@ class Join:
                     )
 
                 else:
-                    joined_message.insert(0, client_id)
 
                     node_id = node_id_to_send_to(
                         client_id,
