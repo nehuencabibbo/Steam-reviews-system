@@ -26,6 +26,7 @@ class Client:
         # self._client_middleware = client_middleware
         self._got_sigterm = False
         self._q4_ends_to_wait_for = 0  # TODO: Cambiar esto de alguna forma para que se envie un unico end, esta horrible asi
+        self._amount_of_queries_received = 0
 
         self._client_id: str = None
         self._query_results = {}
@@ -100,7 +101,9 @@ class Client:
 
     def __print_results_for_query(self, query):
         for result in self._query_results[query]:
-            logging.debug(result)
+            logging.info(f"{query} result: {result}")
+
+        logging.info(f"Finished {query}")
 
     def __handle_query_result(self, results):
         if len(results) == 0:
@@ -112,7 +115,7 @@ class Client:
             self._query_results[query] = []
 
         if results[0][1] == "END":
-            logging.debug(f"Results for query: {query}: ")
+            logging.info(f"Results for query: {query}: ")
             self.__print_results_for_query(query)
             return
 
@@ -123,7 +126,7 @@ class Client:
 
     def __get_results(self):
         # TODO: handle sigterm
-        logging.debug("Waiting for results...")
+        logging.info("Waiting for results...")
         while True:
             logging.debug("Polling for results")
             res = self._middleware.recv_batch()

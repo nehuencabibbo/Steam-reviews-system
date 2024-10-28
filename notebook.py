@@ -176,7 +176,7 @@ q4_results_app_ids = q4_results_app_ids[q4_results_app_ids["count"] > 5000]
 
 # Enriquecemos con el nombre de esos juegos
 q4_results_games_names = pd.merge(q4_results_app_ids, games_action_with_5000_negative_reviews, left_on='app_id', right_on="AppID", how='inner')["Name"]
-q4_results_games_names.to_csv('./data/q4_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
+q4_results_games_names.to_csv('./data/results/q4_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
 
 """## Q5: Nombre de juegos del género "action" dentro del percentil 90 en cantidad de reseñas negativas"""
 
@@ -203,4 +203,4 @@ q5_result = reviews_q5_negative_score_action_by_app_id[reviews_q5_negative_score
 q5_result.shape
 
 q5_result_with_game_names = pd.merge(q5_result, games_action_reduced, left_on='app_id', right_on="AppID", how='inner')
-q5_result_with_game_names[["app_id", "Name"]].to_csv('./data/results/q5_expected.csv', sep=',', encoding='utf-8', index=False, header=False)
+q5_result_with_game_names[["Name", "count"]].to_csv('./data/results/q5_expected.csv', sep=',', encoding='utf-8', index=False, header=False)

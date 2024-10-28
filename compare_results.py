@@ -14,7 +14,9 @@ RESET = "\033[0m"
 def add_line_to_corresponding_expected_query_result(line, results: Set[str], query: str):
     # Every line output is similar to:
     # ... Qi result: ...
-    query_index = line.find(query) # Q5 result: ...
+    line_to_search = f"{query} result"
+    #query_index = line.find(query) # Q5 result: ...
+    query_index = line.find(line_to_search)
     if query_index == -1: return
 
     line = line[query_index + len(query):]
