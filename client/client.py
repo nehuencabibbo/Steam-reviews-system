@@ -28,7 +28,7 @@ class Client:
         self._q4_ends_to_wait_for = 0  # TODO: Cambiar esto de alguna forma para que se envie un unico end, esta horrible asi
 
         self._client_id: str = None
-
+        self._query_results = {}
         self.__find_and_set_csv_field_size_limit()
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -98,13 +98,38 @@ class Client:
         # self._middleware.publish_batch(queue_name)
         self._middleware.send_end()
 
-    def __get_results(self):
+    def __print_results_for_query(self, query):
+        for result in self._query_results[query]:
+            logging.debug(result)
 
+    def __handle_query_result(self, results):
+        if len(results) == 0:
+            return
+
+        query = results.pop(-1)[0]
+
+        if results[0][1] == "END":
+            logging.debug(f"Results for query: {query}: ")
+            self.__print_results_for_query(query)
+            return
+
+        for result in results:
+            if not query in self._query_results.keys():
+                self._query_results[query] = []
+
+            self._query_results[query].append(
+                result[1:]
+            )  # [1:] in order to remove client_id
+
+    def __get_results(self):
+        # TODO: handle sigterm
+        logging.debug("Waiting for results...")
         while True:
-            logging.debug("Waiting for results...")
-            res = self._middleware.recv_string()
-            logging.debug(f"Results: {res}")
-            time.sleep(5)
+            logging.debug("Polling for results")
+            res = self._middleware.recv_batch()
+            self.__handle_query_result(res)
+            time.sleep(0.5)
+
         # for number_of_query in range(1, AMMOUNT_OF_QUERIES + 1):
         #     if self._got_sigterm:
         #         return
@@ -128,39 +153,39 @@ class Client:
         #         if not self._got_sigterm:
         #             logging.error(e)
 
-    def __handle_query_result(
-        self, delivery_tag: int, body: List[List[str]], query_number: int
-    ):
+    # def __handle_query_result(
+    #     self, delivery_tag: int, body: List[List[str]], query_number: int
+    # ):
 
-        body = self._middleware.get_rows_from_message(message=body)
+    #     body = self._middleware.get_rows_from_message(message=body)
 
-        # TODO: Tener handlers aparte en todo caso
-        if query_number == 4:
-            if len(body) == 1 and body[0][0] == FILE_END_MSG:
-                self._q4_ends_to_wait_for += 1
-                message, ends_to_wait_for = body[0]
+    #     # TODO: Tener handlers aparte en todo caso
+    #     if query_number == 4:
+    #         if len(body) == 1 and body[0][0] == FILE_END_MSG:
+    #             self._q4_ends_to_wait_for += 1
+    #             message, ends_to_wait_for = body[0]
 
-                # TODO: use logging.debug()
-                logging.info(
-                    f"Need: {ends_to_wait_for} ends, Recived: {self._q4_ends_to_wait_for} ends"
-                )
-                if self._q4_ends_to_wait_for == int(ends_to_wait_for):
-                    self._q4_ends_to_wait_for = 0
-                    logging.info(f"Finished reciving q{query_number}")
-                    self._middleware.stop_consuming()
-                    self._middleware.ack(delivery_tag)
-                    return
+    #             # TODO: use logging.debug()
+    #             logging.info(
+    #                 f"Need: {ends_to_wait_for} ends, Recived: {self._q4_ends_to_wait_for} ends"
+    #             )
+    #             if self._q4_ends_to_wait_for == int(ends_to_wait_for):
+    #                 self._q4_ends_to_wait_for = 0
+    #                 logging.info(f"Finished reciving q{query_number}")
+    #                 self._middleware.stop_consuming()
+    #                 self._middleware.ack(delivery_tag)
+    #                 return
 
-        for message in body:
-            if len(message) == 1 and message[0] == FILE_END_MSG:
-                self._middleware.stop_consuming()
-                self._middleware.ack(delivery_tag)
-                logging.info(f"Finished reciving q{query_number}")
-                return
+    #     for message in body:
+    #         if len(message) == 1 and message[0] == FILE_END_MSG:
+    #             self._middleware.stop_consuming()
+    #             self._middleware.ack(delivery_tag)
+    #             logging.info(f"Finished reciving q{query_number}")
+    #             return
 
-            logging.info(f"Q{query_number} result: {message}")
+    #         logging.info(f"Q{query_number} result: {message}")
 
-        self._middleware.ack(delivery_tag)
+    #     self._middleware.ack(delivery_tag)
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")

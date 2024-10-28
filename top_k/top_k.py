@@ -56,9 +56,6 @@ class TopK:
                 self.__total_ends_received_per_client.get(client_id, 0) + 1
             )
             logging.debug("END of games received")
-            # logging.debug(
-            #     f"Amount of ends received up to now: {self.__total_ends_received_per_client[client_id]} | Expecting: {self.__config['AMOUNT_OF_RECEIVING_QUEUES']}"
-            # )
 
             if (
                 self.__total_ends_received_per_client[client_id]
@@ -66,20 +63,12 @@ class TopK:
             ):
                 forwarding_queue = self.__config["OUTPUT_TOP_K_QUEUE_NAME"]
                 # Add the client id if its sink node
-                forwarding_queue_name = (
-                    f"{forwarding_queue}_{client_id}"
-                    if "Q" in forwarding_queue
-                    else forwarding_queue
-                )
+                forwarding_queue_name = forwarding_queue
 
                 self.__middleware.create_queue(forwarding_queue_name)
                 self.__send_top(forwarding_queue_name, client_id=client_id)
 
-                end_message = (
-                    [END_TRANSMISSION_MESSAGE]
-                    if "Q" in forwarding_queue
-                    else [client_id, END_TRANSMISSION_MESSAGE]
-                )
+                end_message = [client_id, END_TRANSMISSION_MESSAGE]
                 self.__middleware.send_end(
                     queue=forwarding_queue_name,
                     end_message=end_message,
@@ -108,8 +97,8 @@ class TopK:
 
     def __send_top(self, forwarding_queue_name, client_id):
         for record in read_sorted_file(f"tmp/{client_id}"):
-            if not "Q" in forwarding_queue_name:
-                record.insert(0, client_id)
+            # if not "Q" in forwarding_queue_name:
+            record.insert(0, client_id)
             self.__middleware.publish(record, forwarding_queue_name, "")
 
         self.__middleware.publish_batch(forwarding_queue_name)

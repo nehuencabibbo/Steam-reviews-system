@@ -35,8 +35,13 @@ class ClientMiddleware:
     def send_string(self, message: str):
         self.__socket.send_string(message)
 
-    def recv_string(self):
-        return self.__socket.recv_string()
+    # def recv_string(self):
+    #     res = self.__socket.recv_string()
+    #     return self.__protocol.decode_batch(res)
+
+    def recv_batch(self):
+        res = self.__socket.recv()
+        return self.__protocol.decode_batch(res)
 
     def recv_multipart(self):
         # with self.lock:

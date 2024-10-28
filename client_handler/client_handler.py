@@ -63,18 +63,20 @@ class ClientHandler:
                 self._forwarding_queues_per_client[client_id] = self._reviews_queue_name
 
     def on_message(self, channel, method_frame, header_frame, body):
+        logging.debug(f"received results from queue: {method_frame.routing_key}")
         protocol = Protocol()
-        body = protocol.decode_batch(body)
-        logging.debug(f"Results: {body}")
-        client_id = bytes.fromhex(body[0][0])
-        actual = b""
+        client_id = bytes.fromhex(protocol.decode_batch(body)[0][0])
+        body = protocol.add_to_batch(body, [method_frame.routing_key])
+        # logging.debug(f"Results: {body}")
 
-        for message in body:
-            _ = message.pop(0)
-            actual = protocol.add_to_batch(actual, message)
+        # actual = b""
 
-        self._client_middleware.send_multipart(client_id, actual)
-        logging.debug(f"Sent: {actual}")
+        # for message in body:
+        #     _ = message.pop(0)
+        #     actual = protocol.add_to_batch(actual, message)
+
+        self._client_middleware.send_multipart(client_id, body)
+        logging.debug(f"Sent: {body}")
 
         channel.basic_ack(delivery_tag=method_frame.delivery_tag)
 
