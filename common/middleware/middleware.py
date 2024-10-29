@@ -143,6 +143,9 @@ class Middleware:
     def stop_consuming(self):
         self._channel.stop_consuming()
 
+    def stop_consuming_gracefully(self):
+        self._connection.add_callback_threadsafe(self.stop_consuming)
+
     def ack(self, delivery_tag):
         self._channel.basic_ack(delivery_tag=delivery_tag)
 

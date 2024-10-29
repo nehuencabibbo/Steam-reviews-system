@@ -32,7 +32,8 @@ class Join:
     def __signal_handler(self, sig, frame):
         logging.debug(f"Gracefully shutting down...")
         self._got_sigterm = True
-        self.__middleware.shutdown()
+        self.__middleware.stop_consuming_gracefully()
+
 
     def start(self):
         # gotta check this as it could be the last node, then a prefix shouldn't be used
@@ -72,6 +73,8 @@ class Join:
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
+        finally:
+            self.__middleware.shutdown()
 
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
         body = self.__middleware.get_rows_from_message(body)

@@ -66,6 +66,8 @@ class DropNulls:
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
+        finally:
+            self._middleware.shutdown()
 
     def __handle_end_transmission(
         self, body: List[str], reciving_queue_name: str, message_type: str
@@ -297,4 +299,4 @@ class DropNulls:
             f"[NULL DROP {self._config['NODE_ID']}] Gracefully shutting down..."
         )
         self._got_sigterm = True
-        self._middleware.shutdown()
+        self._middleware.stop_consuming_gracefully()

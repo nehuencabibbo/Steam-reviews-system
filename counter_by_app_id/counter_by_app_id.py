@@ -45,6 +45,8 @@ class CounterByAppId:
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
+        finally:
+            self._middleware.shutdown()
 
         logging.info("Finished")
 
@@ -53,7 +55,6 @@ class CounterByAppId:
             self._middleware.create_queue(f'{i}_{self._config["PUBLISH_QUEUE"]}')
 
     def __handle_message(self, delivery_tag: int, body: List[List[str]]):
-
         body = self._middleware.get_rows_from_message(body)
 
         logging.debug(f"GOT MSG: {body}")
@@ -151,4 +152,5 @@ class CounterByAppId:
         logging.debug("Got SIGTERM")
 
         self._got_sigterm = True
-        self._middleware.shutdown()
+        self._middleware.stop_consuming_gracefully()
+        # self._middleware.shutdown()

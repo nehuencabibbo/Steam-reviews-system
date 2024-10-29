@@ -24,7 +24,8 @@ class TopK:
     def __signal_handler(self, sig, frame):
         logging.debug(f"Gracefully shutting down...")
         self._got_sigterm = True
-        self.__middleware.shutdown()
+        self.__middleware.stop_consuming_gracefully()
+        # self.__middleware.shutdown()
 
     def start(self):
         self.__middleware.create_queue(
@@ -46,6 +47,8 @@ class TopK:
         except MiddlewareError as e:
             if not self._got_sigterm:
                 logging.error(e)
+        finally:
+            self.__middleware.shutdown()
 
     def __callback(self, delivery_tag, body, message_type):
         body = self.__middleware.get_rows_from_message(body)

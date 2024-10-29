@@ -12,7 +12,6 @@ import logging
 
 def get_config():
     config_params = {}
-    print("CWD: ", os.getcwd())
     config = ConfigParser(os.environ)
     config.read("./join/config.ini")
     try:

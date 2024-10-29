@@ -42,6 +42,8 @@ class CounterByPlatform:
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
+        finally:
+            self._middleware.shutdown()
 
     def __handle_message(self, delivery_tag: int, body: List[List[str]]):
         body = self._middleware.get_rows_from_message(body)
@@ -104,4 +106,5 @@ class CounterByPlatform:
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
         self._got_sigterm = True
-        self._middleware.shutdown()
+        self._middleware.stop_consuming_gracefully()
+        # self._middleware.shutdown()

@@ -12,7 +12,6 @@ from top_k.top_k import TopK
 
 def get_config():
     config_params = {}
-    print("CWD: ", os.getcwd())
     config = ConfigParser(os.environ)
     config.read("./top_k/config.ini")
     try:

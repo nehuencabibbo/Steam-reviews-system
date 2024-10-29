@@ -70,17 +70,18 @@ class Client:
         # self.__create_queues(client_id)
 
         # if response == "OK":
-        self.__send_file(
-            self._config["GAME_FILE_PATH"],
-        )
-        self.__send_file(
-            self._config["REVIEWS_FILE_PATH"],
-        )
+        try:
+            self.__send_file(
+                self._config["GAME_FILE_PATH"],
+            )
+            self.__send_file(
+                self._config["REVIEWS_FILE_PATH"],
+            )
 
-        self.__get_results()
-
-        # if not self._got_sigterm:
-        #     self._middleware.shutdown()
+            self.__get_results()
+        except zmq.error.ZMQError:
+            if not self._got_sigterm:
+                raise
 
     def __send_file(self, file_path):
         with open(file_path, "r") as file:

@@ -34,6 +34,8 @@ class Percentile:
         except MiddlewareError as e:
             if not self._got_sigterm:
                 logging.error(e)
+        finally:
+            self._middleware.shutdown()
 
     def _handle_message(self, ch, method, properties, body):
 
@@ -126,4 +128,6 @@ class Percentile:
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
         self._got_sigterm = True
-        self._middleware.shutdown()
+        self._middleware.stop_consuming_gracefully()
+        # self._middleware.stop_consuming()
+

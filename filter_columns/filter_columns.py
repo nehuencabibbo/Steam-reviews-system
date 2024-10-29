@@ -72,6 +72,8 @@ class FilterColumns:
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
+        finally:
+            self._middleware.shutdown()
 
     def __handle_new_clients(self, delivery_tag: int, body: List[str]):
         session_id = self._middleware.get_rows_from_message(body)[0][0]
@@ -263,4 +265,5 @@ class FilterColumns:
             f"[FILTER COLUMNS {self._config['NODE_ID']}] Gracefully shutting down..."
         )
         self._got_sigterm = True
-        self._middleware.shutdown()
+        self._middleware.stop_consuming_gracefully()
+        #self._middleware.shutdown()

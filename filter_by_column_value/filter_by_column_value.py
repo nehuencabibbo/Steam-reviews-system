@@ -65,6 +65,8 @@ class FilterColumnByValue:
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
+        finally:
+            self._middleware.shutdown()
 
     def __create_all_forwarding_queues(self):
         """
@@ -246,4 +248,5 @@ class FilterColumnByValue:
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
         self._got_sigterm = True
-        self._middleware.shutdown()
+        self._middleware.stop_consuming_gracefully()
+        # self._middleware.shutdown()
