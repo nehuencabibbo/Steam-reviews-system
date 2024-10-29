@@ -7,6 +7,8 @@ from common.storage.storage import (
     read_by_range,
     save,
     write_batch_by_range_per_client,
+    delete_directory,
+    delete_file,
 )
 from common.protocol.protocol import Protocol
 from utils.utils import node_id_to_send_to
@@ -105,6 +107,7 @@ class Join:
                     == self.__config["NEEDED_REVIEWS_ENDS"]
                 ):
                     self.__send_end_to_forward_queues(client_id)
+                    self.__clear_client_data(client_id)
 
             self.__middleware.ack(delivery_tag)
 
@@ -159,6 +162,7 @@ class Join:
                     == self.__config["NEEDED_GAMES_ENDS"]
                 ):
                     self.__send_end_to_forward_queues(client_id)
+                    self.__clear_client_data(client_id)
 
                 self.__middleware.ack(delivery_tag)
 
@@ -257,3 +261,10 @@ class Join:
                         joined_message,
                         f"{node_id}_{forwarding_queue_name}",
                     )
+                    
+    def __clear_client_data(self, client_id: str):
+
+        delete_directory(f"/tmp/{client_id}")
+        delete_file(f"/tmp/reviews_{client_id}.csv")
+        self._amount_of_games_ends_recived.pop(client_id)
+        self._amount_of_reviews_ends_recived.pop(client_id)

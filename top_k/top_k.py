@@ -4,6 +4,7 @@ from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
     read_sorted_file,
     add_batch_to_sorted_file_per_client,
+    delete_directory,
 )
 from common.protocol.protocol import Protocol
 
@@ -74,12 +75,10 @@ class TopK:
                     end_message=end_message,
                 )
 
-            self.__middleware.ack(delivery_tag)
+                client_storage_dir = f'/tmp/{client_id}'
+                self._clear_client_data(client_id, client_storage_dir)
 
-            # if not delete_directory('/tmp'):
-            #     logging.debug(f"Couldn't delete directory: {'/tmp'}")
-            # else:
-            #     logging.debug(f"Deleted directory: {'/tmp'}")
+            self.__middleware.ack(delivery_tag)
 
             return
 
@@ -103,3 +102,13 @@ class TopK:
 
         self.__middleware.publish_batch(forwarding_queue_name)
         logging.debug(f"Top sent to queue: {forwarding_queue_name}")
+
+
+    def _clear_client_data(self, client_id: str, storage_dir: str):
+        
+        if not delete_directory(storage_dir):
+            logging.debug(f"Couldn't delete directory: {storage_dir}")
+        else:
+            logging.debug(f"Deleted directory: {storage_dir}")
+        self.__total_ends_received_per_client.pop(client_id) # removed end count for the client
+        

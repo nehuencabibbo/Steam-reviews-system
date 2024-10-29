@@ -57,21 +57,6 @@ class Percentile:
             return
 
         storage.add_batch_to_sorted_file_per_client(self._config["STORAGE_DIR"], body)
-        # records_per_client = {}
-        # for record in body:
-        #     client_id = record.pop(0)
-
-        #     if not client_id in records_per_client:
-        #         records_per_client[client_id] = []
-
-        #     records_per_client[client_id].append(record)
-
-        # logging.debug(f"RECORD PER CLIENT: {records_per_client}")
-
-        # #TODO: make storage handle batches from multiple clients
-        # for client_id, records in records_per_client.items():
-        #     storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
-        #     storage.add_batch_to_sorted_file(storage_dir, records)
 
         self._middleware.ack(method.delivery_tag)
 
@@ -97,11 +82,8 @@ class Percentile:
             forwarding_queue_name, end_message=[client_id, END_TRANSMISSION_MESSAGE]
         )
 
-        # self._amount_msg_received = 0
-        # if not storage.delete_directory(self._config["STORAGE_DIR"]):
-        #     logging.debug(f"Couldn't delete directory: {self._config["STORAGE_DIR"]}")
-        # else:
-        #     logging.debug(f"Deleted directory: {self._config["STORAGE_DIR"]}")
+        self._clear_client_data(client_id, storage_dir)
+
 
     def _get_percentile(self, client_id):
         # to get the rank, i need to read the file if i do not have a countera (i need the amount of messages)
@@ -131,6 +113,15 @@ class Percentile:
         rank = math.ceil(rank)  # instead of interpolating, round the number
 
         return rank
+    
+
+    def _clear_client_data(self, client_id: str, storage_dir: str):
+        
+        if not storage.delete_directory(storage_dir):
+            logging.debug(f"Couldn't delete directory: {storage_dir}")
+        else:
+            logging.debug(f"Deleted directory: {storage_dir}")
+        self._recived_ends.pop(client_id) # removed end count for the client
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")

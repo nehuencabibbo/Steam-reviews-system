@@ -34,6 +34,16 @@ def delete_directory(dir: str) -> bool:
     return True
 
 
+def delete_file(file_path: str):
+    if not os.path.isfile(file_path):
+        logging.debug(f"Couldn't delete file {file_path}")
+        return False
+
+    os.remove(file_path)
+    logging.debug(f"Deleted file {file_path}")
+    return True
+
+
 def write_by_range(dir: str, range: int, record: list[str]):
     key = None
     try:

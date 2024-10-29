@@ -111,13 +111,8 @@ class CounterByAppId:
             prefix_queue_name=queue_name, client_id=client_id
         )
 
-        # if not delete_directory(self._config["STORAGE_DIR"]):
-        #     logging.debug(f"Couldn't delete directory: {self._config["STORAGE_DIR"]}")
-        # else:
-        #     logging.debug(f"Deleted directory: {self._config["STORAGE_DIR"]}")
-        # encoded_msg = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-        # self._middleware.publish(encoded_msg, queue_name=self._config["PUBLISH_QUEUE"])
-        # logging.debug(f'END SENT TO: {self._config["PUBLISH_QUEUE"]}')
+        self._clear_client_data(client_id, storage_dir)
+
 
     def __send_record_to_forwarding_queues(self, record: List[str]):
         for queue_number in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):
@@ -142,6 +137,15 @@ class CounterByAppId:
                 end_message=[client_id, END_TRANSMISSION_MESSAGE],
             )
             logging.debug(f"Sent END of client: {client_id}")
+
+
+    def _clear_client_data(self, client_id, storage_dir):
+        if not storage.delete_directory(storage_dir):
+            logging.debug(f"Couldn't delete directory: {storage_dir}")
+        else:
+            logging.debug(f"Deleted directory: {storage_dir}")
+        self._ends_received_per_client.pop(client_id)
+
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
