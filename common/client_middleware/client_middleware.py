@@ -78,3 +78,17 @@ class ClientMiddleware:
 
         self._send_batch()
         self.__socket.send(end_message)
+
+    def register_for_pollin(self):
+        self.__poller = zmq.Poller()
+        self.__poller.register(self.__socket, zmq.POLLIN)
+
+    def has_message(self):
+        socks = dict(self.__poller.poll())
+        return self.__socket in socks and socks[self.__socket] == zmq.POLLIN
+
+    # linger is the max time (in miliseconds) waited for all undelivered messages to be sent.
+    # https://libzmq.readthedocs.io/en/zeromq3-x/zmq_setsockopt.html (ZMQ_LINGER)
+    def shutdown(self, linger=5000):
+        self.__context.destroy(linger)
+        self.__context.term()

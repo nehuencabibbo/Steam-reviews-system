@@ -127,70 +127,13 @@ class Client:
     def __get_results(self):
         # TODO: handle sigterm
         logging.info("Waiting for results...")
-        while True:
+        self._middleware.register_for_pollin()
+        while not self._got_sigterm:
             logging.debug("Polling for results")
-            res = self._middleware.recv_batch()
-            self.__handle_query_result(res)
-            time.sleep(0.5)
-
-        # for number_of_query in range(1, AMMOUNT_OF_QUERIES + 1):
-        #     if self._got_sigterm:
-        #         return
-
-        #     queue_name = f"Q{number_of_query}_{self._client_id}"
-        #     logging.debug(
-        #         (
-        #             f"Waiting for results of query {number_of_query}, on queue {queue_name}"
-        #         )
-        #     )
-
-        #     callback = self._middleware.__class__.generate_callback(
-        #         self.__handle_query_result, number_of_query
-        #     )
-
-        #     self._middleware.attach_callback(queue_name, callback)
-        #     try:
-        #         self._middleware.start_consuming()
-        #     except MiddlewareError as e:
-        #         # TODO: If got_sigterm is showing any error needed?
-        #         if not self._got_sigterm:
-        #             logging.error(e)
-
-    # def __handle_query_result(
-    #     self, delivery_tag: int, body: List[List[str]], query_number: int
-    # ):
-
-    #     body = self._middleware.get_rows_from_message(message=body)
-
-    #     # TODO: Tener handlers aparte en todo caso
-    #     if query_number == 4:
-    #         if len(body) == 1 and body[0][0] == FILE_END_MSG:
-    #             self._q4_ends_to_wait_for += 1
-    #             message, ends_to_wait_for = body[0]
-
-    #             # TODO: use logging.debug()
-    #             logging.info(
-    #                 f"Need: {ends_to_wait_for} ends, Recived: {self._q4_ends_to_wait_for} ends"
-    #             )
-    #             if self._q4_ends_to_wait_for == int(ends_to_wait_for):
-    #                 self._q4_ends_to_wait_for = 0
-    #                 logging.info(f"Finished reciving q{query_number}")
-    #                 self._middleware.stop_consuming()
-    #                 self._middleware.ack(delivery_tag)
-    #                 return
-
-    #     for message in body:
-    #         if len(message) == 1 and message[0] == FILE_END_MSG:
-    #             self._middleware.stop_consuming()
-    #             self._middleware.ack(delivery_tag)
-    #             logging.info(f"Finished reciving q{query_number}")
-    #             return
-
-    #         logging.info(f"Q{query_number} result: {message}")
-
-    #     self._middleware.ack(delivery_tag)
+            if self._middleware.has_message():
+                res = self._middleware.recv_batch()
+                self.__handle_query_result(res)
 
     def __sigterm_handler(self, signal, frame):
-        logging.debug("Got SIGTERM")
         self._got_sigterm = True
         self._middleware.shutdown()
