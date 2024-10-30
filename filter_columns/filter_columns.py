@@ -75,43 +75,6 @@ class FilterColumns:
         finally:
             self._middleware.shutdown()
 
-    def __handle_new_clients(self, delivery_tag: int, body: List[str]):
-        session_id = self._middleware.get_rows_from_message(body)[0][0]
-
-        logging.debug(f"session_id: {session_id}")
-
-        new_client_games_queue = (
-            f'{self._config["CLIENT_GAMES_QUEUE_NAME"]}_{session_id}'
-        )
-
-        new_client_reviews_queue = (
-            f'{self._config["CLIENT_REVIEWS_QUEUE_NAME"]}_{session_id}'
-        )
-
-        self._middleware.create_queue(new_client_games_queue)
-        self._middleware.create_queue(new_client_reviews_queue)
-
-        games_callback = self._middleware.__class__.generate_callback(
-            self.__handle_games,
-            new_client_games_queue,
-            self._config["NULL_DROP_GAMES_QUEUE_NAME"],
-            session_id,
-        )
-        self._middleware.attach_callback(new_client_games_queue, games_callback)
-
-        reviews_callback = self._middleware.__class__.generate_callback(
-            self.__handle_reviews,
-            new_client_reviews_queue,
-            self._config["NULL_DROP_REVIEWS_QUEUE_NAME"],
-            session_id,
-        )
-        self._middleware.attach_callback(
-            new_client_reviews_queue,
-            reviews_callback,
-        )
-
-        self._middleware.ack(delivery_tag=delivery_tag)
-
     def __handle_end_transmission(
         self,
         body: List[str],

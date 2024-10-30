@@ -42,16 +42,16 @@ class ClientHandler:
             self._rabbit_ip,
             protocol=Protocol(),
         )
-        self.results_middleware.create_queue(name="Q1")
-        self.results_middleware.create_queue(name="Q2")
-        self.results_middleware.create_queue(name="Q3")
-        self.results_middleware.create_queue(name="Q4")
-        self.results_middleware.create_queue(name="Q5")
-        self.results_middleware.attach_callback("Q1", self.on_message)
-        self.results_middleware.attach_callback("Q2", self.on_message)
-        self.results_middleware.attach_callback("Q3", self.on_message)
-        self.results_middleware.attach_callback("Q4", self.on_message)
-        self.results_middleware.attach_callback("Q5", self.on_message)
+        self.results_middleware.create_queue(name=self._q1_result_queue)
+        self.results_middleware.create_queue(name=self._q2_result_queue)
+        self.results_middleware.create_queue(name=self._q3_result_queue)
+        self.results_middleware.create_queue(name=self._q4_result_queue)
+        self.results_middleware.create_queue(name=self._q5_result_queue)
+        self.results_middleware.attach_callback(self._q1_result_queue, self.on_message)
+        self.results_middleware.attach_callback(self._q2_result_queue, self.on_message)
+        self.results_middleware.attach_callback(self._q3_result_queue, self.on_message)
+        self.results_middleware.attach_callback(self._q4_result_queue, self.on_message)
+        self.results_middleware.attach_callback(self._q5_result_queue, self.on_message)
         self.results_middleware.start_consuming()
 
     def handle_clients(self):
@@ -79,7 +79,16 @@ class ClientHandler:
                 )
 
                 if message[-3:] == b"END":
+
+                    if forwarding_queue_name == self._reviews_queue_name:
+                        logging.info(
+                            f"Final end received from client: {client_id}. Removing from the record."
+                        )
+                        del self._forwarding_queues_per_client[client_id]
+                        continue
+
                     logging.debug("Setting forwarding queue to reviews")
+
                     self._forwarding_queues_per_client[client_id] = (
                         self._reviews_queue_name
                     )
