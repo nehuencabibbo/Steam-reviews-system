@@ -118,6 +118,7 @@ class Client:
         if results[0][1] == "END":
             logging.info(f"Results for query: {query}: ")
             self.__print_results_for_query(query)
+            self._amount_of_queries_received += 1
             return
 
         for result in results:
@@ -129,7 +130,10 @@ class Client:
         # TODO: handle sigterm
         logging.info("Waiting for results...")
         self._middleware.register_for_pollin()
-        while not self._got_sigterm:
+        while (
+            not self._got_sigterm
+            and self._amount_of_queries_received < AMMOUNT_OF_QUERIES
+        ):
             logging.debug("Polling for results")
             if self._middleware.has_message():
                 res = self._middleware.recv_batch()

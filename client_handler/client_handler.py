@@ -28,12 +28,18 @@ class ClientHandler:
         self._games_queue_name = kwargs["GAMES_QUEUE_NAME"]
         self._reviews_queue_name = kwargs["REVIEWS_QUEUE_NAME"]
         self._forwarding_queues_per_client = {}
+        self._rabbit_ip = kwargs["RABBIT_IP"]
+        self._q1_result_queue = kwargs["Q1_RESULT_QUEUE"]
+        self._q2_result_queue = kwargs["Q2_RESULT_QUEUE"]
+        self._q3_result_queue = kwargs["Q3_RESULT_QUEUE"]
+        self._q4_result_queue = kwargs["Q4_RESULT_QUEUE"]
+        self._q5_result_queue = kwargs["Q5_RESULT_QUEUE"]
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def start_results_middleware(self):
         self.results_middleware = Middleware(
-            "rabbitmq",
+            self._rabbit_ip,
             protocol=Protocol(),
         )
         self.results_middleware.create_queue(name="Q1")
@@ -48,7 +54,7 @@ class ClientHandler:
         self.results_middleware.attach_callback("Q5", self.on_message)
         self.results_middleware.start_consuming()
 
-    def a(self):
+    def handle_clients(self):
         self._client_middleware.create_socket(zmq.ROUTER)
         self._client_middleware.bind(self._port)
         self._client_middleware.register_for_pollin()
@@ -82,7 +88,7 @@ class ClientHandler:
         self._middleware.shutdown()
 
     def run(self):
-        thread = threading.Thread(target=self.a)
+        thread = threading.Thread(target=self.handle_clients)
         thread.start()
         try:
             self.start_results_middleware()

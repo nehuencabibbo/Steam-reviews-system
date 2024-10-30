@@ -85,7 +85,7 @@ def main():
     logging.debug("Logging configuration:")
     [logging.debug(f"{key}: {value}") for key, value in config.items()]
 
-    broker_ip = config.pop("RABBIT_IP")
+    broker_ip = config["RABBIT_IP"]
     middleware = Middleware(broker_ip)
     client_middleware = ClientMiddleware()
     protocol = Protocol()
