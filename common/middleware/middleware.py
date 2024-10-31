@@ -136,7 +136,7 @@ class Middleware:
             # or general network error
             raise MiddlewareError(f"A connection error ocurred with the broker: {e}")
 
-        except pika.exceptions.StreamLostError:
+        except pika.exceptions.StreamLostError as e:
             raise MiddlewareError(f"A connection error ocurred with the broker: {e}")
 
         except OSError as e:
