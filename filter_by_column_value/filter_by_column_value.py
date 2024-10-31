@@ -25,7 +25,6 @@ class FilterColumnByValue:
     ):
         self._protocol = protocol
         self._middleware = middleware
-        self._config = config
         self._got_sigterm = False
         self._filter_by_criteria: Callable[[List[str]], None] = None
 
@@ -33,21 +32,24 @@ class FilterColumnByValue:
         # Config variables that are recurrently accesed in callback functions are
         # stored so there's no unnecesary key hashing for dictionary access each
         # time the callback function is called
-        self._forwarding_queue_names: List[str] = self._config["FORWARDING_QUEUE_NAMES"]
-        self._amount_of_forwarding_queues: List[int] = self._config[
+        self._forwarding_queue_names: List[str] = config["FORWARDING_QUEUE_NAMES"]
+        self._amount_of_forwarding_queues: List[int] = config[
             "AMOUNT_OF_FORWARDING_QUEUES"
         ]
-        self._columns_to_keep: List[int] = self._config["COLUMNS_TO_KEEP"]
-        self._column_number_to_use: int = self._config["COLUMN_NUMBER_TO_USE"]
-        self._value_to_filter_by: str = self._config["VALUE_TO_FILTER_BY"]
-        self._node_id: str = self._config["NODE_ID"]
+        self._columns_to_keep: List[int] = config["COLUMNS_TO_KEEP"]
+        self._column_number_to_use: int = config["COLUMN_NUMBER_TO_USE"]
+        self._value_to_filter_by: str = config["VALUE_TO_FILTER_BY"]
+        self._node_id: str = config["NODE_ID"]
+        self._receiving_queue_name = config["RECIVING_QUEUE_NAME"]
+        self._instances_of_myself = config["INSTANCES_OF_MYSELF"]
+        self._criteria = config["CRITERIA"]
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
     def start(self):
         # Reciving queues
-        self._middleware.create_queue(self._config["RECIVING_QUEUE_NAME"])
+        self._middleware.create_queue(self._receiving_queue_name)
 
         # Forwarding queues
         self.__create_all_forwarding_queues()
@@ -57,7 +59,7 @@ class FilterColumnByValue:
         callback = self._middleware.__class__.generate_callback(
             self.__handle_message,
         )
-        self._middleware.attach_callback(self._config["RECIVING_QUEUE_NAME"], callback)
+        self._middleware.attach_callback(self._receiving_queue_name, callback)
 
         try:
             self._middleware.start_consuming()
@@ -99,7 +101,7 @@ class FilterColumnByValue:
         peers_that_recived_end = body[2:]
         client_id = body[0]
 
-        if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
+        if len(peers_that_recived_end) == int(self._instances_of_myself):
             self.__send_end_transmission_to_all_forwarding_queues(client_id)
         else:
 
@@ -109,9 +111,7 @@ class FilterColumnByValue:
 
             message += peers_that_recived_end
 
-            self._middleware.publish_message(
-                message, self._config["RECIVING_QUEUE_NAME"]
-            )
+            self._middleware.publish_message(message, self._receiving_queue_name)
 
     def __send_last_batch_to_fowarding_queues(self):
         # TODO: Repeated code between this and send end, remove
@@ -159,7 +159,7 @@ class FilterColumnByValue:
         self._middleware.ack(delivery_tag)
 
     def __set_callback_according_to_criteria(self):
-        criteria = self._config["CRITERIA"]
+        criteria = self._criteria
 
         if criteria == EQUAL_CRITERIA_KEYWORD:
             self._filter_by_criteria = self.__filter_equal

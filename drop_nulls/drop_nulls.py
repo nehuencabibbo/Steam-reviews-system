@@ -21,35 +21,49 @@ class DropNulls:
     ):
         self._protocol = protocol
         self._middleware = middleware
-        self._config = config
         self._got_sigterm = False
         self.r = 0
+
+        # Directly assign each config value to an attribute
+        self.games_receiving_queue_name = config["GAMES_RECIVING_QUEUE_NAME"]
+        self.reviews_receiving_queue_name = config["REVIEWS_RECIVING_QUEUE_NAME"]
+        self.count_by_platform_nodes = config["COUNT_BY_PLATFORM_NODES"]
+        self.q1_platform = config["Q1_PLATFORM"]
+        self.q2_games = config["Q2_GAMES"]
+        self.q3_games = config["Q3_GAMES"]
+        self.q4_games = config["Q4_GAMES"]
+        self.q5_games = config["Q5_GAMES"]
+        self.q3_reviews = config["Q3_REVIEWS"]
+        self.q4_reviews = config["Q4_REVIEWS"]
+        self.q5_reviews = config["Q5_REVIEWS"]
+        self.node_id = config["NODE_ID"]
+        self.instances_of_myself = int(config["INSTANCES_OF_MYSELF"])
+
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
     def start(self):
-        # Reciving queues
-        self._middleware.create_queue(self._config["GAMES_RECIVING_QUEUE_NAME"])
-        self._middleware.create_queue(self._config["REVIEWS_RECIVING_QUEUE_NAME"])
+        # Receiving queues
+        self._middleware.create_queue(self.games_receiving_queue_name)
+        self._middleware.create_queue(self.reviews_receiving_queue_name)
+
         # Forwarding queues
-        # Q1
-        for i in range(self._config["COUNT_BY_PLATFORM_NODES"]):
-            self._middleware.create_queue(f"{i}_{self._config['Q1_PLATFORM']}")
+        for i in range(self.count_by_platform_nodes):
+            self._middleware.create_queue(f"{i}_{self.q1_platform}")
 
-        # Q2
-        self._middleware.create_queue(self._config["Q2_GAMES"])
-
-        # Q3, Q4, Q5
-        for i in range(3, 6):
-            self._middleware.create_queue(self._config[f"Q{i}_GAMES"])
-            self._middleware.create_queue(self._config[f"Q{i}_REVIEWS"])
+        # Q2, Q3, Q4, Q5
+        self._middleware.create_queue(self.q2_games)
+        for queue in [self.q3_games, self.q4_games, self.q5_games]:
+            self._middleware.create_queue(queue)
+        for queue in [self.q3_reviews, self.q4_reviews, self.q5_reviews]:
+            self._middleware.create_queue(queue)
 
         # Attaching callback functions
         games_callback = self._middleware.__class__.generate_callback(
             self.__handle_games,
         )
         self._middleware.attach_callback(
-            self._config["GAMES_RECIVING_QUEUE_NAME"],
+            self.games_receiving_queue_name,
             games_callback,
         )
 
@@ -57,13 +71,12 @@ class DropNulls:
             self.__handle_reviews,
         )
         self._middleware.attach_callback(
-            self._config["REVIEWS_RECIVING_QUEUE_NAME"], reviews_callback
+            self.reviews_receiving_queue_name, reviews_callback
         )
 
         try:
             self._middleware.start_consuming()
         except MiddlewareError as e:
-            # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
         finally:
@@ -72,74 +85,52 @@ class DropNulls:
     def __handle_end_transmission(
         self, body: List[str], reciving_queue_name: str, message_type: str
     ):
-        # Si me llego un END...
-        # 1) Me fijo si los la cantidad de ids que hay es igual a
-        # la cantidad total de instancias de mi mismo que hay.
-        # Si es asi => Envio el END a la proxima cola
-        # Si no es asi => Checkeo si mi ID esta en la lista
-        #     Si es asi => No agrego nada y reencolo
-        #     Si no es asi => Agrego mi id a la lista y reencolo
-
-        peers_that_recived_end = body[2:]
+        peers_that_received_end = body[2:]
         client_id = body[0]
-        
-        if len(peers_that_recived_end) == int(self._config["INSTANCES_OF_MYSELF"]):
-            # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+
+        if len(peers_that_received_end) == self.instances_of_myself:
             logging.debug(f"Sending real END. {message_type}")
             if message_type == GAMES_MESSAGE_TYPE:
                 self.__handle_games_end_transmission_by_query(client_id)
             elif message_type == REVIEWS_MESSAGE_TYPE:
                 self.__handle_reviews_end_transmission_by_query(client_id)
             else:
-                raise Exception(f"Unkown message type: {message_type}")
+                raise Exception(f"Unknown message type: {message_type}")
 
         else:
-
             if message_type == GAMES_MESSAGE_TYPE:
                 self.__handle_games_last_batch()
             elif message_type == REVIEWS_MESSAGE_TYPE:
                 self.__handle_reviews_last_batch()
             else:
-                raise Exception(f"Unkown message type: {message_type}")
+                raise Exception(f"Unknown message type: {message_type}")
 
             message = [client_id, END_TRANSMISSION_MESSAGE]
-            if not self._config["NODE_ID"] in peers_that_recived_end:
-                peers_that_recived_end.append(self._config["NODE_ID"])
+            if self.node_id not in peers_that_received_end:
+                peers_that_received_end.append(self.node_id)
 
-            message += peers_that_recived_end
+            message += peers_that_received_end
             self._middleware.publish_message(message, reciving_queue_name)
 
     def __handle_games_last_batch(self):
-
-        for i in range(self._config["COUNT_BY_PLATFORM_NODES"]):
-            queue_name = f"{i}_{self._config['Q1_PLATFORM']}"
+        for i in range(self.count_by_platform_nodes):
+            queue_name = f"{i}_{self.q1_platform}"
             self._middleware.publish_batch(queue_name)
 
-        # Q2, Q3, Q4, Q5
-        for i in range(2, 6):
-            queue_name = self._config[f"Q{i}_GAMES"]
-            self._middleware.publish_batch(queue_name)
+        for queue in [self.q2_games, self.q3_games, self.q4_games, self.q5_games]:
+            self._middleware.publish_batch(queue)
 
     def __handle_games_end_transmission_by_query(self, client_id: str):
-        # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
-        # Mandar el END a cada uno particular
-        # Como tengo N nodos de count by platform, a cada uno de ellos le tiene que llegar el end
-        # Q1
-        for i in range(self._config["COUNT_BY_PLATFORM_NODES"]):
-            logging.debug(f"SENDING_TO: {i}_{self._config['Q1_PLATFORM']}")
-            # self._middleware.publish(
-            #     encoded_message, f"{i}_{self._config['Q1_PLATFORM']}"
-            # )
+        for i in range(self.count_by_platform_nodes):
+            logging.debug(f"SENDING_TO: {i}_{self.q1_platform}")
             self._middleware.send_end(
-                queue=f"{i}_{self._config['Q1_PLATFORM']}",
+                queue=f"{i}_{self.q1_platform}",
                 end_message=[client_id, END_TRANSMISSION_MESSAGE],
             )
 
-        # Q2, Q3, Q4, Q5
-        for i in range(2, 6):
-            # self._middleware.publish(encoded_message, self._config[f"Q{i}_GAMES"])
+        for queue in [self.q2_games, self.q3_games, self.q4_games, self.q5_games]:
             self._middleware.send_end(
-                queue=self._config[f"Q{i}_GAMES"],
+                queue=queue,
                 end_message=[client_id, END_TRANSMISSION_MESSAGE],
             )
 
@@ -147,15 +138,13 @@ class DropNulls:
         body = self._middleware.get_rows_from_message(message=body)
 
         for message in body:
-            logging.debug(f"Recived message: {message}")
+            logging.debug(f"Received message: {message}")
 
-            # message = [value.strip() for value in message]
-            # For how is the filter_columns made, the first END is prefixed with the client_id
             if message[1] == END_TRANSMISSION_MESSAGE:
-                logging.debug(f"Recived games END: {message}")
+                logging.debug(f"Received games END: {message}")
                 self.__handle_end_transmission(
                     message,
-                    self._config["GAMES_RECIVING_QUEUE_NAME"],
+                    self.games_receiving_queue_name,
                     GAMES_MESSAGE_TYPE,
                 )
 
@@ -165,41 +154,22 @@ class DropNulls:
             if NULL_FIELD_VALUE in message:
                 logging.debug("Dropped prev value")
                 continue
-                # self._middleware.ack(delivery_tag)
-                # return
 
             client_id = message[0]
-
-            # Q1 Platform: plataform
             for platform, platform_index in PLATFORMS.items():
-                platform_supported = message[
-                    platform_index
-                ]  # True if supported else False
-
-                # TODO: Should this be handeled in a different node?
+                platform_supported = message[platform_index]
                 if platform_supported.lower() == "true":
                     node_id = node_id_to_send_to(
-                        client_id, platform, self._config["COUNT_BY_PLATFORM_NODES"]
+                        client_id, platform, self.count_by_platform_nodes
                     )
-                    # encoded_message = self._protocol.encode([platform])
                     self._middleware.publish(
                         [client_id, platform],
-                        f"{node_id}_{self._config['Q1_PLATFORM']}",
+                        f"{node_id}_{self.q1_platform}",
                     )
                     logging.debug(
-                        f"Q1: Sent {[client_id, platform]} to {node_id}_{self._config['Q1_PLATFORM']}"
+                        f"Q1: Sent {[client_id, platform]} to {node_id}_{self.q1_platform}"
                     )
 
-            # Q2 Games: app_id, name, release date, genre, avg playtime forever
-            # encoded_message = self._protocol.encode(
-            #     [
-            #         message[GAMES_APP_ID],
-            #         message[GAMES_NAME],
-            #         message[GAMES_RELEASE_DATE],
-            #         message[GAMES_AVG_PLAYTIME_FOREVER],
-            #         message[GAMES_GENRE],
-            #     ]
-            # )
             self._middleware.publish(
                 [
                     client_id,
@@ -209,15 +179,10 @@ class DropNulls:
                     message[GAMES_AVG_PLAYTIME_FOREVER],
                     message[GAMES_GENRE],
                 ],
-                self._config["Q2_GAMES"],
+                self.q2_games,
             )
 
-            # Q3, Q4, Q5 Games: app_id, name, genre
-            # encoded_message = self._protocol.encode(
-            #     [message[GAMES_APP_ID], message[GAMES_NAME], message[GAMES_GENRE]]
-            # )
-
-            for i in range(3, 6):
+            for queue in [self.q3_games, self.q4_games, self.q5_games]:
                 self._middleware.publish(
                     [
                         client_id,
@@ -225,63 +190,48 @@ class DropNulls:
                         message[GAMES_NAME],
                         message[GAMES_GENRE],
                     ],
-                    self._config[f"Q{i}_GAMES"],
+                    queue,
                 )
 
         self._middleware.ack(delivery_tag)
 
     def __handle_reviews_end_transmission_by_query(self, client_id: str):
-        for i in range(3, 6):
-            # encoded_message = self._protocol.encode([END_TRANSMISSION_MESSAGE])
+        for queue in [self.q3_reviews, self.q5_reviews, self.q4_reviews]:
             self._middleware.send_end(
-                self._config[f"Q{i}_REVIEWS"],
+                queue=queue,
                 end_message=[client_id, END_TRANSMISSION_MESSAGE],
             )
 
     def __handle_reviews_last_batch(self):
-
-        for i in range(3, 6):
-            queue_name = self._config[f"Q{i}_REVIEWS"]
-            self._middleware.publish_batch(queue_name)
+        for queue in [self.q3_reviews, self.q5_reviews, self.q4_reviews]:
+            self._middleware.publish_batch(queue)
 
     def __handle_reviews(self, delivery_tag: int, body: bytes):
         body = self._middleware.get_rows_from_message(message=body)
         for message in body:
-            # message = [value.strip() for value in message]
-
             if message[1] == END_TRANSMISSION_MESSAGE:
-                logging.debug(f"Recived reviews END: {message}")
+                logging.debug(f"Received reviews END: {message}")
                 self.__handle_end_transmission(
                     message,
-                    self._config["REVIEWS_RECIVING_QUEUE_NAME"],
+                    self.reviews_receiving_queue_name,
                     REVIEWS_MESSAGE_TYPE,
                 )
                 self._middleware.ack(delivery_tag)
-
                 return
 
-            logging.debug(f"Recived review: {message}")
+            logging.debug(f"Received review: {message}")
             if NULL_FIELD_VALUE in message:
-                logging.debug("NULL was found in recived review, dropping it")
+                logging.debug("NULL was found in received review, dropping it")
                 continue
 
             client_id = message[0]
-            # Q3, Q5 Reviews: app_id, review_score
-            for i in ["3", "5"]:
-                # encoded_message = self._protocol.encode(
-                #     [message[REVIEW_APP_ID], message[REVIEW_SCORE]]
-                # )
+            for queue in [self.q3_reviews, self.q5_reviews]:
                 self._middleware.publish(
                     [client_id, message[REVIEW_APP_ID], message[REVIEW_SCORE]],
-                    self._config[f"Q{i}_REVIEWS"],
+                    queue,
                 )
 
-            # Q4 Reviews: app_id, review_text, review_score
-            # encoded_message = self._protocol.encode(
-            #     [message[REVIEW_APP_ID], message[REVIEW_TEXT], message[REVIEW_SCORE]]
-            # )
             self.r += 1
-            # logging.debug(f"amount of reviews sent to q4: {self.r}")
             self._middleware.publish(
                 [
                     client_id,
@@ -289,14 +239,12 @@ class DropNulls:
                     message[REVIEW_TEXT],
                     message[REVIEW_SCORE],
                 ],
-                self._config[f"Q4_REVIEWS"],
+                self.q4_reviews,
             )
 
         self._middleware.ack(delivery_tag)
 
     def __signal_handler(self, sig, frame):
-        logging.debug(
-            f"[NULL DROP {self._config['NODE_ID']}] Gracefully shutting down..."
-        )
+        logging.debug(f"[NULL DROP {self.node_id}] Gracefully shutting down...")
         self._got_sigterm = True
         self._middleware.stop_consuming_gracefully()

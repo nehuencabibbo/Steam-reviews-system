@@ -21,16 +21,21 @@ class Client:
         config: dict,
         middleware: ClientMiddleware,
     ):
-        self._config = config
         self._middleware = middleware
-        # self._client_middleware = client_middleware
         self._got_sigterm = False
-        self._q4_ends_to_wait_for = 0  # TODO: Cambiar esto de alguna forma para que se envie un unico end, esta horrible asi
+        self._q4_ends_to_wait_for = 0  # TODO: Change to send a single end message
         self._amount_of_queries_received = 0
 
         self._client_id: str = None
         self._query_results = {}
         self.__find_and_set_csv_field_size_limit()
+
+        self._server_ip = config.get("SERVER_IP")
+        self._server_port = config.get("SERVER_PORT")
+        self._game_file_path = config.get("GAME_FILE_PATH")
+        self._reviews_file_path = config.get("REVIEWS_FILE_PATH")
+        self._sending_wait_time = config.get("SENDING_WAIT_TIME")
+
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     @staticmethod
@@ -47,37 +52,13 @@ class Client:
             except OverflowError:
                 max_int = int(max_int / 10)
 
-    # def __create_queues(self, client_id: str):
-    #     # Forwarding data queues
-    #     self._middleware.create_queue(f'{self._config["GAMES_QUEUE"]}_{client_id}')
-    #     self._middleware.create_queue(f'{self._config["REVIEWS_QUEUE"]}_{client_id}')
-
-    #     # Queues for reciving results
-    #     for i in range(1, AMMOUNT_OF_QUERIES + 1):
-    #         queue_name = f"Q{i}_{client_id}"
-    #         self._middleware.create_queue(queue_name)
-
     def run(self):
         self._middleware.create_socket(zmq.DEALER)
-        self._middleware.connect_to(
-            ip=self._config["SERVER_IP"], port=self._config["SERVER_PORT"]
-        )
-        # self._middleware.send_string("INIT")
-        # response = self._middleware.recv_string()
+        self._middleware.connect_to(ip=self._server_ip, port=self._server_port)
 
-        # logging.debug(f"Received response id: {response}")
-        # self._client_id = client_id
-        # self.__create_queues(client_id)
-
-        # if response == "OK":
         try:
-            self.__send_file(
-                self._config["GAME_FILE_PATH"],
-            )
-            self.__send_file(
-                self._config["REVIEWS_FILE_PATH"],
-            )
-
+            self.__send_file(self._game_file_path)
+            self.__send_file(self._reviews_file_path)
             self.__get_results()
         except zmq.error.ZMQError:
             if not self._got_sigterm:
@@ -88,16 +69,14 @@ class Client:
             reader = csv.reader(file)
             next(reader, None)  # skip header
             for row in reader:
-
                 if self._got_sigterm:
                     return
                 logging.debug(f"Sending appID {row[0]}")
 
                 self._middleware.send(row)
-                time.sleep(self._config["SENDING_WAIT_TIME"])
+                time.sleep(self._sending_wait_time)
 
         logging.debug("Sending file end")
-        # self._middleware.publish_batch(queue_name)
         self._middleware.send_end()
 
     def __print_results_for_query(self, query):
@@ -112,7 +91,7 @@ class Client:
 
         query = results.pop(-1)[0]
 
-        if not query in self._query_results.keys():
+        if query not in self._query_results:
             self._query_results[query] = []
 
         if results[0][1] == "END":
@@ -122,12 +101,9 @@ class Client:
             return
 
         for result in results:
-            self._query_results[query].append(
-                result[1:]
-            )  # [1:] in order to remove client_id
+            self._query_results[query].append(result[1:])  # [1:] to remove client_id
 
     def __get_results(self):
-        # TODO: handle sigterm
         logging.info("Waiting for results...")
         self._middleware.register_for_pollin()
         while (

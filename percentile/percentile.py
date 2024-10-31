@@ -13,20 +13,22 @@ NO_RECORDS = 0
 class Percentile:
 
     def __init__(self, config: dict, middleware: Middleware, protocol: Protocol):
-        self._config = config
         self._middleware = middleware
         self._got_sigterm = False
         self._recived_ends = {}
+        self._consume_queue = config["CONSUME_QUEUE"]
+        self._publish_queue = config["PUBLISH_QUEUE"]
+        self._needed_ends_to_finish = config["NEEDED_ENDS_TO_FINISH"]
+        self._storage_dir = config["STORAGE_DIR"]
+        self._percentile = config["PERCENTILE"]
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
 
-        self._middleware.create_queue(self._config["CONSUME_QUEUE"])
-        self._middleware.create_queue(self._config["PUBLISH_QUEUE"])
+        self._middleware.create_queue(self._consume_queue)
+        self._middleware.create_queue(self._publish_queue)
 
-        self._middleware.attach_callback(
-            self._config["CONSUME_QUEUE"], self._handle_message
-        )
+        self._middleware.attach_callback(self._consume_queue, self._handle_message)
 
         try:
             logging.debug("Starting to consume...")
@@ -48,7 +50,7 @@ class Percentile:
 
             logging.debug(f"GOT END NUMBER: {self._recived_ends[client_id]}")
 
-            if self._recived_ends[client_id] == self._config["NEEDED_ENDS_TO_FINISH"]:
+            if self._recived_ends[client_id] == self._needed_ends_to_finish:
                 # create queue for answering
                 # self._middleware.create_queue(
                 #     f'{self._config["PUBLISH_QUEUE"]}_{client_id}'
@@ -58,7 +60,7 @@ class Percentile:
             self._middleware.ack(method.delivery_tag)
             return
 
-        storage.add_batch_to_sorted_file_per_client(self._config["STORAGE_DIR"], body)
+        storage.add_batch_to_sorted_file_per_client(self._storage_dir, body)
 
         self._middleware.ack(method.delivery_tag)
 
@@ -67,8 +69,8 @@ class Percentile:
         percentile = self._get_percentile(client_id)
         logging.info(f"Percentile is: {percentile}")
 
-        forwarding_queue_name = self._config["PUBLISH_QUEUE"]
-        storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
+        forwarding_queue_name = self._publish_queue
+        storage_dir = f"{self._storage_dir}/{client_id}"
 
         reader = storage.read_sorted_file(storage_dir)
         for row in reader:
@@ -86,14 +88,13 @@ class Percentile:
 
         self._clear_client_data(client_id, storage_dir)
 
-
     def _get_percentile(self, client_id):
         # to get the rank, i need to read the file if i do not have a countera (i need the amount of messages)
         rank = self._get_rank(client_id)
 
         logging.debug(f"Ordinal rank is {rank}")
 
-        storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
+        storage_dir = f"{self._storage_dir}/{client_id}"
         reader = storage.read_sorted_file(storage_dir)
         for i, row in enumerate(reader):
             if (i + 1) == rank:
@@ -106,28 +107,26 @@ class Percentile:
     def _get_rank(self, client_id):
         amount_of_records = 0
 
-        storage_dir = f'{self._config["STORAGE_DIR"]}/{client_id}'
+        storage_dir = f"{self._storage_dir}/{client_id}"
         reader = storage.read_sorted_file(storage_dir)
         for _ in reader:
             amount_of_records += 1
 
-        rank = (self._config["PERCENTILE"] / 100) * amount_of_records
+        rank = (self._percentile / 100) * amount_of_records
         rank = math.ceil(rank)  # instead of interpolating, round the number
 
         return rank
-    
 
     def _clear_client_data(self, client_id: str, storage_dir: str):
-        
+
         if not storage.delete_directory(storage_dir):
             logging.debug(f"Couldn't delete directory: {storage_dir}")
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
-        self._recived_ends.pop(client_id) # removed end count for the client
+        self._recived_ends.pop(client_id)  # removed end count for the client
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
         self._got_sigterm = True
         self._middleware.stop_consuming_gracefully()
         # self._middleware.stop_consuming()
-

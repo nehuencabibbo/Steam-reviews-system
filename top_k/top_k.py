@@ -14,9 +14,13 @@ END_TRANSMISSION_MESSAGE = "END"
 class TopK:
     def __init__(self, middleware: Middleware, config: dict[str, str]):
         self.__middleware = middleware
-        self.__config = config
         self.__total_ends_received_per_client = {}
         self._got_sigterm = False
+        self._node_id = config["NODE_ID"]
+        self._input_top_k_queue_name = config["INPUT_TOP_K_QUEUE_NAME"]
+        self._amount_of_receiving_queues = config["AMOUNT_OF_RECEIVING_QUEUES"]
+        self._output_top_k_queue_name = config["OUTPUT_TOP_K_QUEUE_NAME"]
+        self._k = config["K"]
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -29,17 +33,17 @@ class TopK:
 
     def start(self):
         self.__middleware.create_queue(
-            f"{self.__config['NODE_ID']}_{self.__config['INPUT_TOP_K_QUEUE_NAME']}"
+            f"{self._node_id}_{self._input_top_k_queue_name}"
         )
 
         # # callback, inputq, outputq
         games_callback = self.__middleware.generate_callback(
             self.__callback,
-            f"{self.__config['NODE_ID']}_{self.__config['INPUT_TOP_K_QUEUE_NAME']}",
+            f"{self._node_id}_{self._input_top_k_queue_name}",
         )
 
         self.__middleware.attach_callback(
-            f"{self.__config['NODE_ID']}_{self.__config['INPUT_TOP_K_QUEUE_NAME']}",
+            f"{self._node_id}_{self._input_top_k_queue_name}",
             games_callback,
         )
         try:
@@ -63,9 +67,9 @@ class TopK:
 
             if (
                 self.__total_ends_received_per_client[client_id]
-                == self.__config["AMOUNT_OF_RECEIVING_QUEUES"]
+                == self._amount_of_receiving_queues
             ):
-                forwarding_queue = self.__config["OUTPUT_TOP_K_QUEUE_NAME"]
+                forwarding_queue = self._output_top_k_queue_name
                 # Add the client id if its sink node
                 forwarding_queue_name = forwarding_queue
 
@@ -78,7 +82,7 @@ class TopK:
                     end_message=end_message,
                 )
 
-                client_storage_dir = f'/tmp/{client_id}'
+                client_storage_dir = f"/tmp/{client_id}"
                 self._clear_client_data(client_id, client_storage_dir)
 
             self.__middleware.ack(delivery_tag)
@@ -87,7 +91,7 @@ class TopK:
 
         try:
             add_batch_to_sorted_file_per_client(
-                "tmp", body, ascending=False, limit=int(self.__config["K"])
+                "tmp", body, ascending=False, limit=int(self._k)
             )
 
         except ValueError as e:
@@ -106,12 +110,12 @@ class TopK:
         self.__middleware.publish_batch(forwarding_queue_name)
         logging.debug(f"Top sent to queue: {forwarding_queue_name}")
 
-
     def _clear_client_data(self, client_id: str, storage_dir: str):
-        
+
         if not delete_directory(storage_dir):
             logging.debug(f"Couldn't delete directory: {storage_dir}")
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
-        self.__total_ends_received_per_client.pop(client_id) # removed end count for the client
-        
+        self.__total_ends_received_per_client.pop(
+            client_id
+        )  # removed end count for the client
