@@ -765,8 +765,8 @@ def generate_q4(output: Dict, debug=False):
         "needed_games_ends": 1,  # Q4_AMOUNT_OF_ACTION_GAMES_FILTERS,
         "needed_reviews_ends": Q4_AMOUNT_OF_SECOND_COUNTER_BY_APP_ID,
         "amount_of_forwarding_queues": 1,  # 1 as the filters work as a group (will receive only one end from them)
-        "games_columns_to_keep": "0,1",  # app_id, name
-        "reviews_columns_to_keep": "1",  # count
+        "games_columns_to_keep": "1",  # app_id(0), name(1)
+        "reviews_columns_to_keep": "",  # count(index: 1)
     }
 
     generate_joins(
