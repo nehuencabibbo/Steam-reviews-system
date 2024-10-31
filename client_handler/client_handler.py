@@ -56,42 +56,49 @@ class ClientHandler:
 
     def handle_clients(self):
         self._client_middleware.create_socket(zmq.ROUTER)
-        self._client_middleware.bind(self._port)
-        self._client_middleware.register_for_pollin()
-        while not self._got_sigterm.is_set():
-            if not self._client_middleware.has_message():
-                continue
-            client_id, message = self._client_middleware.recv_multipart()
-            client_id_hex = client_id.hex()
-            logging.debug(f"Received message from {client_id_hex}: {message}")
-
-            if client_id not in self._forwarding_queues_per_client.keys():
-                logging.debug("Setting forwarding queue to games")
-                self._forwarding_queues_per_client[client_id] = self._games_queue_name
-
-            forwarding_queue_name = self._forwarding_queues_per_client[client_id]
-
-            self._middleware.add_client_id_and_send_batch(
-                queue_name=forwarding_queue_name,
-                client_id=client_id_hex,
-                batch=message,
-            )
-
-            if message[-3:] == b"END":
-
-                if forwarding_queue_name == self._reviews_queue_name:
-                    logging.info(
-                        f"Final end received from client: {client_id}. Removing from the record."
-                    )
-                    del self._forwarding_queues_per_client[client_id]
+        try:
+            self._client_middleware.bind(self._port)
+            self._client_middleware.register_for_pollin()
+            while not self._got_sigterm.is_set():
+                if not self._client_middleware.has_message():
                     continue
+                client_id, message = self._client_middleware.recv_multipart()
+                client_id_hex = client_id.hex()
+                logging.debug(f"Received message from {client_id_hex}: {message}")
 
-                logging.debug("Setting forwarding queue to reviews")
+                if client_id not in self._forwarding_queues_per_client.keys():
+                    logging.debug("Setting forwarding queue to games")
+                    self._forwarding_queues_per_client[client_id] = (
+                        self._games_queue_name
+                    )
 
-                self._forwarding_queues_per_client[client_id] = self._reviews_queue_name
+                forwarding_queue_name = self._forwarding_queues_per_client[client_id]
 
-        self._client_middleware.shutdown()
-        self._middleware.shutdown()
+                self._middleware.add_client_id_and_send_batch(
+                    queue_name=forwarding_queue_name,
+                    client_id=client_id_hex,
+                    batch=message,
+                )
+
+                if message[-3:] == b"END":
+
+                    if forwarding_queue_name == self._reviews_queue_name:
+                        logging.info(
+                            f"Final end received from client: {client_id}. Removing from the record."
+                        )
+                        del self._forwarding_queues_per_client[client_id]
+                        continue
+
+                    logging.debug("Setting forwarding queue to reviews")
+
+                    self._forwarding_queues_per_client[client_id] = (
+                        self._reviews_queue_name
+                    )
+        except MiddlewareError as e:
+            logging.error(e.message)
+        finally:
+            self._client_middleware.shutdown()
+            self._middleware.shutdown()
 
     def run(self):
         thread = threading.Thread(target=self.handle_clients)
@@ -99,6 +106,9 @@ class ClientHandler:
 
         try:
             self.start_results_middleware()
+        except MiddlewareError as e:
+            logging.error(e.message)
+
         except SystemExit:
             logging.info("Shutting down results middleware...")
         finally:
