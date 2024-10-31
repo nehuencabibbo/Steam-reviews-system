@@ -155,8 +155,11 @@ class Middleware:
         self._channel.basic_ack(delivery_tag=delivery_tag)
 
     def shutdown(self):
-        self._channel.stop_consuming()
-        self._connection.close()
+        try:
+            self._channel.stop_consuming()
+            self._connection.close()
+        except pika.exceptions.StreamLostError as e:
+            logging.debug(f"CONNECTION ERROR: {e}")
 
     # Callback should be a function that recives:
     # - delivery_tag: so that it can ack the corresponding message
