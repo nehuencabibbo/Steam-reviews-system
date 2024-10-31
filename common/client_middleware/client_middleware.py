@@ -7,7 +7,7 @@ from common.protocol.protocol import Protocol
 import zmq
 
 END_TRANSMISSION_MESSAGE = "END"
-MAX_POLL_TIME = 2
+MAX_POLL_TIME = 2000  # in miliseconds
 
 
 class ClientMiddleware:
