@@ -1,5 +1,6 @@
 import logging
 import pika
+import pika.exceptions
 
 from common.protocol.protocol import Protocol
 
@@ -134,6 +135,10 @@ class Middleware:
             # Connection was finished either due to shutdown
             # or general network error
             raise MiddlewareError(f"A connection error ocurred with the broker: {e}")
+
+        except pika.exceptions.StreamLostError:
+            raise MiddlewareError(f"A connection error ocurred with the broker: {e}")
+
         except OSError as e:
             raise MiddlewareError("Attempted to send data to a closed socket")
 
