@@ -14,7 +14,7 @@ def save(path: str, record: list[str]):
 
 def read(path: str):
     if not os.path.exists(path):
-        logging.error(f"Path {path} doesnt exists. No reviews accumulated")
+        logging.debug(f"Path {path} doesnt exists. No reviews accumulated")
         return
     with open(path, "r") as f:
         reader = csv.reader(f)

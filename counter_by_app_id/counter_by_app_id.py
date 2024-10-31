@@ -48,7 +48,7 @@ class CounterByAppId:
         finally:
             self._middleware.shutdown()
 
-        logging.info("Finished")
+        logging.debug("Finished")
 
     def __create_all_forwarding_queues(self):
         for i in range(self._config["AMOUNT_OF_FORWARDING_QUEUES"]):

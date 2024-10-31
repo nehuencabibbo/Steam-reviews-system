@@ -153,7 +153,7 @@ class Join:
                 # else:
                 #     logging.debug(f"Deleted directory: {'/tmp'}")
 
-                logging.info("END of reviews received")
+                logging.debug("END of reviews received")
                 logging.debug(
                     f"Amount of reviews ends received up to now: {self._amount_of_reviews_ends_recived[client_id]} | Expecting: {self.__config['NEEDED_REVIEWS_ENDS']}"
                 )
