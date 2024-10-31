@@ -7,6 +7,7 @@ from common.protocol.protocol import Protocol
 import zmq
 
 END_TRANSMISSION_MESSAGE = "END"
+MAX_POLL_TIME = 2
 
 
 class ClientMiddleware:
@@ -84,7 +85,7 @@ class ClientMiddleware:
         self.__poller.register(self.__socket, zmq.POLLIN)
 
     def has_message(self):
-        socks = dict(self.__poller.poll())
+        socks = dict(self.__poller.poll(MAX_POLL_TIME))
         return self.__socket in socks and socks[self.__socket] == zmq.POLLIN
 
     # linger is the max time (in miliseconds) waited for all undelivered messages to be sent.

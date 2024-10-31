@@ -22,7 +22,6 @@ class ClientHandler:
     ):
         self._middleware = middleware
         self._client_middleware = client_middleware
-        self._got_sigterm = False
         self._ends_received = 0
         self._port = kwargs["CLIENTS_PORT"]
         self._games_queue_name = kwargs["GAMES_QUEUE_NAME"]
@@ -34,6 +33,7 @@ class ClientHandler:
         self._q3_result_queue = kwargs["Q3_RESULT_QUEUE"]
         self._q4_result_queue = kwargs["Q4_RESULT_QUEUE"]
         self._q5_result_queue = kwargs["Q5_RESULT_QUEUE"]
+        self._got_sigterm = threading.Event()
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -58,40 +58,37 @@ class ClientHandler:
         self._client_middleware.create_socket(zmq.ROUTER)
         self._client_middleware.bind(self._port)
         self._client_middleware.register_for_pollin()
-        while not self._got_sigterm:
-            if self._client_middleware.has_message():
-                client_id, message = self._client_middleware.recv_multipart()
-                client_id_hex = client_id.hex()
-                logging.debug(f"Received message from {client_id_hex}: {message}")
+        while not self._got_sigterm.is_set():
+            if not self._client_middleware.has_message():
+                continue
+            client_id, message = self._client_middleware.recv_multipart()
+            client_id_hex = client_id.hex()
+            logging.debug(f"Received message from {client_id_hex}: {message}")
 
-                if client_id not in self._forwarding_queues_per_client.keys():
-                    logging.debug("Setting forwarding queue to games")
-                    self._forwarding_queues_per_client[client_id] = (
-                        self._games_queue_name
+            if client_id not in self._forwarding_queues_per_client.keys():
+                logging.debug("Setting forwarding queue to games")
+                self._forwarding_queues_per_client[client_id] = self._games_queue_name
+
+            forwarding_queue_name = self._forwarding_queues_per_client[client_id]
+
+            self._middleware.add_client_id_and_send_batch(
+                queue_name=forwarding_queue_name,
+                client_id=client_id_hex,
+                batch=message,
+            )
+
+            if message[-3:] == b"END":
+
+                if forwarding_queue_name == self._reviews_queue_name:
+                    logging.info(
+                        f"Final end received from client: {client_id}. Removing from the record."
                     )
+                    del self._forwarding_queues_per_client[client_id]
+                    continue
 
-                forwarding_queue_name = self._forwarding_queues_per_client[client_id]
+                logging.debug("Setting forwarding queue to reviews")
 
-                self._middleware.add_client_id_and_send_batch(
-                    queue_name=forwarding_queue_name,
-                    client_id=client_id_hex,
-                    batch=message,
-                )
-
-                if message[-3:] == b"END":
-
-                    if forwarding_queue_name == self._reviews_queue_name:
-                        logging.info(
-                            f"Final end received from client: {client_id}. Removing from the record."
-                        )
-                        del self._forwarding_queues_per_client[client_id]
-                        continue
-
-                    logging.debug("Setting forwarding queue to reviews")
-
-                    self._forwarding_queues_per_client[client_id] = (
-                        self._reviews_queue_name
-                    )
+                self._forwarding_queues_per_client[client_id] = self._reviews_queue_name
 
         self._client_middleware.shutdown()
         self._middleware.shutdown()
@@ -99,6 +96,7 @@ class ClientHandler:
     def run(self):
         thread = threading.Thread(target=self.handle_clients)
         thread.start()
+
         try:
             self.start_results_middleware()
         except SystemExit:
@@ -119,5 +117,5 @@ class ClientHandler:
 
     def __sigterm_handler(self, sig, frame):
         logging.info("Shutting down Client Handler")
-        self._got_sigterm = True
+        self._got_sigterm.set()
         raise SystemExit
