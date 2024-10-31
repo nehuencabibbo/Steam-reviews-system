@@ -7,9 +7,6 @@ Original file is located at
     https://colab.research.google.com/#fileId=https%3A//storage.googleapis.com/kaggle-colab-exported-notebooks/fiuba-distribuidos-1-steam-analysis-94cd69-1339507c-5a27-4cd7-9b60-60e62b618a0d.ipynb%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Dgcp-kaggle-com%2540kaggle-161607.iam.gserviceaccount.com/20241019/auto/storage/goog4_request%26X-Goog-Date%3D20241019T012059Z%26X-Goog-Expires%3D259200%26X-Goog-SignedHeaders%3Dhost%26X-Goog-Signature%3D6cc339cb2123b16f6b2fc6b0bbf9a7b3688095132ea95621010e86f50ca286699a3b7f2274920c6db82f4842e33fa982e5523ccfc1a8cce8f8a64bf8ff8e7faa9b2489ed28cbd3a7410c29698404fab3da2a4131b59835cc1d937d3734f6dde709272ff34bb9ee1d7e000bd95becdc1cc5273cd19d564905ca0e6cdfdc7a6e4d500427ec9e9e3e1b500bb8c8695a38acf1063f0e1808ea3f89d92b1b33eeece798bb915bcbf60b110dc3d721f3e9aaf07abb370fcdf3525ac2de9a1eee9cc5e5261dfa7ad8a5abf9803747c78fca54f44123256ac9d62f1c784cd7911c4ba0dbba6e9f84509b33fca14a840048a5d23ee16417958b4e50e4b4268771553513a2
 """
 
-
-print('Data source import complete.')
-
 """# Data load, clean and join"""
 
 import numpy as np # linear algebra

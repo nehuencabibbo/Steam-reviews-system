@@ -19,3 +19,13 @@ Para ver los logs actuales del proyecto usar:
 ```sh
 make docker-logs
 ```
+
+## Comparar resultados
+
+Para poder comparar los resultados,  usar:
+
+```bash
+> ./compare_results.sh <client_id> [--re-run]
+```
+
+Aclaración: El flag corre todo el notebook de nuevo, sino se usa la data ya existente 
