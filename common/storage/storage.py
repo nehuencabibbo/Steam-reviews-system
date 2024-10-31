@@ -248,9 +248,10 @@ def read_all_files(dir: str):
         return []  # No partitions on this dir.
 
     file_name_prefix = f"partition_"
+    platform_file_name = "platform_count.csv"
 
     for filename in os.listdir(dir):
-        if not file_name_prefix in filename:
+        if not file_name_prefix in filename and platform_file_name != filename:
             continue
 
         file_path = os.path.join(dir, filename)
@@ -378,6 +379,38 @@ def group_by_file(
     return records_per_file
 
 
+def _write_batch_on_file(dir:str, file_name:str, records: list[list[str]]):
+    os.makedirs(dir, exist_ok=True)
+
+    #for file_name, records in records_per_file.items():
+    file_path = os.path.join(dir, file_name)
+    with open(file_path, "a", newline="") as f:
+        writer = csv.writer(f)
+        for record in records:
+            writer.writerow(record)
+
+
+def _group_records(file_name: str, records: dict[str, int]) -> dict[str, list[str]]:
+    records_per_file = {}
+    for record_id, value in records.items():
+            records_per_file[file_name] = records_per_file.get(file_name, [])
+            records_per_file[file_name].append([record_id, value])
+
+    return records_per_file
+
+
+def sum_platform_batch_to_records_per_client(
+    dir: str, new_records_per_client: dict[str, dict[str, int]]
+):
+    range_not_used = 0
+    for client_id, new_records in new_records_per_client.items():
+
+        client_dir = os.path.join(dir, client_id)
+        records_for_file = _group_records("platform_count.csv", new_records)
+
+        #it does not use range
+        _sum_batch_to_records(client_dir, range_not_used, records_for_file, partition=False)
+
 def sum_batch_to_records_per_client(
     dir: str, range: int, new_records_per_client: dict[str, dict[str, int]]
 ):
@@ -385,7 +418,11 @@ def sum_batch_to_records_per_client(
     for client_id, new_records in new_records_per_client.items():
 
         client_dir = os.path.join(dir, client_id)
-        _sum_batch_to_records(client_dir, range, new_records)
+        file_prefix = "partition"
+
+        # get the file for each record in the batch -> {"file": [record1, record2], ....}
+        records_per_file = _group_by_file_dict(file_prefix, range, new_records)
+        _sum_batch_to_records(client_dir, range, records_per_file)
 
 
 def _group_by_file_dict(
@@ -405,18 +442,22 @@ def _group_by_file_dict(
     return records_per_file
 
 
-def _sum_batch_to_records(dir: str, range: int, new_records: dict[str, int]):
+def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list[(str,int)]], partition:bool = True):
 
     os.makedirs(dir, exist_ok=True)
-    file_prefix = "partition"
+    # file_prefix = "partition"
 
-    # get the file for each record in the batch -> {"file": [record1, record2], ....}
-    records_per_file = _group_by_file_dict(file_prefix, range, new_records)
+    # # get the file for each record in the batch -> {"file": [record1, record2], ....}
+    # records_per_file = _group_by_file_dict(file_prefix, range, new_records)
 
     for file_name, records in records_per_file.items():
         file_path = os.path.join(dir, file_name)
         if not os.path.exists(file_path):
-            _write_batch_by_range(dir, range, records)
+            if partition:
+                _write_batch_by_range(dir, range, records)
+            else:
+                #todos los records del cliente, van en un mismo archivo
+                _write_batch_on_file(dir, file_name, records)
             continue
 
         temp_file = os.path.join(dir, f"temp_{file_name}")
@@ -433,8 +474,9 @@ def _sum_batch_to_records(dir: str, range: int, new_records: dict[str, int]):
                 read_record_value = int(row[1])
 
                 for i, record in enumerate(records):
-                    key = int(record[0])
-                    if read_record_key == str(key):
+                    #key = int(record[0]) #app_id
+                    key = str(record[0])
+                    if read_record_key == key:
                         writer.writerow(
                             [read_record_key, read_record_value + int(record[1])]
                         )

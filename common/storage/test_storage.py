@@ -385,7 +385,9 @@ class TestStorage(unittest.TestCase):
         partition_key = 5
         batch = {"5": 1, "6":1} #[["5", "1"], ["6", "1"]]
 
-        storage._sum_batch_to_records(self._dir, self._range,batch)
+        records_per_file = storage._group_by_file_dict("partition", self._range, batch)
+
+        storage._sum_batch_to_records(self._dir, self._range, records_per_file)
         records = [r for r in storage.read_by_range(self._dir, self._range, partition_key)]
 
         self.assertEqual(len(records), 2)
@@ -396,9 +398,12 @@ class TestStorage(unittest.TestCase):
         partition_key = 5
         batch1 = {"5": 1, "6": 1}#[["5", "1"], ["6", "1"]]
         batch2 = {"5": 2, "7": 1}#[["5", "2"], ["7", "1"]]
+        
+        records_per_file1 = storage._group_by_file_dict("partition", self._range, batch1)
+        records_per_file2 = storage._group_by_file_dict("partition", self._range, batch2)
 
-        storage._sum_batch_to_records(self._dir, self._range, batch1)
-        storage._sum_batch_to_records(self._dir, self._range, batch2)
+        storage._sum_batch_to_records(self._dir, self._range, records_per_file1)
+        storage._sum_batch_to_records(self._dir, self._range, records_per_file2)
 
         records = [r for r in storage.read_by_range(self._dir, self._range, partition_key)]
 
@@ -412,8 +417,11 @@ class TestStorage(unittest.TestCase):
         batch1 = {"15": 1, "6": 1}#[["5", "1"], ["6", "1"]]
         batch2 = {"15": 2, "7": 1}#[["5", "2"], ["7", "1"]]
 
-        storage._sum_batch_to_records(self._dir, self._range, batch1)
-        storage._sum_batch_to_records(self._dir, self._range, batch2)
+        records_per_file1 = storage._group_by_file_dict("partition", self._range, batch1)
+        records_per_file2 = storage._group_by_file_dict("partition", self._range, batch2)
+
+        storage._sum_batch_to_records(self._dir, self._range, records_per_file1)
+        storage._sum_batch_to_records(self._dir, self._range, records_per_file2)
 
         records = [r for r in storage.read_all_files(self._dir)]
 
@@ -425,9 +433,11 @@ class TestStorage(unittest.TestCase):
     def test_sum_batch_to_record_one_record(self):
         partition_key = 5
         batch = {"5": 1} #[["5", "1"]]
+        
+        records_per_file = storage._group_by_file_dict("partition", self._range, batch)
 
-        storage._sum_batch_to_records(self._dir, self._range,batch)
-        storage._sum_batch_to_records(self._dir, self._range,batch)
+        storage._sum_batch_to_records(self._dir, self._range, records_per_file)
+        storage._sum_batch_to_records(self._dir, self._range, records_per_file)
         records = [r for r in storage.read_by_range(self._dir, self._range, partition_key)]
 
         self.assertEqual(len(records), 1)
@@ -635,6 +645,75 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(read_records2[0], ["1", "20"])
         self.assertEqual(read_records2[1], ["2", "5"])
         
+    def test_sum_platform_batch_to_record(self):
+        batch1 = {"windows": 1, "linux": 1}
+        
+        records_for_file = storage._group_records("platform_count.csv", batch1)
+
+        storage._sum_batch_to_records(self._dir, self._range, records_for_file, partition=False)
+
+        records = [r for r in storage.read_all_files(self._dir)]
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0], ["windows", "1"])
+        self.assertEqual(records[1], ["linux", "1"])
+
+    def test_sum_platform_batch_to_record_update_record(self):
+        batch1 = {"windows": 1, "linux": 1}
+        batch2 = {"windows": 4, "mac": 2}
+
+        records_for_file1 = storage._group_records("platform_count.csv", batch1)
+        records_for_file2 = storage._group_records("platform_count.csv", batch2)
+
+        storage._sum_batch_to_records(self._dir, self._range, records_for_file1, partition=False)
+        storage._sum_batch_to_records(self._dir, self._range, records_for_file2, partition=False)
+
+        records = [r for r in storage.read_all_files(self._dir)]
+
+        self.assertEqual(len(records), 3)
+        self.assertEqual(records[0], ["windows", "5"])
+        self.assertEqual(records[1], ["linux", "1"])
+        self.assertEqual(records[2], ["mac", "2"])
+
+    #a
+
+    def test_sum_batch_for_one_client(self):
+        
+        client_id = "abc"
+        batch_per_client = {}
+        batch_per_client[client_id] = {"windows": 1, "linux": 1}
+
+        storage.sum_platform_batch_to_records_per_client(self._dir, batch_per_client)
+
+        client_dir = f"{self._dir}/{client_id}"
+        records = [r for r in storage.read_all_files(client_dir)]
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0], ["windows", "1"])
+        self.assertEqual(records[1], ["linux", "1"])
+
+    def test_sum_batch_for_multiple_clients(self):
+        client_id1= "abc"
+        client_id2= "bcd"
+        batch_per_client = {}
+        batch_per_client[client_id1] = {"windows": 1, "linux": 1}
+        batch_per_client[client_id2] = {"mac": 15, "linux": 2}
+
+        storage.sum_platform_batch_to_records_per_client(self._dir, batch_per_client)
+
+        client_dir1 = f"{self._dir}/{client_id1}"
+        records = [r for r in storage.read_all_files(client_dir1)]
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0], ["windows", "1"])
+        self.assertEqual(records[1], ["linux", "1"])
+
+        client_dir2 = f"{self._dir}/{client_id2}"
+        records = [r for r in storage.read_all_files(client_dir2)]
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0], ["mac", "15"])
+        self.assertEqual(records[1], ["linux", "2"])
 
 
 if __name__ == "__main__":
