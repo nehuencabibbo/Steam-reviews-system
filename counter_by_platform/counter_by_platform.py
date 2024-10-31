@@ -1,7 +1,7 @@
 import signal
 import logging
 from common.middleware.middleware import Middleware, MiddlewareError
-from common.storage.storage import *
+from common.storage import storage
 from common.protocol.protocol import Protocol
 from typing import *
 
@@ -25,6 +25,7 @@ class CounterByPlatform:
         self.node_id = config["NODE_ID"]
         self.consume_queue_suffix = config["CONSUME_QUEUE_SUFIX"]
         self.publish_queue = config["PUBLISH_QUEUE"]
+        self.storage_dir = config["STORAGE_DIR"]
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -48,35 +49,58 @@ class CounterByPlatform:
 
     def __handle_message(self, delivery_tag: int, body: List[List[str]]):
         body = self._middleware.get_rows_from_message(body)
-        for message in body:
-            logging.debug(f"GOT MSG: {message}")
 
-            if message[END_TRANSMISSION_MESSAGE_INDEX] == END_TRANSMISSION_MESSAGE:
-                logging.debug("Received END transmission")
-                session_id = message[END_TRANSMISSION_SESSION_ID]
+        logging.debug(f"GOT BATCH: {body}")
 
-                self.__send_results(session_id)
-                self._middleware.ack(delivery_tag)
-                return
+        if body[0][END_TRANSMISSION_MESSAGE_INDEX] == END_TRANSMISSION_MESSAGE:
+            logging.debug("Recived END transmssion")
+            session_id = body[0][END_TRANSMISSION_SESSION_ID]
 
-            logging.debug(message)
-            session_id = message[REGULAR_MESSAGE_SESSION_ID]
-            field_to_count = message[REGULAR_MESSAGE_FIELD_TO_COUNT_BY]
+            self.__send_results(session_id)
+            self._middleware.ack(delivery_tag)
 
-            self.__count(field_to_count, session_id)
+            return
+
+        count_per_record_by_client_id = self.__count_per_client_id(body)
+
+        storage.sum_platform_batch_to_records_per_client(
+            self.storage_dir,
+            count_per_record_by_client_id,
+        )
 
         self._middleware.ack(delivery_tag)
+
+    def __count_per_client_id(self, body: list[list]):
+        count_per_record_by_client_id = {}
+        for record in body:
+            client_id = record[REGULAR_MESSAGE_SESSION_ID]
+            record_id = record[REGULAR_MESSAGE_FIELD_TO_COUNT_BY]
+
+            if not client_id in count_per_record_by_client_id:
+                count_per_record_by_client_id[client_id] = {}
+
+            count_per_record_by_client_id[client_id][record_id] = (
+                count_per_record_by_client_id[client_id].get(record_id, 0) + 1
+            )
+            
+        return count_per_record_by_client_id
 
     def __send_results(self, session_id: str):
         self._middleware.create_queue(self.publish_queue)
 
-        for platform, count in self._count_dict[session_id].items():
-            logging.debug(f"{platform}, {count}")
-            if self._got_sigterm:
-                return
 
+        client_dir = f"{self.storage_dir}/{session_id}"
+        reader = storage.read_all_files(client_dir)
+
+        for record in reader:
+            logging.debug(f"sending record: {record}")
+            if self._got_sigterm:
+                #should send everything so i can ack before closing 
+                # or return false so end is not acked and i dont send the results?
+                return
+            
             self._middleware.publish(
-                [session_id, platform, str(count)], queue_name=self.publish_queue
+                [session_id, record[0], record[1]], queue_name=self.publish_queue
             )
 
         self._middleware.publish_batch(self.publish_queue)
@@ -85,12 +109,8 @@ class CounterByPlatform:
         )
         logging.debug(f"Sent results to queue {self.publish_queue}")
 
-    def __count(self, field_to_count: str, session_id: str):
-        if not session_id in self._count_dict:
-            self._count_dict[session_id] = {}
+        storage.delete_directory(client_dir)
 
-        session_id_field_count = self._count_dict[session_id].get(field_to_count, 0)
-        self._count_dict[session_id][field_to_count] = session_id_field_count + 1
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")

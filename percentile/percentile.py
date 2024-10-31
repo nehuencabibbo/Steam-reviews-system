@@ -67,7 +67,7 @@ class Percentile:
     def _handle_end_message(self, client_id):
 
         percentile = self._get_percentile(client_id)
-        logging.info(f"Percentile is: {percentile}")
+        logging.debug(f"Percentile is: {percentile}")
 
         forwarding_queue_name = self._publish_queue
         storage_dir = f"{self._storage_dir}/{client_id}"
