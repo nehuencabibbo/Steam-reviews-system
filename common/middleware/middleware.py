@@ -42,9 +42,11 @@ class Middleware:
         self.__batch_size = batch_size
         self.__max_batch_size = 1 * 1024  # TODO: receive as param
         self.__batchs_per_queue = {}
+        self.is_running = True
 
     def __create_connection(self, ip):
-        return pika.BlockingConnection(pika.ConnectionParameters(host=ip))
+        # delete the heartbeat parameter if its too low
+        return pika.BlockingConnection(pika.ConnectionParameters(host=ip, heartbeat=5))
 
     def __create_async_connection(self, ip, on_connected_callback):
         parameters = pika.ConnectionParameters(host=ip)
@@ -125,7 +127,9 @@ class Middleware:
 
     def start_consuming(self):
         try:
-            self._channel.start_consuming()
+            while self.is_running:
+                self._connection.process_data_events(time_limit=1)
+                
         except pika.exceptions.ChannelClosedByBroker as e:
             # Rabbit mq terminated during execution most probably
             # TODO: Is writing to a closed channel handled by this too or
@@ -142,6 +146,9 @@ class Middleware:
         except OSError as e:
             raise MiddlewareError("Attempted to send data to a closed socket")
 
+    def process_events_once(self):
+        self._connection.process_data_events(time_limit=0)
+
     def start_async_ioloop(self):
         self._connection.ioloop.start()
 
@@ -156,8 +163,10 @@ class Middleware:
 
     def shutdown(self):
         try:
-            self._channel.stop_consuming()
-            self._connection.close()
+            self.is_running = False
+            if self._connection.is_open:
+                self._connection.add_callback_threadsafe(self._connection.close)
+
         except pika.exceptions.StreamLostError as e:
             logging.debug(f"CONNECTION ERROR: {e}")
 

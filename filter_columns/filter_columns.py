@@ -222,5 +222,5 @@ class FilterColumns:
     def __signal_handler(self, sig, frame):
         logging.debug(f"[FILTER COLUMNS {self._node_id}] Gracefully shutting down...")
         self._got_sigterm = True
-        self._middleware.stop_consuming_gracefully()
-        # self._middleware.shutdown()
+        # self._middleware.stop_consuming_gracefully()
+        self._middleware.shutdown()
