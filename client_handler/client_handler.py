@@ -60,6 +60,9 @@ class ClientHandler:
             self._client_middleware.bind(self._port)
             self._client_middleware.register_for_pollin()
             while not self._got_sigterm.is_set():
+                # for answering heartbeats if there is any
+                self._middleware.process_events_once()
+
                 self._middleware._connection.process_data_events(time_limit=0)
                 if not self._client_middleware.has_message():
                     continue

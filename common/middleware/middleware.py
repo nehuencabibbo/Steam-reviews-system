@@ -3,7 +3,6 @@ import pika
 import pika.exceptions
 
 from common.protocol.protocol import Protocol
-import time
 
 END_TRANSMISSION_MESSAGE = "END"
 
@@ -146,6 +145,9 @@ class Middleware:
 
         except OSError as e:
             raise MiddlewareError("Attempted to send data to a closed socket")
+
+    def process_events_once(self):
+        self._connection.process_data_events(time_limit=0)
 
     def start_async_ioloop(self):
         self._connection.ioloop.start()
