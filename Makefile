@@ -10,6 +10,7 @@ docker-image:
 	docker build -f ./drop_nulls/Dockerfile -t "drop_nulls:latest" .
 	docker build -f ./top_k/Dockerfile -t "top_k:latest" .
 	docker build -f ./filter_by_column_value/Dockerfile -t "filter_by_column_value:latest" .
+	docker build -f ./filter_by_language/Dockerfile -t "filter_by_language:latest" .
 	docker build -f ./counter_by_platform/Dockerfile -t "counter_by_platform:latest" .
 	docker build -f ./counter_by_app_id/Dockerfile -t "counter_by_app_id:latest" .
 	docker build -f ./percentile/Dockerfile -t "percentile:latest" .

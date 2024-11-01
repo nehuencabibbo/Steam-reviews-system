@@ -1,7 +1,4 @@
-import csv
 import sys, os
-
-from common.storage.storage import write_by_range
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -13,9 +10,10 @@ from utils.utils import node_id_to_send_to
 
 import signal
 import logging
+import langid
 
 
-class FilterColumnByValue:
+class FilterByLanguage:
     def __init__(
         self,
         protocol: Protocol,
@@ -37,11 +35,11 @@ class FilterColumnByValue:
         ]
         self._columns_to_keep: List[int] = config["COLUMNS_TO_KEEP"]
         self._column_number_to_use: int = config["COLUMN_NUMBER_TO_USE"]
-        self._value_to_filter_by: str = config["VALUE_TO_FILTER_BY"]
         self._node_id: str = config["NODE_ID"]
         self._receiving_queue_name = config["RECIVING_QUEUE_NAME"]
         self._instances_of_myself = config["INSTANCES_OF_MYSELF"]
-        self._criteria = config["CRITERIA"]
+
+        self._language = config["LANGUAGE"]
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -54,7 +52,6 @@ class FilterColumnByValue:
         self.__create_all_forwarding_queues()
 
         # Attaching callback functions
-        self.__set_callback_according_to_criteria()
         callback = self._middleware.__class__.generate_callback(
             self.__handle_message,
         )
@@ -153,58 +150,14 @@ class FilterColumnByValue:
 
                 return
 
-            self._filter_by_criteria(message)
+            self.__filter_language(message)
 
         self._middleware.ack(delivery_tag)
 
-    def __set_callback_according_to_criteria(self):
-        criteria = self._criteria
-
-        if criteria == EQUAL_CRITERIA_KEYWORD:
-            self._filter_by_criteria = self.__filter_equal
-
-        elif criteria == GRATER_THAN_CRITERIA_KEYWORD:
-            self._filter_by_criteria = self.__filter_greater_than
-
-        elif criteria == CONTAINS_CRITERIA_KEYWORD:
-            self._filter_by_criteria = self.__filter_contains
-
-        elif criteria == EQUAL_FLOAT_CRITERIA_KEYWORD:
-            self._filter_by_criteria = self.__filter_equal_float
-
-        else:
-            raise Exception(f"Unkown cirteria: {criteria}")
-
-    def __filter_equal(self, body: List[str]):
+    def __filter_language(self, body: List[str]):
         column_to_use = body[self._column_number_to_use]
-        if column_to_use == self._value_to_filter_by:
-            self.__send_message(body)
-
-    def __filter_greater_than(self, body: List[str]):
-        column_to_use = body[self._column_number_to_use]
-        try:
-            column_to_use = int(column_to_use)
-            value_to_filter_by = int(self._value_to_filter_by)
-        except ValueError as e:
-            logging.debug(f"Failed integer conversion: {e}")
-
-        if column_to_use > value_to_filter_by:
-            self.__send_message(body)
-
-    def __filter_contains(self, body: List[str]):
-        column_to_use = body[self._column_number_to_use]
-        if self._value_to_filter_by in column_to_use.lower():
-            self.__send_message(body)
-
-    def __filter_equal_float(self, body: List[str]):
-        column_to_use = body[self._column_number_to_use]
-        try:
-            column_to_use = float(column_to_use)
-            value_to_filter_by = float(self._value_to_filter_by)
-        except ValueError as e:
-            logging.debug(f"Failed float conversion: {e}")
-
-        if column_to_use == value_to_filter_by:
+        detected_language, _ = langid.classify(column_to_use)
+        if detected_language == self._language.lower():
             self.__send_message(body)
 
     def __filter_columns(self, data: List[str]):
