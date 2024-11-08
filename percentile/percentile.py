@@ -128,5 +128,5 @@ class Percentile:
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
         self._got_sigterm = True
-        self._middleware.stop_consuming_gracefully()
-        # self._middleware.stop_consuming()
+        # self._middleware.stop_consuming_gracefully()
+        self._middleware.shutdown()

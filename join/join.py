@@ -41,7 +41,8 @@ class Join:
     def __signal_handler(self, sig, frame):
         logging.debug(f"Gracefully shutting down...")
         self._got_sigterm = True
-        self.__middleware.stop_consuming_gracefully()
+        self.__middleware.shutdown()
+        #self.__middleware.stop_consuming_gracefully()
 
     def start(self):
         # gotta check this as it could be the last node, then a prefix shouldn't be used
