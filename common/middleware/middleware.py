@@ -1,4 +1,5 @@
 import logging
+import threading
 import pika
 import pika.exceptions
 
@@ -185,3 +186,10 @@ class Middleware:
             routing_key=queue_name,
             body=self.__protocol.insert_before_batch(batch, [client_id]),
         ),
+
+    def execute_from_another_thread(self, fn):
+        logging.info(
+            f"Executing from another thread: {threading.currentThread().ident}"
+        )
+        self._connection.add_callback_threadsafe(fn)
+        logging.info("added threadsafe callback")
