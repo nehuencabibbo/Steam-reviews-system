@@ -91,9 +91,12 @@ class DropNulls:
         if len(peers_that_received_end) == self.instances_of_myself:
             logging.debug(f"Sending real END. {message_type}")
             if message_type == GAMES_MESSAGE_TYPE:
-                self.__handle_games_end_transmission_by_query(client_id)
+                self.__forward_to_all_games_queues(client_id, END_TRANSMISSION_MESSAGE)
             elif message_type == REVIEWS_MESSAGE_TYPE:
-                self.__handle_reviews_end_transmission_by_query(client_id)
+                self.__forward_to_all_reviews_queues(
+                    client_id, END_TRANSMISSION_MESSAGE
+                )
+                # self.__handle_reviews_end_transmission_by_query(client_id)
             else:
                 raise Exception(f"Unknown message type: {message_type}")
 
@@ -112,6 +115,40 @@ class DropNulls:
             message += peers_that_received_end
             self._middleware.publish_message(message, reciving_queue_name)
 
+    def __handle_timeout(
+        self, body: List[str], reciving_queue_name: str, message_type: str
+    ):
+        peers_that_received_end = body[2:]
+        client_id = body[0]
+
+        if len(peers_that_received_end) == self.instances_of_myself:
+            logging.debug(f"Sending real TIMEOUT. {message_type}")
+            if message_type == GAMES_MESSAGE_TYPE:
+                self.__forward_to_all_games_queues(
+                    client_id, SESSION_TIMEOUT_TRANSMISSION_MESSAGE
+                )
+            elif message_type == REVIEWS_MESSAGE_TYPE:
+                self.__forward_to_all_reviews_queues(
+                    client_id, SESSION_TIMEOUT_TRANSMISSION_MESSAGE
+                )
+            else:
+                raise Exception(f"Unknown message type: {message_type}")
+
+        else:
+            if message_type == GAMES_MESSAGE_TYPE:
+                self.__handle_games_last_batch()
+            elif message_type == REVIEWS_MESSAGE_TYPE:
+                self.__handle_reviews_last_batch()
+            else:
+                raise Exception(f"Unknown message type: {message_type}")
+
+            message = [client_id, SESSION_TIMEOUT_TRANSMISSION_MESSAGE]
+            if self.node_id not in peers_that_received_end:
+                peers_that_received_end.append(self.node_id)
+
+            message += peers_that_received_end
+            self._middleware.publish_message(message, reciving_queue_name)
+
     def __handle_games_last_batch(self):
         for i in range(self.count_by_platform_nodes):
             queue_name = f"{i}_{self.q1_platform}"
@@ -120,18 +157,18 @@ class DropNulls:
         for queue in [self.q2_games, self.q3_games, self.q4_games, self.q5_games]:
             self._middleware.publish_batch(queue)
 
-    def __handle_games_end_transmission_by_query(self, client_id: str):
+    def __forward_to_all_games_queues(self, client_id: str, message):
         for i in range(self.count_by_platform_nodes):
             logging.debug(f"SENDING_TO: {i}_{self.q1_platform}")
             self._middleware.send_end(
                 queue=f"{i}_{self.q1_platform}",
-                end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                end_message=[client_id, message],
             )
 
         for queue in [self.q2_games, self.q3_games, self.q4_games, self.q5_games]:
             self._middleware.send_end(
                 queue=queue,
-                end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                end_message=[client_id, message],
             )
 
     def __handle_games(self, delivery_tag: int, body: bytes):
@@ -139,6 +176,14 @@ class DropNulls:
 
         for message in body:
             logging.debug(f"Received message: {message}")
+
+            if message[1] == SESSION_TIMEOUT_TRANSMISSION_MESSAGE:
+                logging.info(f"Received timeout while processing reviews")
+                self.__handle_timeout(
+                    message, self.games_receiving_queue_name, GAMES_MESSAGE_TYPE
+                )
+                self._middleware.ack(delivery_tag)
+                return
 
             if message[1] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Received games END: {message}")
@@ -195,11 +240,11 @@ class DropNulls:
 
         self._middleware.ack(delivery_tag)
 
-    def __handle_reviews_end_transmission_by_query(self, client_id: str):
+    def __forward_to_all_reviews_queues(self, client_id: str, message):
         for queue in [self.q3_reviews, self.q5_reviews, self.q4_reviews]:
             self._middleware.send_end(
                 queue=queue,
-                end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                end_message=[client_id, message],
             )
 
     def __handle_reviews_last_batch(self):
@@ -209,6 +254,14 @@ class DropNulls:
     def __handle_reviews(self, delivery_tag: int, body: bytes):
         body = self._middleware.get_rows_from_message(message=body)
         for message in body:
+            if message[1] == SESSION_TIMEOUT_TRANSMISSION_MESSAGE:
+                logging.info(f"Received timeout while processing reviews")
+                self.__handle_timeout(
+                    message, self.reviews_receiving_queue_name, REVIEWS_MESSAGE_TYPE
+                )
+                self._middleware.ack(delivery_tag)
+                return
+
             if message[1] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Received reviews END: {message}")
                 self.__handle_end_transmission(
@@ -247,5 +300,5 @@ class DropNulls:
     def __signal_handler(self, sig, frame):
         logging.debug(f"[NULL DROP {self.node_id}] Gracefully shutting down...")
         self._got_sigterm = True
-        #self._middleware.stop_consuming_gracefully()
+        # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()

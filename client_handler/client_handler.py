@@ -76,7 +76,7 @@ class ClientHandler:
                     logging.debug("Setting forwarding queue to games")
                     t = (
                         threading.Timer(
-                            0.0, self.handle_client_timeout, args=[client_id]
+                            0.0, self.handle_client_timeout, args=[client_id_hex]
                         ),
                     )
 
@@ -86,7 +86,7 @@ class ClientHandler:
                     ]
 
                     t[0].start()
-
+                    
                 forwarding_queue_name = self._forwarding_queues_per_client[client_id][0]
 
                 self._middleware.add_client_id_and_send_batch(
@@ -96,7 +96,7 @@ class ClientHandler:
                 )
 
                 if message[-3:] == b"END":
-
+                    # TODO: publish batch
                     if forwarding_queue_name == self._reviews_queue_name:
                         logging.info(
                             f"Final end received from client: {client_id}. Removing from the record."
@@ -115,18 +115,18 @@ class ClientHandler:
             self._client_middleware.shutdown()
             self._middleware.shutdown()
 
-    def send_timeout(self):
-        logging.info("Executing send_timeout")
-        # self._middleware.publish_message(
-        #     [client_id, "TIMEOUT"], self._reviews_queue_name
-        # )
-        # self._middleware.publish_message([client_id, "TIMEOUT"], self._games_queue_name)
+    def send_timeout(self, client_id):
+        logging.info(f"Executing send_timeout for client: {client_id}")
+        self._middleware.publish_message(
+            [client_id, "TIMEOUT"], self._reviews_queue_name
+        )
+        self._middleware.publish_message([client_id, "TIMEOUT"], self._games_queue_name)
 
     def handle_client_timeout(self, client_id):
         # del
-        logging.info(f"func called from: {threading.currentThread().ident}")
-        self._middleware.execute_from_another_thread(self.send_timeout)
-        logging.info("DONE")
+        self._middleware.execute_from_another_thread(
+            functools.partial(self.send_timeout, client_id=client_id)
+        )
 
     def run(self):
         thread = threading.Thread(target=self.handle_clients)

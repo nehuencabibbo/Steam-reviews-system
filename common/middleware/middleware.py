@@ -88,6 +88,8 @@ class Middleware:
 
         self.__batchs_per_queue[queue_name] = [b"", 0]
 
+    
+
     def publish_message(self, message: list[str], queue_name="", exchange_name=""):
         self._channel.basic_publish(
             exchange=exchange_name,

@@ -6,9 +6,13 @@ from common.protocol.protocol import Protocol
 from typing import *
 
 END_TRANSMISSION_MESSAGE = "END"
+SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
 END_TRANSMISSION_MESSAGE_INDEX = 1
 END_TRANSMISSION_SESSION_ID = 0
+
+SESSION_TIMEOUT_MESSAGE_INDEX = 1
+TIMEOUT_TRANSMISSION_SESSION_ID = 0
 
 REGULAR_MESSAGE_SESSION_ID = 0
 REGULAR_MESSAGE_FIELD_TO_COUNT_BY = 1
@@ -51,6 +55,15 @@ class CounterByPlatform:
         body = self._middleware.get_rows_from_message(body)
 
         logging.debug(f"GOT BATCH: {body}")
+        if body[0][SESSION_TIMEOUT_MESSAGE_INDEX] == SESSION_TIMEOUT_MESSAGE:
+            session_id = body[0][TIMEOUT_TRANSMISSION_SESSION_ID]
+            logging.info(f"Received timeout for client: {session_id}")
+
+            client_dir = f"{self.storage_dir}/{session_id}"
+            storage.delete_directory(client_dir)
+            self._middleware.ack(delivery_tag)
+
+            return
 
         if body[0][END_TRANSMISSION_MESSAGE_INDEX] == END_TRANSMISSION_MESSAGE:
             logging.debug("Recived END transmssion")
@@ -82,12 +95,11 @@ class CounterByPlatform:
             count_per_record_by_client_id[client_id][record_id] = (
                 count_per_record_by_client_id[client_id].get(record_id, 0) + 1
             )
-            
+
         return count_per_record_by_client_id
 
     def __send_results(self, session_id: str):
         self._middleware.create_queue(self.publish_queue)
-
 
         client_dir = f"{self.storage_dir}/{session_id}"
         reader = storage.read_all_files(client_dir)
@@ -95,10 +107,10 @@ class CounterByPlatform:
         for record in reader:
             logging.debug(f"sending record: {record}")
             if self._got_sigterm:
-                #should send everything so i can ack before closing 
+                # should send everything so i can ack before closing
                 # or return false so end is not acked and i dont send the results?
                 return
-            
+
             self._middleware.publish(
                 [session_id, record[0], record[1]], queue_name=self.publish_queue
             )
@@ -111,9 +123,8 @@ class CounterByPlatform:
 
         storage.delete_directory(client_dir)
 
-
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
         self._got_sigterm = True
-        #self._middleware.stop_consuming_gracefully()
+        # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()

@@ -89,7 +89,7 @@ class FilterColumnByValue:
                 full_queue_name = f"{queue_number}_{queue_name}"
                 self._middleware.create_queue(full_queue_name)
 
-    def __handle_end_transmission(self, body: List[str]):
+    def __handle_consensus_tranmission(self, body: List[str], consensus_message):
         # Si me llego un END...
         # 1) Me fijo si los la cantidad de ids que hay es igual a
         # la cantidad total de instancias de mi mismo que hay.
@@ -102,10 +102,10 @@ class FilterColumnByValue:
         client_id = body[0]
 
         if len(peers_that_recived_end) == int(self._instances_of_myself):
-            self.__send_end_transmission_to_all_forwarding_queues(client_id)
+            self.__send_to_all_forwarding_queues(client_id, consensus_message)
         else:
 
-            message = [client_id, END_TRANSMISSION_MESSAGE]
+            message = [client_id, consensus_message]
             if not self._node_id in peers_that_recived_end:
                 peers_that_recived_end.append(self._node_id)
 
@@ -126,7 +126,7 @@ class FilterColumnByValue:
 
                 self._middleware.publish_batch(full_queue_name)
 
-    def __send_end_transmission_to_all_forwarding_queues(self, client_id: str):
+    def __send_to_all_forwarding_queues(self, client_id: str, message):
         # TODO: Repeated code between this and send last batch, remove
         for i in range(len(self._amount_of_forwarding_queues)):
             amount_of_current_queue = self._amount_of_forwarding_queues[i]
@@ -134,11 +134,11 @@ class FilterColumnByValue:
 
             for queue_number in range(amount_of_current_queue):
                 full_queue_name = f"{queue_number}_{queue_name}"
-                logging.debug(f"Sending END to queue: {full_queue_name}")
+                logging.debug(f"Sending {message} to queue: {full_queue_name}")
 
                 self._middleware.send_end(
                     queue=full_queue_name,
-                    end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                    end_message=[client_id, message],
                 )
 
     def __handle_message(self, delivery_tag: int, body: bytes):
@@ -146,10 +146,19 @@ class FilterColumnByValue:
         for message in body:
             logging.debug(f"Recived message: {message}")
 
+            if message[1] == SESSION_TIMEOUT_MESSAGE:
+                session_id = body[0]
+                logging.info(f"Received TIMEOUT for client: {session_id}")
+                self.__send_last_batch_to_fowarding_queues()
+                self.__handle_consensus_tranmission(message, SESSION_TIMEOUT_MESSAGE)
+                self._middleware.ack(delivery_tag)
+
+                return
+
             if message[1] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"GOT END: {body}")
                 self.__send_last_batch_to_fowarding_queues()
-                self.__handle_end_transmission(message)
+                self.__handle_consensus_tranmission(message, END_TRANSMISSION_MESSAGE)
                 self._middleware.ack(delivery_tag)
 
                 return
@@ -248,6 +257,6 @@ class FilterColumnByValue:
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
         self._got_sigterm = True
-        #self._middleware.stop_consuming_gracefully()
+        # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
         # self._middleware.shutdown()

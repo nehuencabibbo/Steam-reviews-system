@@ -9,12 +9,14 @@ from common.storage.storage import (
 from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
+SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
 
 class TopK:
     def __init__(self, middleware: Middleware, config: dict[str, str]):
         self.__middleware = middleware
         self.__total_ends_received_per_client = {}
+        self.__total_timeouts_received_per_client = {}
         self._got_sigterm = False
         self._node_id = config["NODE_ID"]
         self._input_top_k_queue_name = config["INPUT_TOP_K_QUEUE_NAME"]
@@ -57,6 +59,32 @@ class TopK:
     def __callback(self, delivery_tag, body, message_type):
         body = self.__middleware.get_rows_from_message(body)
         logging.debug(f"[INPUT GAMES] received: {body}")
+
+        if body[0][1] == SESSION_TIMEOUT_MESSAGE:
+            session_id = body[0][0]
+            logging.info(f"Timeout received for session: {session_id}")
+
+            self.__total_timeouts_received_per_client[session_id] = (
+                self.__total_timeouts_received_per_client.get(session_id, 0) + 1
+            )
+
+            if (
+                self.__total_timeouts_received_per_client[session_id]
+                == self._amount_of_receiving_queues
+            ):
+                client_storage_dir = f"/tmp/{session_id}"
+                self._clear_client_data(session_id, client_storage_dir)
+                forwarding_queue_name = self._output_top_k_queue_name
+
+                # If it contains Q<x>, then it's an aggregator, shouldn't forward the timeout
+                if "Q" not in forwarding_queue_name:
+                    self.__middleware.send_end(
+                        queue=forwarding_queue_name,
+                        end_message=[session_id, SESSION_TIMEOUT_MESSAGE],
+                    )
+
+            self.__middleware.ack(delivery_tag)
+            return
 
         if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
             client_id = body[0][0]
@@ -116,6 +144,17 @@ class TopK:
             logging.debug(f"Couldn't delete directory: {storage_dir}")
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
-        self.__total_ends_received_per_client.pop(
-            client_id
-        )  # removed end count for the client
+
+        try:
+            self.__total_timeouts_received_per_client.pop(
+                client_id
+            )  # removed timeout count for the client
+        except KeyError:
+            logging.debug("No session found with id: {session_id}. Omitting.")
+
+        try:
+            self.__total_ends_received_per_client.pop(
+                client_id
+            )  # removed end count for the client
+        except KeyError:
+            logging.debug("No session found with id: {session_id}. Omitting.")

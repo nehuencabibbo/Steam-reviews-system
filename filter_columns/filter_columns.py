@@ -11,6 +11,7 @@ import logging
 GAMES_MESSAGE_TYPE = "games"
 REVIEWS_MESSAGE_TYPE = "reviews"
 END_TRANSMISSION_MESSAGE = "END"
+SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
 
 class FilterColumns:
@@ -119,6 +120,45 @@ class FilterColumns:
             self._middleware.publish_message(message, reciving_queue_name)
             logging.debug(f"Publishing: {message} in {reciving_queue_name}")
 
+    def __handle_timeout(
+        self,
+        body: List[str],
+        reciving_queue_name: str,
+        forwarding_queue_name: str,
+        client_id,
+    ):
+        # Si me llego un END...
+        # 1) Me fijo si los la cantidad de ids que hay es igual a
+        # la cantidad total de instancias de mi mismo que hay.
+        # Si es asi => Envio el END a la proxima cola
+        # Si no es asi => Checkeo si mi ID esta en la lista
+        #     Si es asi => No agrego nada y reencolo
+        #     Si no es asi => Agrego mi id a la lista y reencolo
+
+        # Have to check if it's a client end, in which case only "END" is received, otherwise, the client ID comes
+        # first
+        # peers_that_recived_end = body[1:] if len(body) == 1 else body[2:]
+        logging.info(f"Received: {body}")
+        peers_that_recived_end = body[1:]
+        if len(peers_that_recived_end) == int(self._instances_of_myself):
+            logging.debug("Sending real TIMEOUT")
+            self._middleware.send_end(
+                queue=forwarding_queue_name,
+                end_message=[client_id, SESSION_TIMEOUT_MESSAGE],
+            )
+        else:
+            self._middleware.publish_batch(forwarding_queue_name)
+
+            # TODO: cambiar esto, por que se crea otra lista??? reusar la de body y fulbo
+            # Si lo dejamos asi, un set para mejor eficiencia en vez de una lista
+            message = [client_id, SESSION_TIMEOUT_MESSAGE]
+            if not self._node_id in peers_that_recived_end:
+                peers_that_recived_end.append(self._node_id)
+
+            message += peers_that_recived_end
+            self._middleware.publish_message(message, reciving_queue_name)
+            logging.debug(f"Publishing: {message} in {reciving_queue_name}")
+
     def __handle_games(
         self,
         delivery_tag: int,
@@ -137,6 +177,20 @@ class FilterColumns:
         for message in body:
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
+            if message[0] == SESSION_TIMEOUT_MESSAGE:
+                logging.info(
+                    f"Received TIMEOUT while processing games for client: {client_id}"
+                )
+                self.__handle_timeout(
+                    message,
+                    input_queue_name,
+                    self._null_drop_games_queue_name,
+                    client_id,
+                )
+                self._middleware.ack(delivery_tag)
+
+                return
+
             if message[0] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived END of games: {message}")
                 self.__handle_end_transmission(
@@ -182,6 +236,20 @@ class FilterColumns:
         logging.debug(f"client_id: {client_id}")
 
         for message in body:
+
+            if message[0] == SESSION_TIMEOUT_MESSAGE:
+                logging.info(
+                    f"Received TIMEOUT while processing reviews for client: {client_id}"
+                )
+                self.__handle_timeout(
+                    message,
+                    input_queue_name,
+                    self._null_drop_reviews_queue_name,
+                    client_id,
+                )
+                self._middleware.ack(delivery_tag)
+
+                return
 
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
