@@ -62,33 +62,39 @@ class ActivityLog:
                 yield line.strip()
 
     # https://stackoverflow.com/questions/2301789/how-to-read-a-file-in-reverse-order
-    # TODO: Esto NO funciona con encoding utf-8, que va a ser necesario para leer data
-    # de los joins creo, habria que buscar otra funcion para leer un archivo al reves
-    def read_log_in_reverse(self):
-        '''
-        Generator that returns each line of the file in reverse, the \n
-        at the end of the line is not returned 
-        '''
-        with open(self._full_log_path) as log:
-            log.seek(0, SEEK_END)
-            position = log.tell()
-            line = ''
-            while position >= 0:
-                log.seek(position)
-                next_char = log.read(1)
-                if next_char == "\n":
-                    if line == '':
-                        position -= 1
-                        continue 
+    def read_log_in_reverse(self, buf_size=8192):
+        """
+        A generator that returns the lines of a file in reverse order.
+        Supports UTF-8 encoding
+        """
+        with open(self._full_log_path, 'rb') as fh:
+            segment = None
+            offset = 0
+            fh.seek(0, SEEK_END)
+            file_size = remaining_size = fh.tell()
+            while remaining_size > 0:
+                offset = min(file_size, offset + buf_size)
+                fh.seek(file_size - offset)
+                buffer = fh.read(min(remaining_size, buf_size))
+                # remove file's last "\n" if it exists, only for the first buffer
+                if remaining_size == file_size and buffer[-1] == ord('\n'):
+                    buffer = buffer[:-1]
+                remaining_size -= buf_size
+                lines = buffer.split('\n'.encode())
+                # append last chunk's segment to this chunk's last line
+                if segment is not None:
+                    lines[-1] += segment
+                segment = lines[0]
+                lines = lines[1:]
+                # yield lines in this chunk except the segment
+                for line in reversed(lines):
+                    # only decode on a parsed line, to avoid utf-8 decode error
+                    yield line.decode()
+            # Don't yield None if the file was empty
+            if segment is not None:
+                yield segment.decode()
 
-                    yield line[::-1]
-                    line = ''
-                else:
-                    line += next_char
-                position -= 1
-            yield line[::-1]
-
-    def restore(self) -> tuple[RecoveryOperation, List[List[str]]]: 
+    def restore(self): 
         '''
         Para el ultimo commit, ya sea si se completo o no: 
         Restaurar el estado implica verificar la ultima Ti commiteo, si commiteo

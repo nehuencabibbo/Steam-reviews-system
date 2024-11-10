@@ -18,6 +18,3 @@ class Operation(Enum):
 class RecoveryOperation(Enum):
     REDO = 0
     ABORT = 1
-
-if __name__ == '__main__':
-    print(Operation.BEGIN.message())
