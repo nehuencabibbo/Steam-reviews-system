@@ -58,13 +58,15 @@ class Client:
 
         try:
             self.__send_file(self._game_file_path)
-            self.__send_file(self._reviews_file_path)
+            # return
+            # self.__send_file(self._reviews_file_path)
             self.__get_results()
         except zmq.error.ZMQError:
             if not self._got_sigterm:
                 raise
 
     def __send_file(self, file_path):
+        count = 0
         with open(file_path, "r") as file:
             reader = csv.reader(file)
             next(reader, None)  # skip header
@@ -75,7 +77,10 @@ class Client:
 
                 self._middleware.send(row)
                 time.sleep(self._sending_wait_time)
-
+                count += 1
+                # TODO: remove return. just for testing purposes
+                if count == 14:
+                    return
         logging.debug("Sending file end")
         self._middleware.send_end()
 

@@ -78,9 +78,9 @@ class TopK:
 
                 # If it contains Q<x>, then it's an aggregator, shouldn't forward the timeout
                 if "Q" not in forwarding_queue_name:
-                    self.__middleware.send_end(
-                        queue=forwarding_queue_name,
-                        end_message=[session_id, SESSION_TIMEOUT_MESSAGE],
+                    self.__middleware.publish_message(
+                        [session_id, SESSION_TIMEOUT_MESSAGE],
+                        forwarding_queue_name,
                     )
 
             self.__middleware.ack(delivery_tag)
@@ -150,11 +150,17 @@ class TopK:
                 client_id
             )  # removed timeout count for the client
         except KeyError:
-            logging.debug("No session found with id: {session_id}. Omitting.")
+            # When can this happen? when the timeout comes before the client data (for whatever reason)
+            logging.debug(
+                f"No session found with id: {client_id} while removing ends. Omitting."
+            )
 
         try:
             self.__total_ends_received_per_client.pop(
                 client_id
             )  # removed end count for the client
         except KeyError:
-            logging.debug("No session found with id: {session_id}. Omitting.")
+            # When can this happen? when the there was no timeout for a given client
+            logging.debug(
+                f"No session found with id: {client_id} while removing timeouts. Omitting."
+            )

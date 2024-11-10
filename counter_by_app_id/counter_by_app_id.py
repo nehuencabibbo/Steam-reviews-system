@@ -8,7 +8,9 @@ from common.storage import storage
 from utils.utils import node_id_to_send_to
 
 END_TRANSMISSION_MESSAGE = "END"
+SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
+SESSION_TIMEOUT_MESSAGE_INDEX = 1
 END_MESSAGE_CLIENT_ID = 0
 END_MESSAGE_END = 1
 
@@ -23,6 +25,7 @@ class CounterByAppId:
         self._middleware = middleware
         self._got_sigterm = False
         self._ends_received_per_client = {}
+        self.__total_timeouts_received_per_client = {}
 
         # Configuration attributes
         self._node_id = config["NODE_ID"]
@@ -65,6 +68,35 @@ class CounterByAppId:
         body = self._middleware.get_rows_from_message(body)
 
         logging.debug(f"GOT MSG: {body}")
+
+        if body[0][SESSION_TIMEOUT_MESSAGE_INDEX] == SESSION_TIMEOUT_MESSAGE:
+            session_id = body[0][END_MESSAGE_CLIENT_ID]
+            self.__total_timeouts_received_per_client[session_id] = (
+                self.__total_timeouts_received_per_client.get(session_id, 0) + 1
+            )
+
+            logging.info(
+                f"Amount of timeouts received up to now: {self.__total_timeouts_received_per_client[session_id]} | Expecting: {self._needed_ends}"
+            )
+            if (
+                self.__total_timeouts_received_per_client[session_id]
+                == self._needed_ends
+            ):
+                queue_name = self._publish_queue
+                storage_dir = f"{self._storage_dir}/{session_id}"
+
+                self.__send_last_batch_to_forwarding_queues()
+
+                self.__send_to_forwarding_queues(
+                    prefix_queue_name=queue_name,
+                    client_id=session_id,
+                    message=SESSION_TIMEOUT_MESSAGE,
+                )
+
+                self._clear_client_data(session_id, storage_dir)
+
+            self._middleware.ack(delivery_tag)
+            return
 
         if body[0][END_MESSAGE_END] == END_TRANSMISSION_MESSAGE:
             client_id = body[0][END_MESSAGE_CLIENT_ID]
@@ -113,8 +145,10 @@ class CounterByAppId:
             self.__send_record_to_forwarding_queues(record)
 
         self.__send_last_batch_to_forwarding_queues()
-        self.__send_end_to_forwarding_queues(
-            prefix_queue_name=queue_name, client_id=client_id
+        self.__send_to_forwarding_queues(
+            prefix_queue_name=queue_name,
+            client_id=client_id,
+            message=END_TRANSMISSION_MESSAGE,
         )
 
         self._clear_client_data(client_id, storage_dir)
@@ -135,24 +169,39 @@ class CounterByAppId:
 
             self._middleware.publish_batch(full_queue_name)
 
-    def __send_end_to_forwarding_queues(self, prefix_queue_name, client_id):
+    def __send_to_forwarding_queues(self, prefix_queue_name, client_id, message):
         for i in range(self._amount_of_forwarding_queues):
-            self._middleware.send_end(
+            self._middleware.publish_message(
+                [client_id, message],
                 f"{i}_{prefix_queue_name}",
-                end_message=[client_id, END_TRANSMISSION_MESSAGE],
             )
-            logging.debug(f"Sent END of client: {client_id}")
+            logging.debug(f"Sent {message} of client: {client_id}")
 
     def _clear_client_data(self, client_id, storage_dir):
         if not storage.delete_directory(storage_dir):
             logging.debug(f"Couldn't delete directory: {storage_dir}")
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
-        self._ends_received_per_client.pop(client_id)
+
+        try:
+            self._ends_received_per_client.pop(client_id)
+        except KeyError:
+            # When can this happen? when the timeout comes before the client data (for whatever reason)
+            logging.debug(
+                f"No session found with id: {client_id} while removing ends. Omitting."
+            )
+
+        try:
+            self.__total_timeouts_received_per_client.pop(client_id)
+        except KeyError:
+            # When can this happen? when the there was no timeout for a given client
+            logging.debug(
+                f"No session found with id: {client_id} while removing timeouts. Omitting."
+            )
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
 
         self._got_sigterm = True
-        #self._middleware.stop_consuming_gracefully()
+        # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()

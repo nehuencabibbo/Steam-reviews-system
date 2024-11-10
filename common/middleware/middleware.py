@@ -77,18 +77,19 @@ class Middleware:
         self._channel.basic_qos(prefetch_count=1)
 
     def publish_batch(self, queue_name="", exchange_name=""):
-        batch, amount_of_messages = self.__batchs_per_queue[queue_name]
+        try:
+            batch, amount_of_messages = self.__batchs_per_queue[queue_name]
 
-        if amount_of_messages == 0:
+            if amount_of_messages == 0:
+                return
+
+            self._channel.basic_publish(
+                exchange=exchange_name, routing_key=queue_name, body=batch
+            )
+
+            self.__batchs_per_queue[queue_name] = [b"", 0]
+        except KeyError:
             return
-
-        self._channel.basic_publish(
-            exchange=exchange_name, routing_key=queue_name, body=batch
-        )
-
-        self.__batchs_per_queue[queue_name] = [b"", 0]
-
-    
 
     def publish_message(self, message: list[str], queue_name="", exchange_name=""):
         self._channel.basic_publish(
@@ -132,7 +133,7 @@ class Middleware:
         try:
             while self.is_running:
                 self._connection.process_data_events(time_limit=1)
-                
+
         except pika.exceptions.ChannelClosedByBroker as e:
             # Rabbit mq terminated during execution most probably
             # TODO: Is writing to a closed channel handled by this too or

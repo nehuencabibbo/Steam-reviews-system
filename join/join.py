@@ -1,6 +1,5 @@
 import logging
 import signal
-from time import sleep
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
     read,
@@ -14,6 +13,7 @@ from common.protocol.protocol import Protocol
 from utils.utils import node_id_to_send_to
 
 END_TRANSMISSION_MESSAGE = "END"
+SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
 
 class Join:
@@ -23,6 +23,7 @@ class Join:
         self.__middleware = middleware
         self._amount_of_games_ends_recived = {}
         self._amount_of_reviews_ends_recived = {}
+        self._amount_of_timeouts_per_client_received = {}
         self._got_sigterm = False
         self._input_games_queue_name = config["INPUT_GAMES_QUEUE_NAME"]
         self._input_reviews_queue_name = config["INPUT_REVIEWS_QUEUE_NAME"]
@@ -34,6 +35,7 @@ class Join:
         self._instances_of_myself = config["INSTANCES_OF_MYSELF"]
         self._games_columns_to_keep = config["GAMES_COLUMNS_TO_KEEP"]
         self._reviews_columns_to_keep = config["REVIEWS_COLUMNS_TO_KEEP"]
+        self._needed_timeouts = self._needed_games_ends + self._needed_reviews_ends
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -42,7 +44,7 @@ class Join:
         logging.debug(f"Gracefully shutting down...")
         self._got_sigterm = True
         self.__middleware.shutdown()
-        #self.__middleware.stop_consuming_gracefully()
+        # self.__middleware.stop_consuming_gracefully()
 
     def start(self):
         # gotta check this as it could be the last node, then a prefix shouldn't be used
@@ -82,6 +84,32 @@ class Join:
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
         body = self.__middleware.get_rows_from_message(body)
 
+        if len(body) == 1 and body[0][1] == SESSION_TIMEOUT_MESSAGE:
+            session_id = body[0][0]
+            self._amount_of_timeouts_per_client_received[session_id] = (
+                self._amount_of_timeouts_per_client_received.get(session_id, 0) + 1
+            )
+
+            logging.debug(
+                (
+                    f"Amount of timeouts received up to now for client: {session_id}: {self._amount_of_timeouts_per_client_received[session_id]}"
+                    f"| Expecting: {self._needed_timeouts}"
+                )
+            )
+
+            if (
+                self._amount_of_timeouts_per_client_received[session_id]
+                == self._needed_timeouts
+            ):
+                self.__send_to_forward_queues(
+                    session_id, message=SESSION_TIMEOUT_MESSAGE
+                )
+                self.__clear_client_data(session_id)
+
+            self.__middleware.ack(delivery_tag)
+
+            return
+
         if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
             client_id = body[0][0]
             self._amount_of_games_ends_recived[client_id] = (
@@ -109,7 +137,9 @@ class Join:
                     self._amount_of_reviews_ends_recived[client_id]
                     == self._needed_reviews_ends
                 ):
-                    self.__send_end_to_forward_queues(client_id)
+                    self.__send_to_forward_queues(
+                        client_id, message=END_TRANSMISSION_MESSAGE
+                    )
                     self.__clear_client_data(client_id)
 
             self.__middleware.ack(delivery_tag)
@@ -138,6 +168,31 @@ class Join:
             if not client_id in self._amount_of_games_ends_recived:
                 self._amount_of_games_ends_recived[client_id] = 0
 
+            if len(review) == 1 and review[0] == SESSION_TIMEOUT_MESSAGE:
+                self._amount_of_timeouts_per_client_received[client_id] = (
+                    self._amount_of_timeouts_per_client_received.get(client_id, 0) + 1
+                )
+
+                logging.info(
+                    (
+                        f"Amount of timeouts received up to now for client: {client_id}: {self._amount_of_timeouts_per_client_received[client_id]}"
+                        f"| Expecting: {self._needed_timeouts}"
+                    )
+                )
+
+                if (
+                    self._amount_of_timeouts_per_client_received[client_id]
+                    == self._needed_timeouts
+                ):
+                    self.__send_to_forward_queues(
+                        client_id, message=SESSION_TIMEOUT_MESSAGE
+                    )
+                    self.__clear_client_data(client_id)
+
+                self.__middleware.ack(delivery_tag)
+
+                return
+
             if len(review) == 1 and review[0] == END_TRANSMISSION_MESSAGE:
 
                 self._amount_of_reviews_ends_recived[client_id] = (
@@ -162,7 +217,9 @@ class Join:
                     and self._amount_of_games_ends_recived[client_id]
                     == self._needed_games_ends
                 ):
-                    self.__send_end_to_forward_queues(client_id)
+                    self.__send_to_forward_queues(
+                        client_id, message=END_TRANSMISSION_MESSAGE
+                    )
                     self.__clear_client_data(client_id)
 
                 self.__middleware.ack(delivery_tag)
@@ -180,25 +237,25 @@ class Join:
 
         self.__middleware.ack(delivery_tag)
 
-    def __send_end_to_forward_queues(self, client_id: str):
+    def __send_to_forward_queues(self, client_id: str, message):
         forwarding_queue_name = self._output_queue_name
 
         if (
             "Q" in forwarding_queue_name
         ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
             self.__middleware.publish_batch(forwarding_queue_name)
-            end_message = [client_id, "END", f"{self._instances_of_myself}"]
-            self.__middleware.send_end(forwarding_queue_name, end_message=end_message)
-            logging.debug(f"Sent end to: {forwarding_queue_name}")
+            end_message = [client_id, message, f"{self._instances_of_myself}"]
+            self.__middleware.publish_message(end_message, forwarding_queue_name)
+            logging.debug(f"Sent {message} to: {forwarding_queue_name}")
             return
 
         for i in range(self._amount_of_forwarding_queues):
             self.__middleware.publish_batch(f"{i}_{forwarding_queue_name}")
-            self.__middleware.send_end(
+            self.__middleware.publish_message(
+                [client_id, message],
                 f"{i}_{forwarding_queue_name}",
-                end_message=[client_id, END_TRANSMISSION_MESSAGE],
             )
-            logging.debug(f"Sent end to: {i}_{forwarding_queue_name}")
+            logging.debug(f"Sent {message} to: {i}_{forwarding_queue_name}")
 
     def __games_columns_to_keep(self, games_record: list[str]):
         return [games_record[i] for i in self._games_columns_to_keep]
@@ -263,7 +320,23 @@ class Join:
                     )
 
     def __clear_client_data(self, client_id: str):
+
         delete_directory(f"/tmp/{client_id}")
         delete_file(f"/tmp/reviews_{client_id}.csv")
-        self._amount_of_games_ends_recived.pop(client_id)
-        self._amount_of_reviews_ends_recived.pop(client_id)
+        try:
+            self._amount_of_games_ends_recived.pop(client_id)
+            self._amount_of_reviews_ends_recived.pop(client_id)
+        except KeyError:
+            logging.debug(
+                f"No session found with id: {client_id} while removing ends. Omitting."
+            )
+
+        try:
+            self._amount_of_timeouts_per_client_received.pop(client_id)
+        except KeyError:
+            # When can this happen? when the there was no timeout for a given client
+            logging.debug(
+                f"No session found with id: {client_id} while removing timeouts. Omitting."
+            )
+
+        logging.info(f"Removed client info for client: {client_id}")

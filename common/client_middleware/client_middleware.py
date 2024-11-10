@@ -61,6 +61,7 @@ class ClientMiddleware:
 
         if ammount_of_messages + 1 == self.__batch_size:
             self.__socket.send(new_batch)
+            logging.debug("Sent batch")
             self.__batch = [b"", 0]
         else:
             self.__batch = [new_batch, ammount_of_messages + 1]
