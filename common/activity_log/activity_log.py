@@ -94,7 +94,19 @@ class ActivityLog:
             if segment is not None:
                 yield segment.decode()
 
+    def get_recovery_operation(self):
+        for line in self.read_log_in_reverse():
+            line = line.split(',')
+            if line[0] == Operation.COMMIT.message():
+                return RecoveryOperation.REDO
+            else: 
+                return RecoveryOperation.ABORT
+            
     def restore(self): 
+        '''
+        Generator that first returns the action to perform (RecoveryOperation.REDO or RecoveryOperation.ABORT)
+        and then the corresponding lines to either REDO or ABORT
+        '''
         '''
         Para el ultimo commit, ya sea si se completo o no: 
         Restaurar el estado implica verificar la ultima Ti commiteo, si commiteo
@@ -113,27 +125,22 @@ class ActivityLog:
         # - Si la ultima linea leida es un commit corrupto (tengo la palabra commit, pero no el numero de batch por eh),
         # tengo que re-guardar todo lo de ese batch
         # - Si la ultima linea leida no es un commit, tengo que abortar la tx
-        lines_read = 0
-        result_lines = []
-        recovery_operation = None
-        for line in self.read_log_in_reverse():
+        for index, line in enumerate(self.read_log_in_reverse()):
             line = line.split(',')
-            if lines_read == 0:
-                if line[0] == Operation.COMMIT.message():
-                    recovery_operation = RecoveryOperation.REDO
-                else: 
-                    recovery_operation = RecoveryOperation.ABORT
+            if index == 0:
+                if line[0] != Operation.COMMIT.message():
+                    # TODO: Verificar de alguna forma si esta corrupta? 
+                    # Si estaba corrupta la linea y no rompio por alguna razon
+                    # el parseo va a intentar re-hacer algo que estaba mal el nodo
+                    # y es un problema 
+                    yield line[1:]
 
-                lines_read += 1
                 continue
             
             if line[0] == Operation.BEGIN.message(): 
                 break
 
-            result_lines.append(line[1:]) 
-            lines_read += 1
-
-        return (recovery_operation, result_lines)
+            yield line[1:] 
 
 
 

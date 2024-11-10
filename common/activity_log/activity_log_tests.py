@@ -39,10 +39,30 @@ class ActivityLogTests(unittest.TestCase):
         self._activity_log.log_write('1', ['1', '105'])
         self._activity_log.log_commit('1')
 
-        recovery_operation, result_lines = self._activity_log.restore()
+        recovery_operation = self._activity_log.get_recovery_operation()
+        result_lines = []
+        for line in self._activity_log.restore():
+            result_lines.append(line)
+
 
         self.assertEqual(recovery_operation, RecoveryOperation.REDO)
         self.assertEqual(result_lines[0], ['1', '1', '105'])
+
+    def test_04_restoring_an_uncommited_transaction_should_abort_it(self):
+        self._activity_log.log_begin('1')
+        self._activity_log.log_write('1', ['1', '105'])
+
+        recovery_operation = self._activity_log.get_recovery_operation()
+        result_lines = []
+        for line in self._activity_log.restore():
+            result_lines.append(line)
+
+        self.assertEqual(recovery_operation, RecoveryOperation.ABORT)
+        self.assertEqual(result_lines[0], ['1', '1', '105'])
+
+    def test_05_restoring_an_uncommited_transaction_with_a_corrupted_line_should_not_return_the_corrupted_line(self):
+        self._activity_log.log_begin('1')
+        pass 
 
             
 if __name__ == "__main__":
