@@ -6,6 +6,7 @@ from common.protocol.protocol import Protocol
 import math
 
 END_TRANSMISSION_MESSAGE = "END"
+SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 FILE_NAME = "percentile_data.csv"
 NO_RECORDS = 0
 
@@ -16,6 +17,7 @@ class Percentile:
         self._middleware = middleware
         self._got_sigterm = False
         self._recived_ends = {}
+        self._received_client_timeouts = {}
         self._consume_queue = config["CONSUME_QUEUE"]
         self._publish_queue = config["PUBLISH_QUEUE"]
         self._needed_ends_to_finish = config["NEEDED_ENDS_TO_FINISH"]
@@ -43,6 +45,34 @@ class Percentile:
 
         body = self._middleware.get_rows_from_message(body)
         logging.debug(f"body: {body}")
+
+        if len(body) == 1 and body[0][1] == SESSION_TIMEOUT_MESSAGE:
+            session_id = body[0][0]
+            self._received_client_timeouts[session_id] = (
+                self._received_client_timeouts.get(session_id, 0) + 1
+            )
+
+            logging.debug(
+                f"GOT TIMEOUT NUMBER: {self._received_client_timeouts[session_id]}"
+            )
+
+            if (
+                self._received_client_timeouts[session_id]
+                == self._needed_ends_to_finish
+            ):
+                forwarding_queue_name = self._publish_queue
+                storage_dir = f"{self._storage_dir}/{session_id}"
+
+                self._middleware.publish_batch(forwarding_queue_name)
+                self._middleware.publish_message(
+                    [session_id, SESSION_TIMEOUT_MESSAGE],
+                    forwarding_queue_name,
+                )
+
+                self._clear_client_data(session_id, storage_dir)
+
+            self._middleware.ack(method.delivery_tag)
+            return
 
         if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
             client_id = body[0][0]
@@ -123,7 +153,19 @@ class Percentile:
             logging.debug(f"Couldn't delete directory: {storage_dir}")
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
-        self._recived_ends.pop(client_id)  # removed end count for the client
+        try:
+            self._recived_ends.pop(client_id)  # removed end count for the client
+        except KeyError:
+            logging.debug(
+                f"No session found with id: {client_id} while removing ends. Omitting."
+            )
+
+        try:
+            self._received_client_timeouts.pop(client_id)
+        except KeyError:
+            logging.debug(
+                f"No session found with id: {client_id} while removing client timeouts. Omitting."
+            )
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
