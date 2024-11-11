@@ -6,27 +6,29 @@ from common.server_socket.client_connection import ClientConnection
 HEARTBEAT_MESSAGE = "A"
 class NodeHandler:
 
-    def __init__(self, node_conn: ClientConnection, node_name: str, got_sigterm: Event):
+    def __init__(self, node_conn: ClientConnection, node_name: str, got_sigterm: Event, wait_between_heartbeats: float):
         self._node_conn = node_conn
         self._node_name = node_name
         self._got_sigterm = got_sigterm 
+        self._wait_between_heartbeats = wait_between_heartbeats
 
     def start(self):
         try:
-            while not self._got_sigterm.is_set(): #close connection when i got the sigterm?
+            while not self._got_sigterm.is_set():
+                logging.info(f"Sending heartbeat to {self._node_name}")
                 self._node_conn.send(HEARTBEAT_MESSAGE)
                 self._node_conn.recv() # if timeout, raises error
-                self._got_sigterm.wait(30) #time between heartbeats
+                logging.info(f"Got response from {self._node_name}, sleeping")
+                self._got_sigterm.wait(self._wait_between_heartbeats) 
 
-        except (OSError, TimeoutError) as e:
+        except (OSError, TimeoutError) as _:
             if not self._got_sigterm.is_set():
-                res = subprocess.run(['docker', 'start', self._node_name],
+                logging.info(f"Node {self._node_name} is down.")
+                subprocess.run(['docker', 'start', self._node_name],
                                 check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE
                                 )
-                logging.info('Starting container\n {}\n Error={}'.format(res.stdout, res.stderr))
+                logging.info(f"Starting container {self._node_name}")
         finally:
             self._node_conn.close()
 
-        #result = subprocess.run(['docker', 'start', 'docker-from-docker_counter_1'], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        #logging.info('Starting container\n {}\n Error={}'.format(result.stdout, result.stderr))
 

@@ -25,7 +25,6 @@ Pero si se cae el lider antes de que se envien todos los nombres de los nodos y 
 cuyo nombre no se envio -> entonces hay problema
 """
 from common.server_socket.server_socket import ServerSocket
-from common.server_socket.client_connection import ClientConnection #delete this?
 from node_handler import NodeHandler
 
 import threading
@@ -33,10 +32,11 @@ import signal
 import logging
 
 class Watchdog:
-    def __init__(self, server_socket: ServerSocket):
+    def __init__(self, server_socket: ServerSocket, config: dict):
         self._server_socket = server_socket
         self._threads = {}
         self._got_sigterm = threading.Event()
+        self._wait_between_heartbeats = config["WAIT_BETWEEN_HEARTBEAT"]
         signal.signal(signal.SIGTERM, self._sigterm_handler)
 
     def start(self):
@@ -47,9 +47,12 @@ class Watchdog:
                 conn = self._server_socket.accept_connection(5) #set timeout for connection
             
                 node_name = conn.recv()
+
+                logging.info(f"Node {node_name} connected.")
                 
-                handler = NodeHandler(conn, node_name, self._got_sigterm)
-                thread = threading.Thread(target=handler.start())
+                handler = NodeHandler(conn, node_name, self._got_sigterm, self._wait_between_heartbeats)
+                thread = threading.Thread(target=handler.start, args=())
+                thread.start()
                 
                 if node_name in self._threads:
                     self._threads[node_name].join()
@@ -58,12 +61,14 @@ class Watchdog:
                 #self._handlers[node_name] = handler
         except OSError as e:
             if not self._got_sigterm.is_set():
-                logging.error(e)
+                logging.error(f"ERROR: {e}")
+                raise
         finally:
-            [thread.join() for thread in self._threads]
+            [thread.join() for thread in self._threads.values()] #error here
             #[handler.close() for handler in self._hanlders]
                 
     
-    def _sigterm_handler(self):
+    def _sigterm_handler(self, signal, frame):
         self._got_sigterm.set()
         self._server_socket.close()
+        

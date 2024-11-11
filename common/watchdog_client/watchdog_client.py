@@ -1,8 +1,12 @@
 import socket
 import logging
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from server_socket.client_connection import ClientConnection
 
-TIMEOUT = 3
 class WatchdogClient:
 
     def __init__(self, monitor_ip, monitor_port, client_name:str):
@@ -11,26 +15,30 @@ class WatchdogClient:
         self._monitor_port = monitor_port
         self._client_name = client_name
 
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect((self._monitor_ip,  self._monitor_port))
+        self._connection = ClientConnection(client_socket, None)
+
     def start(self):
 
         try:
-            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket.connect((self._monitor_ip,  self._monitor_port))
+            logging.info(f"[MONITOR] Sending name: {self._client_name}")
+            self._connection.send(self._client_name)#envio el nombre
 
-            connection = ClientConnection(client_socket, TIMEOUT)
-
-            connection.send(self._client_name)#envio el nombre
-
-            while not self._stop: #close connection when i got the sigterm?
-                msg = connection.recv() # if timeout, raises error
-                connection.send(msg)
+            while not self._stop: 
+                logging.debug("[MONITOR] Waiting for heartbeat")
+                msg = self._connection.recv()
+                logging.debug("[MONITOR] Got heartbeat")
+                self._connection.send(msg)
 
         except (OSError, TimeoutError)as e:
             if not self._stop:
                 #for now if the monitor is down, is an error. This can be fixed wit leader election
                 logging.error(f"Error while listening to monitor. {e}")
         finally:
-            connection.close()
+            self._connection.close()
 
     def stop(self):
         self._stop = True
+        self._connection.close()
+        

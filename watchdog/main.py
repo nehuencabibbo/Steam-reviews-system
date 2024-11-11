@@ -11,7 +11,6 @@ from common.server_socket.server_socket import ServerSocket
 def get_config():
     config_params = {}
     config = ConfigParser(os.environ)
-    config.read("./top_k/config.ini")
     try:
         config_params["LOGGING_LEVEL"] = os.getenv(
             "LOGGING_LEVEL", config["DEFAULT"]["LOGGING_LEVEL"]
@@ -19,6 +18,12 @@ def get_config():
 
         config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])
         config_params["PORT"] = int(os.getenv("PORT", config["DEFAULT"]["PORT"]))
+
+        config_params["WAIT_BETWEEN_HEARTBEAT"] = float(
+            os.getenv("WAIT_BETWEEN_HEARTBEAT", 
+            config["DEFAULT"]["WAIT_BETWEEN_HEARTBEAT"],
+            )
+        )
 
         #TODO: add env var for lider election nodes
 
@@ -48,12 +53,13 @@ def main():
     config.pop("LOGGING_LEVEL", None)
 
     socket = ServerSocket(config["PORT"])
+    config.pop("PORT", None)
 
-    watchdog = Watchdog.new(socket)
+    watchdog = Watchdog(socket, config)
 
     watchdog.start()
 
 
-
 if __name__ == "__main__":
     main()
+

@@ -1,3 +1,4 @@
+
 from common.protocol.protocol import Protocol
 LENGTH_BYTES =  4
 
@@ -7,7 +8,8 @@ class ClientConnection:
     def __init__(self, socket, timeout = 2):
         self._socket = socket
         self._stop = False
-        self._socket.settimeout(timeout)
+        self._timeout = timeout
+        
 
     def send(self, message: str):
         encoded_msg = Protocol.encode([message])
@@ -27,8 +29,9 @@ class ClientConnection:
         message = b""
         message_len = self._recv_message_length()
         while bytes_received < message_len:
-
             message += self._socket.recv(message_len - bytes_received)
+            if len(message) == 0:
+                raise ConnectionError
             bytes_received += len(message)
 
         decoded_message = message.decode("utf-8")
@@ -39,10 +42,11 @@ class ClientConnection:
 
         bytes_left_to_receive = LENGTH_BYTES
         message = b""
-        while bytes_left_to_receive < 0:
+        while bytes_left_to_receive > 0:
 
             message += self._socket.recv(bytes_left_to_receive)
-
+            if len(message) == 0:
+                raise ConnectionError
             bytes_left_to_receive -= len(message)
 
         return int.from_bytes(message[:4], "big", signed=False)
@@ -50,3 +54,4 @@ class ClientConnection:
     def close(self):
         self._stop = True
         self._socket.close()
+
