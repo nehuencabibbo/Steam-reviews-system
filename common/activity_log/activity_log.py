@@ -50,14 +50,20 @@ class ActivityLog:
         line = [operation.message(), batch_number]
         if data: line += data
 
-        line_to_write = self._protocol.encode(line) + b'\n'
+        line_to_write = self._protocol.encode(line, add_checksum=True) + b'\n'
 
         with open(self._full_log_path, 'ab') as log:
             log.write(line_to_write)
 
-
-    def get_last_batch_number(self):
-        pass
+    def get_last_batch_number(self) -> str:
+        '''
+        Returns the last batch's number. If log is empty 
+        an empty string is returned instead
+        '''
+        for line in self.read_log_in_reverse():
+            return line[1]
+        
+        return ''
 
     def read_log(self):
         '''
@@ -66,7 +72,7 @@ class ActivityLog:
         '''
         with open(self._full_log_path, 'rb') as log:
             for line in log:
-                decoded_line = self._protocol.decode(line)
+                decoded_line = self._protocol.decode(line, has_checksum=True)
                 if len(decoded_line) != 0:
                     decoded_line[-1] = decoded_line[-1].strip()
 
@@ -101,11 +107,11 @@ class ActivityLog:
                 for line in reversed(lines):
                     # only decode on a parsed line, to avoid utf-8 decode error
                     # print(line)
-                    yield self._protocol.decode(line)
+                    yield self._protocol.decode(line, has_checksum=True)
             # Don't yield None if the file was empty
             if segment is not None:
                 # print(segment)
-                yield self._protocol.decode(segment)
+                yield self._protocol.decode(segment, has_checksum=True)
 
     def get_recovery_operation(self):
         for line in self.read_log_in_reverse():
@@ -113,7 +119,7 @@ class ActivityLog:
                 return RecoveryOperation.REDO
             else: 
                 return RecoveryOperation.ABORT
-            
+
     def restore(self): 
         '''
         Generator that first returns the action to perform (RecoveryOperation.REDO or RecoveryOperation.ABORT)

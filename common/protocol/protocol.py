@@ -8,7 +8,28 @@ FIELD_LENGTH_BYTES_AMOUNT = 4
 
 class Protocol:
     @staticmethod
-    def encode(row: List[str]) -> bytes:
+    def __remove_and_validate_checksum(message: bytes) -> bytes: 
+        checksum = message[:4]
+        message = message[4:]
+
+        checksum = int.from_bytes(checksum, byteorder='big', signed=False)
+
+        if checksum != len(message):
+            raise Exception((
+                f'ERROR: Checksum does not match, '
+                f'expected: {checksum}, got: {len(message)}'
+            ))
+        
+        return message
+
+    @staticmethod
+    def __add_checksum(message: bytes) -> bytes:
+        length = len(message).to_bytes(4, byteorder='big', signed=False)
+
+        return length + message
+    
+    @staticmethod
+    def encode(row: List[str], add_checksum=False) -> bytes:
         result = b""
         for field in row:
             encoded_field = field.encode("utf-8")
@@ -17,6 +38,9 @@ class Protocol:
             )
             result += encoded_field_length
             result += encoded_field
+
+        if add_checksum: 
+            result = Protocol.__add_checksum(result)
 
         return result
 
@@ -53,7 +77,10 @@ class Protocol:
         return res
 
     @staticmethod
-    def decode(message: bytes) -> List[str]:
+    def decode(message: bytes, has_checksum=False) -> List[str]:
+        if has_checksum: 
+            message = Protocol.__remove_and_validate_checksum(message)
+
         result = []
         while len(message) > 0:
             field_length = int.from_bytes(message[:4], "big", signed=False)

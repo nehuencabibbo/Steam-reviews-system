@@ -105,7 +105,7 @@ class ActivityLogTests(unittest.TestCase):
         self.assertEqual(result_lines[1], ['2', '1', '25'])
 
     def test_07_restoring_an_uncommited_transaction_with_a_corrupted_line_should_not_return_the_corrupted_line(self):
-        self._activity_log.log_begin('1')
+        # TODO: Para testear esto hay que mockear el protocolo
         pass 
 
             
