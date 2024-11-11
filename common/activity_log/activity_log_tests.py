@@ -64,11 +64,50 @@ class ActivityLogTests(unittest.TestCase):
 
         self.assertEqual(recovery_operation, RecoveryOperation.ABORT)
         self.assertEqual(result_lines[0], ['1', '1', '105'])
+    
+    def test_05_restoring_a_commited_transaction_with_two_transactions_should_redo_the_last_one(self):
+        self._activity_log.log_begin('1')
+        self._activity_log.log_write('1', ['1', '105'])
+        self._activity_log.log_write('1', ['1', '164'])
+        self._activity_log.log_commit('1')
+        self._activity_log.log_begin('2')
+        self._activity_log.log_write('2', ['1', '25'])
+        self._activity_log.log_write('2', ['2', '43'])
+        self._activity_log.log_commit('2')
 
-    def test_05_restoring_an_uncommited_transaction_with_a_corrupted_line_should_not_return_the_corrupted_line(self):
+        recovery_operation = self._activity_log.get_recovery_operation()
+        result_lines = []
+        for line in self._activity_log.restore():
+            result_lines.append(line)
+
+        self.assertEqual(recovery_operation, RecoveryOperation.REDO)
+        self.assertEqual(len(result_lines), 2)
+        self.assertEqual(result_lines[0], ['2', '2', '43'])
+        self.assertEqual(result_lines[1], ['2', '1', '25'])
+
+    def test_06_restoring_an_uncommited_transaction_with_two_transactions_should_abort_the_last_one(self):
+        self._activity_log.log_begin('1')
+        self._activity_log.log_write('1', ['1', '105'])
+        self._activity_log.log_write('1', ['1', '164'])
+        self._activity_log.log_commit('1')
+        self._activity_log.log_begin('2')
+        self._activity_log.log_write('2', ['1', '25'])
+        self._activity_log.log_write('2', ['2', '43'])
+
+        recovery_operation = self._activity_log.get_recovery_operation()
+        result_lines = []
+        for line in self._activity_log.restore():
+            result_lines.append(line)
+
+        self.assertEqual(recovery_operation, RecoveryOperation.ABORT)
+        self.assertEqual(len(result_lines), 2)
+        self.assertEqual(result_lines[0], ['2', '2', '43'])
+        self.assertEqual(result_lines[1], ['2', '1', '25'])
+
+    def test_07_restoring_an_uncommited_transaction_with_a_corrupted_line_should_not_return_the_corrupted_line(self):
         self._activity_log.log_begin('1')
         pass 
 
             
 if __name__ == "__main__":
-    unittest.main(defaultTest='ActivityLogTests.test_02_reading_utf8_log_in_reverse_works')
+    unittest.main()
