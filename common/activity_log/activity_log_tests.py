@@ -1,11 +1,17 @@
+import sys
+from os import path
+
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
 from pathlib import Path
 import unittest
 from activity_log import ActivityLog
 from operations import Operation, RecoveryOperation
+from protocol.protocol import Protocol
 
 class ActivityLogTests(unittest.TestCase):
     def setUp(self):
-        self._activity_log = ActivityLog('test')
+        self._activity_log = ActivityLog('test', Protocol())
         self._dir = './log'
 
     def tearDown(self):
@@ -20,16 +26,16 @@ class ActivityLogTests(unittest.TestCase):
         for line in self._activity_log.read_log_in_reverse():
             result.append(line)
 
-        self.assertEqual(result[0], f'{Operation.COMMIT.message()},1')
-        self.assertEqual(result[1], f'{Operation.WRITE.message()},1,1,105')
-        self.assertEqual(result[2], f'{Operation.BEGIN.message()},1')
+        self.assertEqual(result[0], [Operation.COMMIT.message(),'1'])
+        self.assertEqual(result[1], [Operation.WRITE.message(),'1','1','105'])
+        self.assertEqual(result[2], [Operation.BEGIN.message(),'1'])
 
     def test_02_reading_utf8_log_in_reverse_works(self):
         '''
         Las reviews se bajan a disco en algun punto, si no se soporta esto (que no es trivial)
         explota cuando lee las reviews
         '''
-        expected_line = f'{Operation.WRITE.message()},1,Hello, world! Привет, мир! こんにちは世界 🌍'
+        expected_line = [Operation.WRITE.message() , '1' , 'Hello, world! Привет, мир! こんにちは世界 🌍']
         self._activity_log.log_write('1', ["Hello, world! Привет, мир! こんにちは世界 🌍"])
         for line in self._activity_log.read_log_in_reverse():
             self.assertEqual(expected_line, line)
@@ -43,7 +49,6 @@ class ActivityLogTests(unittest.TestCase):
         result_lines = []
         for line in self._activity_log.restore():
             result_lines.append(line)
-
 
         self.assertEqual(recovery_operation, RecoveryOperation.REDO)
         self.assertEqual(result_lines[0], ['1', '1', '105'])
@@ -66,4 +71,4 @@ class ActivityLogTests(unittest.TestCase):
 
             
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(defaultTest='ActivityLogTests.test_02_reading_utf8_log_in_reverse_works')

@@ -1,6 +1,11 @@
+import sys
+from os import SEEK_END, makedirs, path
+
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
 from typing import * 
 from operations import Operation, RecoveryOperation
-from os import SEEK_END, makedirs
+from protocol.protocol import Protocol
 
 # TODO: Volar el BEGIN 
 class ActivityLog:
@@ -19,13 +24,15 @@ class ActivityLog:
     no hay dependencias, es como si el solapamiento fuera secuencial
     de multiples transacciones Ti (que son procesar el batch i)
     '''
-    def __init__(self, output_file_name: str):
+    def __init__(self, output_file_name: str, protocol: Protocol):
         self._output_file_name = output_file_name + "_log.txt"
         self._dir = './log'
         makedirs(self._dir, exist_ok=True)
 
         self._full_log_path = f'{self._dir}/{self._output_file_name}'
         self.__create_log_file()
+
+        self._protocol = protocol
 
     def __create_log_file(self):
         open(self._full_log_path, 'w').close()
@@ -43,10 +50,10 @@ class ActivityLog:
         line = [operation.message(), batch_number]
         if data: line += data
 
-        joined_line = ','.join(line) + '\n'
+        line_to_write = self._protocol.encode(line) + b'\n'
 
-        with open(self._full_log_path, 'a') as log:
-            log.write(joined_line)
+        with open(self._full_log_path, 'ab') as log:
+            log.write(line_to_write)
 
 
     def get_last_batch_number(self):
@@ -57,9 +64,13 @@ class ActivityLog:
         Generator that returns each line of the file, the \n
         at the end of the line is not returned 
         '''
-        with open(self._full_log_path) as log:
+        with open(self._full_log_path, 'rb') as log:
             for line in log:
-                yield line.strip()
+                decoded_line = self._protocol.decode(line)
+                if len(decoded_line) != 0:
+                    decoded_line[-1] = decoded_line[-1].strip()
+
+                yield decoded_line
 
     # https://stackoverflow.com/questions/2301789/how-to-read-a-file-in-reverse-order
     def read_log_in_reverse(self, buf_size=8192):
@@ -89,14 +100,15 @@ class ActivityLog:
                 # yield lines in this chunk except the segment
                 for line in reversed(lines):
                     # only decode on a parsed line, to avoid utf-8 decode error
-                    yield line.decode()
+                    # print(line)
+                    yield self._protocol.decode(line)
             # Don't yield None if the file was empty
             if segment is not None:
-                yield segment.decode()
+                # print(segment)
+                yield self._protocol.decode(segment)
 
     def get_recovery_operation(self):
         for line in self.read_log_in_reverse():
-            line = line.split(',')
             if line[0] == Operation.COMMIT.message():
                 return RecoveryOperation.REDO
             else: 
@@ -126,7 +138,6 @@ class ActivityLog:
         # tengo que re-guardar todo lo de ese batch
         # - Si la ultima linea leida no es un commit, tengo que abortar la tx
         for index, line in enumerate(self.read_log_in_reverse()):
-            line = line.split(',')
             if index == 0:
                 if line[0] != Operation.COMMIT.message():
                     # TODO: Verificar de alguna forma si esta corrupta? 
@@ -141,11 +152,4 @@ class ActivityLog:
                 break
 
             yield line[1:] 
-
-
-
-
-                
-
-                    
 
