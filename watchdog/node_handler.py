@@ -1,15 +1,15 @@
 import subprocess
 import logging
-from threading import Event
+#from threading import Event
 from common.server_socket.client_connection import ClientConnection
 
 HEARTBEAT_MESSAGE = "A"
 class NodeHandler:
 
-    def __init__(self, node_conn: ClientConnection, node_name: str, got_sigterm: Event, wait_between_heartbeats: float):
+    def __init__(self, node_conn: ClientConnection, node_name: str, got_sigterm, wait_between_heartbeats: float):
         self._node_conn = node_conn
         self._node_name = node_name
-        self._got_sigterm = got_sigterm 
+        self._got_sigterm = got_sigterm #multiprocessing Event
         self._wait_between_heartbeats = wait_between_heartbeats
 
     def start(self):

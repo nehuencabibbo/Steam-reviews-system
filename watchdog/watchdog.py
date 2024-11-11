@@ -27,7 +27,8 @@ cuyo nombre no se envio -> entonces hay problema
 from common.server_socket.server_socket import ServerSocket
 from node_handler import NodeHandler
 
-import threading
+#import threading
+import multiprocessing
 import signal
 import logging
 
@@ -35,7 +36,7 @@ class Watchdog:
     def __init__(self, server_socket: ServerSocket, config: dict):
         self._server_socket = server_socket
         self._threads = {}
-        self._got_sigterm = threading.Event()
+        self._got_sigterm = multiprocessing.Event()
         self._wait_between_heartbeats = config["WAIT_BETWEEN_HEARTBEAT"]
         signal.signal(signal.SIGTERM, self._sigterm_handler)
 
@@ -51,7 +52,8 @@ class Watchdog:
                 logging.info(f"Node {node_name} connected.")
                 
                 handler = NodeHandler(conn, node_name, self._got_sigterm, self._wait_between_heartbeats)
-                thread = threading.Thread(target=handler.start, args=())
+                #thread = threading.Thread(target=handler.start, args=())
+                thread = multiprocessing.Process(target=handler.start, args=())
                 thread.start()
                 
                 if node_name in self._threads:
