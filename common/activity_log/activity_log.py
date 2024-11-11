@@ -5,7 +5,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 from typing import * 
 from operations import Operation, RecoveryOperation
-from protocol.protocol import Protocol
+from protocol.protocol import Protocol, ProtocolError
 
 # TODO: Volar el BEGIN 
 class ActivityLog:
@@ -24,7 +24,7 @@ class ActivityLog:
     no hay dependencias, es como si el solapamiento fuera secuencial
     de multiples transacciones Ti (que son procesar el batch i)
     '''
-    def __init__(self, output_file_name: str, protocol: Protocol):
+    def __init__(self, output_file_name: str, protocol=Protocol(), show_corrupted=False):
         self._output_file_name = output_file_name + "_log.txt"
         self._dir = './log'
         makedirs(self._dir, exist_ok=True)
@@ -33,9 +33,11 @@ class ActivityLog:
         self.__create_log_file()
 
         self._protocol = protocol
+        self._show_corrupted_lines = show_corrupted
 
     def __create_log_file(self):
-        open(self._full_log_path, 'w').close()
+        if not path.exists(self._full_log_path):
+            open(self._full_log_path, 'w').close()
 
     def log_begin(self, batch_number: str):
         self.__log(Operation.BEGIN, batch_number)
@@ -107,11 +109,19 @@ class ActivityLog:
                 for line in reversed(lines):
                     # only decode on a parsed line, to avoid utf-8 decode error
                     # print(line)
-                    yield self._protocol.decode(line, has_checksum=True)
+                    try: 
+                        yield self._protocol.decode(line, has_checksum=True)
+                    except ProtocolError as e: 
+                        if self._show_corrupted_lines:
+                            print(f"[ACTIVITY LOG] {str(e)}")
             # Don't yield None if the file was empty
             if segment is not None:
                 # print(segment)
-                yield self._protocol.decode(segment, has_checksum=True)
+                try:
+                    yield self._protocol.decode(segment, has_checksum=True)
+                except ProtocolError as e: 
+                    if self._show_corrupted_lines:
+                        print(f"[ACTIVITY LOG] {str(e)}")
 
     def get_recovery_operation(self):
         for line in self.read_log_in_reverse():

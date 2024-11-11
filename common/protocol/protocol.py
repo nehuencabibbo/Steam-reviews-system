@@ -5,6 +5,14 @@ from typing import *
 
 FIELD_LENGTH_BYTES_AMOUNT = 4
 
+class ProtocolError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self):
+        return self.message
+
 
 class Protocol:
     @staticmethod
@@ -15,7 +23,7 @@ class Protocol:
         checksum = int.from_bytes(checksum, byteorder='big', signed=False)
 
         if checksum != len(message):
-            raise Exception((
+            raise ProtocolError((
                 f'ERROR: Checksum does not match, '
                 f'expected: {checksum}, got: {len(message)}'
             ))
@@ -23,7 +31,7 @@ class Protocol:
         return message
 
     @staticmethod
-    def __add_checksum(message: bytes) -> bytes:
+    def _add_checksum(message: bytes) -> bytes:
         length = len(message).to_bytes(4, byteorder='big', signed=False)
 
         return length + message
@@ -40,7 +48,7 @@ class Protocol:
             result += encoded_field
 
         if add_checksum: 
-            result = Protocol.__add_checksum(result)
+            result = Protocol._add_checksum(result)
 
         return result
 
