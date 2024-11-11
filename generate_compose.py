@@ -189,6 +189,43 @@ def add_top_k_aggregator(
         "restart": "on-failure",
     }
 
+def add_filter_by_language(
+    output: Dict,
+    query: str,
+    num: int,
+    filter_name: str,
+    input_queue_name: str,
+    output_queue_name: str,
+    amount_of_forwarding_queues: int,
+    column_number_to_use: int,
+    language: str,
+    columns_to_keep: str,
+    instances_of_myself: str,
+    debug: bool,
+    batch_size: int = 10,
+    prefetch_count=100,
+):
+    output["services"][f"{query}_filter_{filter_name}{num}"] = {
+        "image": "filter_by_language:latest",
+        "container_name": f"{query}_{filter_name}{num}",
+        "environment": [
+            f"NODE_ID={num}",
+            f"RECIVING_QUEUE_NAME={input_queue_name}",
+            f"FORWARDING_QUEUE_NAMES={output_queue_name}",
+            f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
+            f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
+            f"COLUMN_NUMBER_TO_USE={column_number_to_use}",
+            f"LANGUAGE={language}",
+            f"COLUMNS_TO_KEEP={columns_to_keep}",
+            f"INSTANCES_OF_MYSELF={instances_of_myself}",
+            f"BATCH_SIZE={batch_size}",
+            f"PREFETCH_COUNT={prefetch_count}",
+        ],
+        "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
+        "networks": ["net"],
+        "restart": "on-failure",
+    }
+
 
 def add_filter_by_value(
     output: Dict,
@@ -372,6 +409,14 @@ def generate_filters_by_value(
 ):
     for i in range(amount_of_filters):
         add_filter_by_value(**kwargs, num=i, debug=debug)
+
+def generate_filters_by_language(
+    amount_of_filters: int,
+    debug=False,
+    **kwargs,
+):
+    for i in range(amount_of_filters):
+        add_filter_by_language(**kwargs, num=i, debug=debug)
 
 
 def generate_counters_by_app_id(amount_of_counters: int, debug=False, **kwargs):
@@ -708,14 +753,13 @@ def generate_q4(output: Dict, debug=False):
         "output_queue_name": "q4_english_reviews",
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_SECOND_COUNTER_BY_APP_ID,
         "column_number_to_use": 2,  # review
-        "value_to_filter_by": "en",
-        "criteria": "LANGUAGE",
+        "language": "en",
         "columns_to_keep": "0,1",  # client_id, app_id
         "instances_of_myself": Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS,
         "prefetch_count": 1,
     }
 
-    generate_filters_by_value(
+    generate_filters_by_language(
         Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS,
         debug=debug,
         **q4_filter_english_reviews_args,
