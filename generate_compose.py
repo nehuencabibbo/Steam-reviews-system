@@ -427,8 +427,8 @@ def add_client_handler(output: Dict, num: int, debug: bool, port: int):
     depends_on: dict[str, str] = {
         "rabbitmq": {"condition": "service_healthy"},
     }
-    for i in range(AMOUNT_OF_DROP_FILTER_COLUMNS):
-        depends_on[f"filter_columns{i}"] = {"condition": "service_started"}
+    # for i in range(AMOUNT_OF_DROP_FILTER_COLUMNS):
+    #     depends_on[f"filter_columns{i}"] = {"condition": "service_started"}
 
     logging.debug(f"depends_on: {depends_on}")
 
@@ -817,7 +817,7 @@ def generate_q4(output: Dict, debug=False):
 
     q4_english_reviews_counter_args = {
         "output": output,
-        "query": "q4_second_counter",
+        "query": "q4_second", # q4_second_counter 
         "consume_queue_sufix": "q4_english_reviews",
         "publish_queue": "q4_english_review_count",
         "amount_of_forwarding_queues": 1,  # Next node is a filter -> Filters consume from one queue exlusively
@@ -978,15 +978,15 @@ def generate_output():
     # ; GAME_FILE_PATH=data/filtered_games.csv
     # ; REVIEWS_FILE_PATH=data/filtered_reviews.csv
 
-    # add_client(
-    #     output,
-    #     num=1,
-    #     # games_file_path="data/games.csv",
-    #     # reviews_file_path="data/reviews_sample.csv",
-    #     games_file_path="data/games_sample.csv",
-    #     reviews_file_path="data/reviews_sample.csv",
-    #     debug=False,
-    # )
+    add_client(
+        output,
+        num=1,
+        # games_file_path="data/games.csv",
+        # reviews_file_path="data/reviews_sample.csv",
+        games_file_path="data/games_sample.csv",
+        reviews_file_path="data/reviews_sample.csv",
+        debug=False,
+    )
     # add_client(
     #     output,
     #     num=2,
