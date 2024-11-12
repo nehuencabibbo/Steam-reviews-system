@@ -9,7 +9,7 @@ import pika
 from common.client_middleware.client_middleware import ClientMiddleware
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.protocol.protocol import Protocol
-from common.storage import storage
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 END_TRANSMISSION_MESSAGE = "END"
 APP_ID = 0
@@ -18,7 +18,7 @@ APP_ID = 0
 class ClientHandler:
 
     def __init__(
-        self, middleware: Middleware, client_middleware: ClientMiddleware, **kwargs
+        self, middleware: Middleware, client_middleware: ClientMiddleware, client_monitor: WatchdogClient, **kwargs
     ):
         self._middleware = middleware
         self._client_middleware = client_middleware
@@ -34,6 +34,7 @@ class ClientHandler:
         self._q4_result_queue = kwargs["Q4_RESULT_QUEUE"]
         self._q5_result_queue = kwargs["Q5_RESULT_QUEUE"]
         self._got_sigterm = threading.Event()
+        self._client_monitor = client_monitor
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -106,6 +107,8 @@ class ClientHandler:
             self._middleware.shutdown()
 
     def run(self):
+        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        monitor_thread.start()
         thread = threading.Thread(target=self.handle_clients)
         thread.start()
 
@@ -118,6 +121,7 @@ class ClientHandler:
             logging.info("Shutting down results middleware...")
         finally:
             self.results_middleware.shutdown()
+            monitor_thread.join()
 
     def on_message(self, channel, method_frame, header_frame, body):
         logging.debug(f"received results from queue: {method_frame.routing_key}")
@@ -133,4 +137,5 @@ class ClientHandler:
     def __sigterm_handler(self, sig, frame):
         logging.info("Shutting down Client Handler")
         self._got_sigterm.set()
+        self._client_monitor.stop()
         raise SystemExit

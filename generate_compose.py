@@ -5,6 +5,8 @@ from typing import *
 
 
 CLIENTS_PORT = 7777
+WATCHDOG_PORT = 8080
+WAIT_BETWEEN_HEARTBEAT = 5.0
 
 AMOUNT_OF_DROP_FILTER_COLUMNS = 5
 AMOUNT_OF_DROP_NULLS = 5
@@ -52,6 +54,21 @@ def add_networks(networks: Dict):
 def add_volumes(output: Dict):
     output["volumes"] = {"rabbitmq_data": {}}
 
+def add_watchdog(output, port, debug=False, num=1):
+    output["services"][f"watchdog"] = {
+        "image": "watchdog:latest",
+        "container_name": f"watchdog",
+        "volumes": [
+            "/var/run/docker.sock:/var/run/docker.sock"
+        ],
+        "environment": [
+            f"NODE_ID={num}",
+            f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
+            f"PORT={port}",
+            f"WAIT_BETWEEN_HEARTBEAT={WAIT_BETWEEN_HEARTBEAT}"
+        ],
+        "networks": ["net"],
+    }
 
 def add_filter_columns(output: Dict, num: int, debug: bool):
     output["services"][f"filter_columns{num}"] = {
@@ -61,6 +78,8 @@ def add_filter_columns(output: Dict, num: int, debug: bool):
             f"NODE_ID={num}",
             f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_FILTER_COLUMNS}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"NODE_NAME={f'filter_columns{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -69,7 +88,7 @@ def add_filter_columns(output: Dict, num: int, debug: bool):
 
 
 def add_drop_nulls(output: Dict, num: int, debug: bool):
-    output["services"][f"drop_columns{num}"] = {
+    output["services"][f"drop_nulls{num}"] = {
         "image": "drop_nulls:latest",
         "container_name": f"drop_nulls{num}",
         "environment": [
@@ -77,6 +96,9 @@ def add_drop_nulls(output: Dict, num: int, debug: bool):
             "COUNT_BY_PLATFORM_NODES=1",  # TODO: change when scaling
             f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_NULLS}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
+            f"NODE_NAME={f'drop_nulls{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -101,6 +123,9 @@ def add_counter_by_platform(
             f"CONSUME_QUEUE_SUFIX={consume_queue_sufix}",
             f"PUBLISH_QUEUE={publish_queue}",
             f"LOGGING_LEVEL={'DEBUG' if debug else 'INFO'}",
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
+            f"NODE_NAME={f'{query}_counter{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -118,7 +143,7 @@ def add_counter_by_app_id(
     needed_ends: int,
     debug: bool,
 ):
-    output["services"][f"{query}_{num}"] = {
+    output["services"][f"{query}_counter{num}"] = {
         "container_name": f"{query}_counter{num}",
         "image": "counter_by_app_id:latest",
         "entrypoint": "python3 /main.py",
@@ -129,6 +154,9 @@ def add_counter_by_app_id(
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
             f"NEEDED_ENDS={needed_ends}",
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
+            f"NODE_NAME={f'{query}_counter{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -156,6 +184,9 @@ def add_top_k(
             f"NODE_ID={num}",
             f"AMOUNT_OF_RECEIVING_QUEUES={amount_of_receiving_queues}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
+            f"NODE_NAME={f'{query}_top_k{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -183,6 +214,9 @@ def add_top_k_aggregator(
             f"NODE_ID={num}",
             f"AMOUNT_OF_RECEIVING_QUEUES={amount_of_top_k_nodes}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
+            f"NODE_NAME={f'{query}_top_k{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -220,6 +254,9 @@ def add_filter_by_language(
             f"INSTANCES_OF_MYSELF={instances_of_myself}",
             f"BATCH_SIZE={batch_size}",
             f"PREFETCH_COUNT={prefetch_count}",
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
+            f"NODE_NAME={f'{query}_filter_{filter_name}{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -260,6 +297,9 @@ def add_filter_by_value(
             f"INSTANCES_OF_MYSELF={instances_of_myself}",
             f"BATCH_SIZE={batch_size}",
             f"PREFETCH_COUNT={prefetch_count}",
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
+            f"NODE_NAME={f'{query}_filter_{filter_name}{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -297,6 +337,9 @@ def add_join(
             f"GAMES_COLUMNS_TO_KEEP={games_columns_to_keep}",
             f"REVIEWS_COLUMNS_TO_KEEP={reviews_columns_to_keep}",
             f"INSTANCES_OF_MYSELF={instances_of_myself}",
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
+            f"NODE_NAME={f'{query}_join{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -313,7 +356,7 @@ def add_percentile(
     needed_ends_to_finish: int,
     debug: bool,
 ):
-    output["services"][f"{query}_percentil_{num}"] = {
+    output["services"][f"{query}_percentile_{num}"] = {
         "container_name": f"{query}_percentile_{num}",
         "image": "percentile:latest",
         "entrypoint": "python3 /main.py",
@@ -323,6 +366,9 @@ def add_percentile(
             f"PUBLISH_QUEUE={publish_queue}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"NEEDED_ENDS_TO_FINISH={needed_ends_to_finish}",
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
+            f"NODE_NAME={f'{query}_percentile_{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -385,7 +431,7 @@ def add_client_handler(output: Dict, num: int, debug: bool, port: int):
 
     logging.debug(f"depends_on: {depends_on}")
 
-    output["services"]["client_handler"] = {
+    output["services"][f"client_handler{num}"] = {
         "container_name": f"client_handler{num}",
         "image": "client_handler:latest",
         "entrypoint": "python3 /main.py",
@@ -394,6 +440,9 @@ def add_client_handler(output: Dict, num: int, debug: bool, port: int):
             f"CLIENTS_PORT={port}",
             f"GAMES_QUEUE_NAME=games",  # see filter_columns/config.ini
             f"REVIEWS_QUEUE_NAME=reviews",  # see filter_columns/config.ini
+            f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
+            f"NODE_NAME={f'client_handler{num}'}", #name of the service not container
         ],
         "volumes": ["./data/:/data"],
         "networks": ["net"],
@@ -921,30 +970,31 @@ def generate_output():
 
     output["services"] = {}
     add_rabbit(output)
+    add_watchdog(output, port=WATCHDOG_PORT, debug=False)
     # GAME_FILE_PATH=data/games_sample.csv
     # REVIEWS_FILE_PATH=data/reviews_sample.csv
 
     # ; GAME_FILE_PATH=data/filtered_games.csv
     # ; REVIEWS_FILE_PATH=data/filtered_reviews.csv
 
-    add_client(
-        output,
-        num=1,
-        # games_file_path="data/games.csv",
-        # reviews_file_path="data/reviews_sample.csv",
-        games_file_path="data/games_sample.csv",
-        reviews_file_path="data/reviews_sample.csv",
-        debug=False,
-    )
-    add_client(
-        output,
-        num=2,
-        # games_file_path="data/games.csv",
-        # reviews_file_path="data/reviews_sample.csv",
-        games_file_path="data/games.csv",
-        reviews_file_path="data/filtered_reviews.csv",
-        debug=False,
-    )
+    # add_client(
+    #     output,
+    #     num=1,
+    #     # games_file_path="data/games.csv",
+    #     # reviews_file_path="data/reviews_sample.csv",
+    #     games_file_path="data/games_sample.csv",
+    #     reviews_file_path="data/reviews_sample.csv",
+    #     debug=False,
+    # )
+    # add_client(
+    #     output,
+    #     num=2,
+    #     # games_file_path="data/games.csv",
+    #     # reviews_file_path="data/reviews_sample.csv",
+    #     games_file_path="data/games.csv",
+    #     reviews_file_path="data/filtered_reviews.csv",
+    #     debug=False,
+    # )
     add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
     generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)

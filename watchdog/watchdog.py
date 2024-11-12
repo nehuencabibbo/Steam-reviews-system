@@ -61,7 +61,7 @@ class Watchdog:
 
                 self._threads[node_name] = thread
                 #self._handlers[node_name] = handler
-        except OSError as e:
+        except (OSError, ConnectionError) as e:
             if not self._got_sigterm.is_set():
                 logging.error(f"ERROR: {e}")
                 raise

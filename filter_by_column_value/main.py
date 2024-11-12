@@ -84,6 +84,13 @@ def get_config():
             )
         )
 
+        # # Monitor
+        config_params["WATCHDOG_IP"] = os.getenv("WATCHDOG_IP")
+
+        config_params["WATCHDOG_PORT"] = int(os.getenv("WATCHDOG_PORT"))
+
+        config_params["NODE_NAME"] = os.getenv("NODE_NAME")
+
         # TODO: Raise an error if __REQUIRED__ is paresed anywhere here
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")

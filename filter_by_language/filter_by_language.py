@@ -191,5 +191,5 @@ class FilterByLanguage:
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
         self._got_sigterm = True
-        self._middleware.stop_consuming_gracefully()
+        self._middleware.shutdown()
         # self._middleware.shutdown()

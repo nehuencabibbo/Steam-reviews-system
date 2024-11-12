@@ -14,6 +14,7 @@ docker-image:
 	docker build -f ./counter_by_platform/Dockerfile -t "counter_by_platform:latest" .
 	docker build -f ./counter_by_app_id/Dockerfile -t "counter_by_app_id:latest" .
 	docker build -f ./percentile/Dockerfile -t "percentile:latest" .
+	docker build -f ./watchdog/Dockerfile -t "watchdog:latest" .
 .PHONY: docker-image
 
 docker-run: docker-image

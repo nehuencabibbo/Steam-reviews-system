@@ -5,7 +5,7 @@ from configparser import ConfigParser
 import logging
 from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
-
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 def get_config():
     config_params = {}
@@ -57,7 +57,12 @@ def get_config():
             config["DEFAULT"]["REVIEWS_QUEUE_NAME"],
         )
 
-        # # Forwardig queue
+        # # Monitor
+        config_params["WATCHDOG_IP"] = os.getenv("WATCHDOG_IP")
+
+        config_params["WATCHDOG_PORT"] = int(os.getenv("WATCHDOG_PORT"))
+
+        config_params["NODE_NAME"] = os.getenv("NODE_NAME")
 
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
@@ -89,11 +94,16 @@ def main():
     middleware = Middleware(broker_ip)
     client_middleware = ClientMiddleware()
     protocol = Protocol()
+    monitor_ip = config["WATCHDOG_IP"]
+    monitor_port = config["WATCHDOG_PORT"]
+    node_name = config["NODE_NAME"]
+    monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
 
     counter = ClientHandler(
         client_middleware=client_middleware,
         middleware=middleware,
         protocol=protocol,
+        client_monitor=monitor,
         **config,
     )
 

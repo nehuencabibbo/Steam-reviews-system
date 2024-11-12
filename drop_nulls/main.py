@@ -69,6 +69,13 @@ def get_config():
             "Q5_REVIEWS", config["DEFAULT"]["Q5_REVIEWS"]
         )
 
+        # # Monitor
+        config_params["WATCHDOG_IP"] = os.getenv("WATCHDOG_IP")
+
+        config_params["WATCHDOG_PORT"] = int(os.getenv("WATCHDOG_PORT"))
+
+        config_params["NODE_NAME"] = os.getenv("NODE_NAME")
+
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
     except ValueError as e:
