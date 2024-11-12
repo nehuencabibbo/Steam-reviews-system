@@ -5,8 +5,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from typing import *
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.protocol.protocol import Protocol
+from common.watchdog_client.watchdog_client import WatchdogClient
+
 import signal
 import logging
+import threading
 
 GAMES_MESSAGE_TYPE = "games"
 REVIEWS_MESSAGE_TYPE = "reviews"
@@ -18,11 +21,13 @@ class FilterColumns:
         self,
         protocol: Protocol,
         middleware: Middleware,
+        monitor: WatchdogClient,
         config: Dict[str, Union[str, int]],
     ):
         self._protocol = protocol
         self._middleware = middleware
         self._got_sigterm = False
+        self._client_monitor = monitor
 
         self._client_games_queue_name = config["CLIENT_GAMES_QUEUE_NAME"]
         self._client_reviews_queue_name = config["CLIENT_REVIEWS_QUEUE_NAME"]
@@ -37,6 +42,9 @@ class FilterColumns:
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
     def start(self):
+
+        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        monitor_thread.start()
         # Queues that the client uses to send data
         # anonymous_queue_name = self._middleware.create_anonymous_queue()
         # self._middleware.bind_queue_to_exchange(
@@ -80,6 +88,7 @@ class FilterColumns:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
+            monitor_thread.join()
 
     def __handle_end_transmission(
         self,
@@ -224,3 +233,4 @@ class FilterColumns:
         self._got_sigterm = True
         # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
+        self._client_monitor.stop()

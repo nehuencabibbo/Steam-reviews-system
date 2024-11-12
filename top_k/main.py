@@ -1,13 +1,12 @@
 # Parent directory is included in the search path for modules
 import os
-
-from common.middleware.middleware import Middleware
-from common.protocol.protocol import Protocol
-
 from configparser import ConfigParser
 import logging
 
+from common.middleware.middleware import Middleware
+
 from top_k.top_k import TopK
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 
 def get_config():
@@ -77,7 +76,12 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    top_k = TopK(middleware, config)
+    monitor_ip = config.pop("WATCHDOG_IP")
+    monitor_port = config.pop("WATCHDOG_PORT")
+    node_name = config.pop("NODE_NAME")
+    monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
+
+    top_k = TopK(middleware, monitor, config)
     top_k.start()
 
 

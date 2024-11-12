@@ -15,6 +15,7 @@ class WatchdogClient:
         self._monitor_port = monitor_port
         self._client_name = client_name
 
+        # TODO: Add retry if connection fails
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.connect((self._monitor_ip,  self._monitor_port))
         self._connection = ClientConnection(client_socket, None)

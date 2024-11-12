@@ -3,7 +3,7 @@ from counter_by_app_id import CounterByAppId
 from configparser import ConfigParser
 import logging
 from common.middleware.middleware import Middleware
-from common.protocol.protocol import Protocol
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 
 def get_config():
@@ -90,9 +90,13 @@ def main():
 
     broker_ip = config.pop("RABBIT_IP")
     middleware = Middleware(broker_ip)
-    protocol = Protocol()
 
-    counter = CounterByAppId(config, middleware, protocol)
+    monitor_ip = config.pop("WATCHDOG_IP")
+    monitor_port = config.pop("WATCHDOG_PORT")
+    node_name = config.pop("NODE_NAME")
+    monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
+
+    counter = CounterByAppId(config, middleware, monitor)
     logging.info("RUNNING COUNTER")
     counter.run()
 

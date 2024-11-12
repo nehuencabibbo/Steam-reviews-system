@@ -2,8 +2,9 @@ import signal
 import logging
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage import storage
-from common.protocol.protocol import Protocol
 from typing import *
+from common.watchdog_client.watchdog_client import WatchdogClient
+import threading
 
 END_TRANSMISSION_MESSAGE = "END"
 
@@ -16,10 +17,11 @@ REGULAR_MESSAGE_FIELD_TO_COUNT_BY = 1
 
 class CounterByPlatform:
 
-    def __init__(self, config, middleware: Middleware):
+    def __init__(self, config, middleware: Middleware, monitor: WatchdogClient):
         self._middleware = middleware
         self._got_sigterm = False
         self._count_dict = {}
+        self._client_monitor = monitor
 
         # Assigning config values to instance attributes
         self.node_id = config["NODE_ID"]
@@ -30,6 +32,10 @@ class CounterByPlatform:
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
+
+        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        monitor_thread.start()
+
         consume_queue_name = f"{self.node_id}_{self.consume_queue_suffix}"
 
         self._middleware.create_queue(consume_queue_name)
@@ -46,6 +52,7 @@ class CounterByPlatform:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
+            monitor_thread.join()
 
     def __handle_message(self, delivery_tag: int, body: List[List[str]]):
         body = self._middleware.get_rows_from_message(body)
@@ -117,3 +124,4 @@ class CounterByPlatform:
         self._got_sigterm = True
         #self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
+        self._client_monitor.stop()

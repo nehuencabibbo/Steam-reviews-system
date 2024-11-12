@@ -1,4 +1,3 @@
-import csv
 import sys, os
 
 from common.storage.storage import write_by_range
@@ -10,22 +9,25 @@ from constants import *
 from common.protocol.protocol import Protocol
 from common.middleware.middleware import Middleware, MiddlewareError
 from utils.utils import node_id_to_send_to
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 import signal
 import logging
-
+import threading
 
 class FilterColumnByValue:
     def __init__(
         self,
         protocol: Protocol,
         middleware: Middleware,
+        monitor: WatchdogClient,
         config: Dict[str, Union[str, int]],
     ):
         self._protocol = protocol
         self._middleware = middleware
         self._got_sigterm = False
         self._filter_by_criteria: Callable[[List[str]], None] = None
+        self._client_monitor = monitor
 
         # Config variables
         # Config variables that are recurrently accesed in callback functions are
@@ -47,6 +49,10 @@ class FilterColumnByValue:
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
     def start(self):
+
+        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        monitor_thread.start()
+
         # Reciving queues
         self._middleware.create_queue(self._receiving_queue_name)
 
@@ -68,6 +74,7 @@ class FilterColumnByValue:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
+            monitor_thread.join()
 
     def __create_all_forwarding_queues(self):
         """
@@ -240,4 +247,5 @@ class FilterColumnByValue:
         self._got_sigterm = True
         #self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
+        self._client_monitor.stop()
         # self._middleware.shutdown()

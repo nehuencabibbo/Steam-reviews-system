@@ -94,9 +94,10 @@ def main():
     middleware = Middleware(broker_ip)
     client_middleware = ClientMiddleware()
     protocol = Protocol()
-    monitor_ip = config["WATCHDOG_IP"]
-    monitor_port = config["WATCHDOG_PORT"]
-    node_name = config["NODE_NAME"]
+    
+    monitor_ip = config.pop("WATCHDOG_IP")
+    monitor_port = config.pop("WATCHDOG_PORT")
+    node_name = config.pop("NODE_NAME")
     monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
 
     counter = ClientHandler(

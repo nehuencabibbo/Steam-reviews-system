@@ -79,6 +79,7 @@ def add_filter_columns(output: Dict, num: int, debug: bool):
             f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_FILTER_COLUMNS}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
+            f"WATCHDOG_IP=watchdog",
             f"NODE_NAME={f'filter_columns{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -241,7 +242,7 @@ def add_filter_by_language(
 ):
     output["services"][f"{query}_filter_{filter_name}{num}"] = {
         "image": "filter_by_language:latest",
-        "container_name": f"{query}_{filter_name}{num}",
+        "container_name": f"{query}_filter_{filter_name}{num}",
         "environment": [
             f"NODE_ID={num}",
             f"RECIVING_QUEUE_NAME={input_queue_name}",
@@ -283,7 +284,7 @@ def add_filter_by_value(
 ):
     output["services"][f"{query}_filter_{filter_name}{num}"] = {
         "image": "filter_by_column_value:latest",
-        "container_name": f"{query}_{filter_name}{num}",
+        "container_name": f"{query}_filter_{filter_name}{num}",
         "environment": [
             f"NODE_ID={num}",
             f"RECIVING_QUEUE_NAME={input_queue_name}",

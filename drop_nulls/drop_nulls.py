@@ -7,6 +7,8 @@ from common.protocol.protocol import Protocol
 from common.middleware.middleware import Middleware, MiddlewareError
 from utils.utils import node_id_to_send_to
 from constants import *
+from common.watchdog_client.watchdog_client import WatchdogClient
+import threading
 
 import signal
 import logging
@@ -17,10 +19,12 @@ class DropNulls:
         self,
         protocol: Protocol,
         middleware: Middleware,
+        monitor: WatchdogClient,
         config: Dict[str, Union[str, int]],
     ):
         self._protocol = protocol
         self._middleware = middleware
+        self._client_monitor = monitor
         self._got_sigterm = False
         self.r = 0
 
@@ -43,6 +47,10 @@ class DropNulls:
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
     def start(self):
+
+        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        monitor_thread.start()
+
         # Receiving queues
         self._middleware.create_queue(self.games_receiving_queue_name)
         self._middleware.create_queue(self.reviews_receiving_queue_name)
@@ -81,6 +89,7 @@ class DropNulls:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
+            monitor_thread.join()
 
     def __handle_end_transmission(
         self, body: List[str], reciving_queue_name: str, message_type: str
@@ -249,3 +258,4 @@ class DropNulls:
         self._got_sigterm = True
         #self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
+        self._client_monitor.stop()

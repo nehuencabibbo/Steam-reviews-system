@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
 from drop_nulls import DropNulls
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 from configparser import ConfigParser
 import logging
@@ -103,7 +104,12 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    drop_nulls = DropNulls(protocol, middleware, config)
+    monitor_ip = config.pop("WATCHDOG_IP")
+    monitor_port = config.pop("WATCHDOG_PORT")
+    node_name = config.pop("NODE_NAME")
+    monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
+
+    drop_nulls = DropNulls(protocol, middleware, monitor, config)
     drop_nulls.start()
 
 

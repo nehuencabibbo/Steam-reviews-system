@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
 from filter_by_language import FilterByLanguage
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 from configparser import ConfigParser
 import logging
@@ -121,7 +122,12 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    filter_column_by_value = FilterByLanguage(protocol, middleware, config)
+    monitor_ip = config.pop("WATCHDOG_IP")
+    monitor_port = config.pop("WATCHDOG_PORT")
+    node_name = config.pop("NODE_NAME")
+    monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
+
+    filter_column_by_value = FilterByLanguage(protocol, middleware, monitor, config)
     filter_column_by_value.start()
 
 

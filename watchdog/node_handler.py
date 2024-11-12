@@ -15,10 +15,11 @@ class NodeHandler:
     def start(self):
         try:
             while not self._got_sigterm.is_set():
-                logging.info(f"Sending heartbeat to {self._node_name}")
+                # TODO: pass to logging.debug 
+                logging.debug(f"Sending heartbeat to {self._node_name}")
                 self._node_conn.send(HEARTBEAT_MESSAGE)
                 self._node_conn.recv() # if timeout, raises error
-                logging.info(f"Got response from {self._node_name}, sleeping")
+                logging.debug(f"Got response from {self._node_name}, sleeping")
                 self._got_sigterm.wait(self._wait_between_heartbeats) 
 
         except (OSError, TimeoutError) as _:
