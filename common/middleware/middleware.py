@@ -46,7 +46,7 @@ class Middleware:
 
     def __create_connection(self, ip):
         # delete the heartbeat parameter if its too low
-        return pika.BlockingConnection(pika.ConnectionParameters(host=ip, heartbeat=5))
+        return pika.BlockingConnection(pika.ConnectionParameters(host=ip))
 
     def __create_async_connection(self, ip, on_connected_callback):
         parameters = pika.ConnectionParameters(host=ip)
@@ -194,3 +194,7 @@ class Middleware:
             routing_key=queue_name,
             body=self.__protocol.insert_before_batch(batch, [client_id]),
         ),
+
+    def check_connection(self):
+        #como chequeo que la queue esten conectadas?
+        return self._connection.is_open and self._channel.is_open

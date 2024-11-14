@@ -987,15 +987,15 @@ def generate_output():
         reviews_file_path="data/reviews_sample.csv",
         debug=False,
     )
-    # add_client(
-    #     output,
-    #     num=2,
-    #     # games_file_path="data/games.csv",
-    #     # reviews_file_path="data/reviews_sample.csv",
-    #     games_file_path="data/games.csv",
-    #     reviews_file_path="data/filtered_reviews.csv",
-    #     debug=False,
-    # )
+    add_client(
+        output,
+        num=2,
+        # games_file_path="data/games.csv",
+        # reviews_file_path="data/reviews_sample.csv",
+        games_file_path="data/games.csv",
+        reviews_file_path="data/filtered_reviews.csv",
+        debug=False,
+    )
     add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
     generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)

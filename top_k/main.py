@@ -79,7 +79,7 @@ def main():
     monitor_ip = config.pop("WATCHDOG_IP")
     monitor_port = config.pop("WATCHDOG_PORT")
     node_name = config.pop("NODE_NAME")
-    monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
+    monitor = WatchdogClient(monitor_ip, monitor_port, node_name, middleware)
 
     top_k = TopK(middleware, monitor, config)
     top_k.start()

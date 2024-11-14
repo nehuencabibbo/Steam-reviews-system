@@ -58,7 +58,7 @@ class CounterByPlatform:
         body = self._middleware.get_rows_from_message(body)
 
         logging.debug(f"GOT BATCH: {body}")
-
+    
         if body[0][END_TRANSMISSION_MESSAGE_INDEX] == END_TRANSMISSION_MESSAGE:
             logging.debug("Recived END transmssion")
             session_id = body[0][END_TRANSMISSION_SESSION_ID]
