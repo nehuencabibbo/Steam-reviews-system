@@ -66,6 +66,31 @@ class Protocol:
 
         return result
 
+    @staticmethod
+    def insert_total_length(message: bytes) -> bytes:
+        return (
+            len(message).to_bytes(FIELD_LENGTH_BYTES_AMOUNT, "big", signed=False)
+            + message
+        )
+
+    @staticmethod
+    def decode_length(message: bytes) -> int:
+        return int.from_bytes(message, "big", signed=False)
+
+    @staticmethod
+    def get_message_type(message: bytes) -> Tuple[str, bytes]:
+        # In order to avoid the decoding+encoding in the client_handler, we only extract and decode this part
+        msg_type = Protocol.decode_batch(message[:9])[0][0]
+        return msg_type, message[9:]
+
+    @staticmethod
+    def get_session_id(message: bytes) -> Tuple[str, bytes]:
+        # In order to avoid the decoding+encoding in the client_handler, we only extract and decode this part
+        session_id_length = int.from_bytes(message[4:8], "big", signed=False)
+        session_id = message[8 : 8 + session_id_length].decode("utf8")
+        logging.info(f"PROTOCOL | session id: {session_id}")
+        return session_id, message[8 + session_id_length :]
+
 
 class TestProtocol(unittest.TestCase):
     def test_encode(self):

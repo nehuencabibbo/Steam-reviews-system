@@ -57,16 +57,36 @@ class Client:
         self._middleware.connect_to(ip=self._server_ip, port=self._server_port)
 
         try:
+            self.__send_start_of_new_session()
+            # self._middleware.disconnect(self._server_ip, self._server_port)
+            # self._middleware.close_socket(0)
+            # self._middleware.create_socket(zmq.DEALER)
+            # self._middleware.connect_to(ip=self._server_ip, port=self._server_port)
+            # self._middleware.set_session_id(self._session_id)
             self.__send_file(self._game_file_path)
-            # return
-            # self.__send_file(self._reviews_file_path)
+            self.__send_file(self._reviews_file_path)
             self.__get_results()
         except zmq.error.ZMQError:
             if not self._got_sigterm:
                 raise
 
+    def __send_start_of_new_session(self):
+        self._middleware.send(["N"])
+        self._middleware.send_batch()
+        self._middleware.register_for_pollin()
+        while True:
+            logging.info("Pollin")
+            if self._middleware.has_message():
+                res = self._middleware.recv_batch()
+                logging.info(f"fres: {res}")
+                # self._session_id = bytes.fromhex(res[0][0])
+                self._session_id = res[0][0]
+                logging.info(f"Received id: {self._session_id}")
+
+                # self._middleware.set_session_id(self._session_id)
+                return
+
     def __send_file(self, file_path):
-        count = 0
         with open(file_path, "r") as file:
             reader = csv.reader(file)
             next(reader, None)  # skip header
@@ -75,14 +95,12 @@ class Client:
                     return
                 logging.debug(f"Sending appID {row[0]}")
 
-                self._middleware.send(row)
+                self._middleware.send(row, session_id=self._session_id)
+                # self.__handle_query_result(res)
+
                 time.sleep(self._sending_wait_time)
-                count += 1
-                # TODO: remove return. just for testing purposes
-                if count == 14:
-                    return
         logging.debug("Sending file end")
-        self._middleware.send_end()
+        self._middleware.send_end(session_id=self._session_id)
 
     def __print_results_for_query(self, query):
         for result in self._query_results[query]:
@@ -110,11 +128,13 @@ class Client:
 
     def __get_results(self):
         logging.info("Waiting for results...")
-        self._middleware.register_for_pollin()
+        # self._middleware.register_for_pollin()
+
         while (
             not self._got_sigterm
             and self._amount_of_queries_received < AMMOUNT_OF_QUERIES
         ):
+            # self._middleware.send([client_id, 'H'])  # H: Heartbeat
             logging.debug("Polling for results")
             if self._middleware.has_message():
                 res = self._middleware.recv_batch()
