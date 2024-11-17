@@ -9,7 +9,6 @@ import pika
 from common.client_middleware.client_middleware import ClientMiddleware
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.protocol.protocol import Protocol
-from common.storage import storage
 
 END_TRANSMISSION_MESSAGE = "END"
 APP_ID = 0

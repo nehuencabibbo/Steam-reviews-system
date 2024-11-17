@@ -2,6 +2,7 @@ import os
 import csv
 import logging
 import shutil
+from typing import * 
 
 # TODO: use threads for all functions or some parallelization tool (maybe)
 
@@ -301,8 +302,6 @@ def add_to_sorted_file(dir: str, record: str):
 
         if not new_record_appended:
             writer.writerow(record)
-
-    os.makedirs(dir, exist_ok=True)
     os.replace(temp_file, file_path)
 
 
@@ -378,41 +377,53 @@ def group_by_file(
 
     return records_per_file
 
-
-def _write_batch_on_file(dir:str, file_name:str, records: list[list[str]]):
+# Solamente la usa el count by platform esta funcion
+def _write_batch_on_file(dir:str, file_name: str, records: list[list[Union[str, List[str]]]]):
     os.makedirs(dir, exist_ok=True)
+    
+    PLATFORM = 0
+    MSG_IDS = 1
 
     #for file_name, records in records_per_file.items():
     file_path = os.path.join(dir, file_name)
     with open(file_path, "a", newline="") as f:
         writer = csv.writer(f)
         for record in records:
-            writer.writerow(record)
+            platform = record[PLATFORM]
+            msg_ids = record[MSG_IDS]
+            count = len(msg_ids)
+
+            writer.writerow([platform, count])
 
 
-def _group_records(file_name: str, records: dict[str, int]) -> dict[str, list[str]]:
+def _group_records(file_name: str, records: dict[str, List[str]]) -> Dict[str, List[str]]:
     records_per_file = {}
-    for record_id, value in records.items():
-            records_per_file[file_name] = records_per_file.get(file_name, [])
-            records_per_file[file_name].append([record_id, value])
+    for record_id, msg_id_list in records.items():
+        records_per_file[file_name] = records_per_file.get(file_name, [])
+        records_per_file[file_name].append([record_id, msg_id_list])
 
     return records_per_file
 
-
+# el que usa el count by platform
 def sum_platform_batch_to_records_per_client(
-    dir: str, new_records_per_client: dict[str, dict[str, int]]
+    dir: str, new_records_per_client: Dict[str, Dict[str, List[str]]], logger
 ):
     range_not_used = 0
     for client_id, new_records in new_records_per_client.items():
-
+        # new_records = {Windows: [msg_id_1, msg_id_2, .., ], Linux: ....} 
+        print(f"CLIENT_ID: {client_id}")
+        print(f"NEW RECORDS: {new_records}")
+        # client_id = numerito
         client_dir = os.path.join(dir, client_id)
         records_for_file = _group_records("platform_count.csv", new_records)
+        # {platform_count.csv: [[WINDOWS, MSG_ID_LIST], [LINUX, MSG_ID_LIST]]}
+        print(f"RECORDS FOR FILE: {records_for_file}")
 
-        #it does not use range
-        _sum_batch_to_records(client_dir, range_not_used, records_for_file, partition=False)
+        # final_path = client_dir/platform_count.csv
+        _sum_batch_to_records(client_dir, range_not_used, records_for_file, logger, partition=False)
 
 def sum_batch_to_records_per_client(
-    dir: str, range: int, new_records_per_client: dict[str, dict[str, int]]
+    dir: str, range: int, new_records_per_client: dict[str, dict[str, int]],
 ):
 
     for client_id, new_records in new_records_per_client.items():
@@ -422,6 +433,12 @@ def sum_batch_to_records_per_client(
 
         # get the file for each record in the batch -> {"file": [record1, record2], ....}
         records_per_file = _group_by_file_dict(file_prefix, range, new_records)
+        # loggeo la ultima linea procesada, mensajes procesados -> 
+        # loggeo que procese los mensajes -> en el archivo del cliente
+
+        # Si se cae entre logs, al hacer la recuperacion, tiene que checkear si los mensajes
+        # procesados del ultimo log estan guardados en el otro log, si ese es el caso, no
+        # hay problema, pero si no estan, los tiene que agregar el
         _sum_batch_to_records(client_dir, range, records_per_file)
 
 
@@ -442,26 +459,27 @@ def _group_by_file_dict(
     return records_per_file
 
 
-def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list[(str,int)]], partition:bool = True):
+def create_file_if_unexistent(full_path: str):
+    if not os.path.exists(full_path):
+        open(full_path, 'w').close()
+
+
+def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list[(str,int)]], logger, partition: bool = True):
 
     os.makedirs(dir, exist_ok=True)
     # file_prefix = "partition"
 
-    # # get the file for each record in the batch -> {"file": [record1, record2], ....}
-    # records_per_file = _group_by_file_dict(file_prefix, range, new_records)
-
     for file_name, records in records_per_file.items():
+        # file_name = partition.csv
+        # records = [[WINDOWS, MSG_ID_LIST], [LINUX, MSG_ID_LIST]]
         file_path = os.path.join(dir, file_name)
-        if not os.path.exists(file_path):
-            if partition:
-                _write_batch_by_range(dir, range, records)
-            else:
-                #todos los records del cliente, van en un mismo archivo
-                _write_batch_on_file(dir, file_name, records)
-            continue
+        create_file_if_unexistent(file_path)
 
         temp_file = os.path.join(dir, f"temp_{file_name}")
 
+        # De aca para abajo las operaciones son atomicas, o pasan o no pasan
+        msg_ids_used_in_file = []
+        new_file_lines = []
         with open(file_path, mode="r") as infile, open(
             temp_file, mode="w", newline=""
         ) as outfile:
@@ -474,21 +492,36 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
                 read_record_value = int(row[1])
 
                 for i, record in enumerate(records):
+                    # cada record es: [WINDOWS, MSG_ID_LIST]
                     #key = int(record[0]) #app_id
-                    key = str(record[0])
+                    key = record[0]
+                    msg_ids = record[1]
+                    msg_ids_used_in_file.extend(msg_ids)
                     if read_record_key == key:
+                        new_state = [read_record_key, str(read_record_value + len(msg_ids))]
                         writer.writerow(
-                            [read_record_key, read_record_value + int(record[1])]
+                            new_state   
                         )
+                        new_file_lines.append(','.join(new_state))
                         record_was_updated = True
                         records.pop(i)
                         break
+
                 if not record_was_updated:
                     writer.writerow(row)
+                    new_file_lines.append(','.join(row))
 
             for record in records:
-                writer.writerow(record)
+                key = record[0]
+                msg_ids = record[1]
+                line = [key, str(len(msg_ids))]
 
+                writer.writerow(line)
+                new_file_lines.append(','.join(line))
+
+        # TODO: esto lo deberia recibir por parametro y el path se deberia armar aca...
+        client_id = dir.rsplit('/', maxsplit=1)[-1]
+        logger.log(client_id, [file_path] + new_file_lines, msg_ids_used_in_file)
         os.replace(temp_file, file_path)
 
 

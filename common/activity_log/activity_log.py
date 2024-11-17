@@ -7,10 +7,13 @@ from pathlib import Path
 
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
-from constants import *
 from typing import * 
-from operations import Operation, RecoveryOperation
+# from operations import Operation, RecoveryOperation
 from protocol.protocol import Protocol, ProtocolError
+from storage.storage import create_file_if_unexistent
+
+GENERAL_LOG_FILE_NAME="general_log.txt"
+CLIENT_LOG_FILE_NAME="client_log.csv"
 
 class ActivityLog:
     def __init__(self, protocol=Protocol(), show_corrupted=False):
@@ -21,7 +24,7 @@ class ActivityLog:
         # un log por cliente, que solamente se guarda el numero de mensaje
         # para loggearlo
         self._general_log_path = f'{self._dir}/{GENERAL_LOG_FILE_NAME}'
-        self.__create_log_file(self._general_log_path)
+        create_file_if_unexistent(self._general_log_path)
 
         self._protocol = protocol
         self._show_corrupted_lines = show_corrupted
@@ -34,16 +37,12 @@ class ActivityLog:
         makedirs(full_client_dir_path, exist_ok=True)
 
         full_path = f'{full_client_dir_path}/{CLIENT_LOG_FILE_NAME}'
-        self.__create_log_file(full_path)
+        create_file_if_unexistent(full_path)
 
 
-    def __create_log_file(self, full_path: str):
-        if not path.exists(full_path):
-            open(full_path, 'w').close()
-
-    def __get_line_for_general_log(self, client_id: str, data: List[str], msg_ids: List[str]) -> bytes:
-        row = [client_id] + data + msg_ids
-        return self._protocol.encode(row, add_checksum=True)
+    def __get_line_for_general_log(self, msg: List[str], client_id: str = None) -> bytes:
+        if client_id: msg = [client_id] + msg
+        return self._protocol.encode(msg, add_checksum=True)
 
     def _log_to_processed_lines(self,  client_id: str, msg_id: str):
         '''
@@ -79,11 +78,14 @@ class ActivityLog:
         # denuevo una linea (llegue hasta esta funcion), eso quiere decir
         # que ya se termino de bajar a disco la linea anterior (es
         # secuencial), por lo tanto ya no necesito la linea anterior
-        line = self.__get_line_for_general_log(client_id, data, msg_ids)
+        data = self.__get_line_for_general_log(data) + b'\n' # Se trimea al leer, no afecta al checksum
+        msg_ids = self.__get_line_for_general_log(msg_ids, client_id=client_id) + b'\n'
         with open(self._general_log_path, 'wb') as log: 
-            log.write(line)
+            log.write(data)
+            log.write(msg_ids)
 
-    def __log(self, client_id: str, data: List[str], msg_ids: List[str]): 
+
+    def log(self, client_id: str, data: List[str], msg_ids: List[str]): 
         # Si se rompe mientras se hace el log general 
         #       -> Si no se llego a loggear completo salta el checksum y no se re-hace nada
         #       -> Si se llego a loggear completo, se re-hace el bajado a disco (se guarda estado por lo tanto
@@ -91,9 +93,12 @@ class ActivityLog:
         #       -> Para cada msg_id involucrado en el log, me fijo si se pudo bajar 
         #          a disco, si no se pudo bajar lo agrego, entonces no hay problema 
         #          conque se rompa mientras se guardan las lineas que se procesaron
-        self.__log_to_general_log(client_id, data)    
+
+        # Para que el general log sea valido tiene que tener dos lineas y ambas tienen que estar
+        # integras 
+        self._log_to_general_log(client_id, data, msg_ids)
         for msg_id in msg_ids:
-            self.__log_to_processed_lines(client_id, msg_id)
+            self._log_to_processed_lines(client_id, msg_id)
 
     def read_general_log(self):
         '''
@@ -191,50 +196,3 @@ class ActivityLog:
                 except ProtocolError as e: 
                     if self._show_corrupted_lines:
                         print(f"[ACTIVITY LOG] {str(e)}")
-
-    def get_recovery_operation(self):
-        for line in self.read_log_in_reverse():
-            if line[0] == Operation.COMMIT.message():
-                return RecoveryOperation.REDO
-            else: 
-                return RecoveryOperation.ABORT
-
-    def restore(self): 
-        '''
-        Generator that first returns the action to perform (RecoveryOperation.REDO or RecoveryOperation.ABORT)
-        and then the corresponding lines to either REDO or ABORT
-        '''
-        '''
-        Para el ultimo commit, ya sea si se completo o no: 
-        Restaurar el estado implica verificar la ultima Ti commiteo, si commiteo
-        entonces hay que re-hacer todo lo que hizo, si no commiteo, entonces hay 
-        que abortar, es decir, deshacer todo lo que se hizo. 
-
-        Ambas operaciones implican saber donde esta guardada la data, hay dos opciones:
-        - O lo hace el activity log
-        - O el activity log dice que operacion hay que hacer, y con que data (el batch size)
-        va ser acotado en general, asi que no deberia haber problema devolviendo que borrar
-
-        Que lo haga el activity log, tambien implica que sepa como esta guardada la data, lo
-        cual hace que este mas acoplado todavia a la implementacion de los nodos 
-        '''
-        # - Si la ultima linea leida es un commit, tengo que re-guardar todo lo de ese batch
-        # - Si la ultima linea leida es un commit corrupto (tengo la palabra commit, pero no el numero de batch por eh),
-        # tengo que re-guardar todo lo de ese batch
-        # - Si la ultima linea leida no es un commit, tengo que abortar la tx
-        for index, line in enumerate(self.read_log_in_reverse()):
-            if index == 0:
-                if line[0] != Operation.COMMIT.message():
-                    # TODO: Verificar de alguna forma si esta corrupta? 
-                    # Si estaba corrupta la linea y no rompio por alguna razon
-                    # el parseo va a intentar re-hacer algo que estaba mal el nodo
-                    # y es un problema 
-                    yield line[1:]
-
-                continue
-            
-            if line[0] == Operation.BEGIN.message(): 
-                break
-
-            yield line[1:] 
-

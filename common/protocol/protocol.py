@@ -51,7 +51,7 @@ class Protocol:
             result = Protocol._add_checksum(result)
 
         return result
-
+    
     @staticmethod
     def add_to_batch(current_batch: bytes, row: List[str]) -> bytes:
         encoded_row = Protocol.encode(row)
@@ -71,7 +71,7 @@ class Protocol:
         return encoded_row_length + encoded_row + current_batch
 
     @staticmethod
-    def decode_batch(message: bytes) -> list[list[str]]:
+    def decode_batch(message: bytes, has_checksum = False) -> list[list[str]]:
         res = []
         while len(message) > 0:
             row_length = int.from_bytes(message[:4], "big", signed=False)

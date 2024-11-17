@@ -3,6 +3,7 @@ import logging
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage import storage
 from common.protocol.protocol import Protocol
+from common.activity_log.activity_log import ActivityLog
 from typing import *
 
 END_TRANSMISSION_MESSAGE = "END"
@@ -11,15 +12,16 @@ END_TRANSMISSION_MESSAGE_INDEX = 1
 END_TRANSMISSION_SESSION_ID = 0
 
 REGULAR_MESSAGE_SESSION_ID = 0
-REGULAR_MESSAGE_FIELD_TO_COUNT_BY = 1
+REGULAR_MESSAGE_ID = 1
+REGULAR_MESSAGE_FIELD_TO_COUNT_BY = 2
 
 
 class CounterByPlatform:
 
-    def __init__(self, config, middleware: Middleware):
+    def __init__(self, config, middleware: Middleware, activity_log: ActivityLog):
         self._middleware = middleware
         self._got_sigterm = False
-        self._count_dict = {}
+        self._activity_log = activity_log
 
         # Assigning config values to instance attributes
         self.node_id = config["NODE_ID"]
@@ -61,33 +63,42 @@ class CounterByPlatform:
 
             return
 
+        # {client_id: {Windows: 2, Linux: 10, Mac: 20}, ...}
         count_per_record_by_client_id = self.__count_per_client_id(body)
+        logging.debug(f"Count per record by client id: {count_per_record_by_client_id}")
 
         storage.sum_platform_batch_to_records_per_client(
             self.storage_dir,
             count_per_record_by_client_id,
+            self._activity_log
         )
 
         self._middleware.ack(delivery_tag)
 
-    def __count_per_client_id(self, body: list[list]):
+    def __count_per_client_id(
+        self, body: list[list]
+    ) -> Dict[str, Dict[str, List[str]]]:
+        # Retorna una lista con los msg ids involucrados para cada mensaje, sacar la cantidad a sumar
+        # es hacer len(lista) por eso no se guarda el count tambien
+        # {client_id: {Windows: [1, 3, 4, 5], Linux: [2, 10], Mac: [9]}, ...}
         count_per_record_by_client_id = {}
         for record in body:
+            msg_id = record[REGULAR_MESSAGE_ID]
             client_id = record[REGULAR_MESSAGE_SESSION_ID]
             record_id = record[REGULAR_MESSAGE_FIELD_TO_COUNT_BY]
 
             if not client_id in count_per_record_by_client_id:
                 count_per_record_by_client_id[client_id] = {}
 
-            count_per_record_by_client_id[client_id][record_id] = (
-                count_per_record_by_client_id[client_id].get(record_id, 0) + 1
-            )
-            
+            if not record_id in count_per_record_by_client_id[client_id]:
+                count_per_record_by_client_id[client_id][record_id] = []
+
+            count_per_record_by_client_id[client_id][record_id].append(msg_id)
+
         return count_per_record_by_client_id
 
     def __send_results(self, session_id: str):
         self._middleware.create_queue(self.publish_queue)
-
 
         client_dir = f"{self.storage_dir}/{session_id}"
         reader = storage.read_all_files(client_dir)
@@ -95,10 +106,10 @@ class CounterByPlatform:
         for record in reader:
             logging.debug(f"sending record: {record}")
             if self._got_sigterm:
-                #should send everything so i can ack before closing 
+                # should send everything so i can ack before closing
                 # or return false so end is not acked and i dont send the results?
                 return
-            
+
             self._middleware.publish(
                 [session_id, record[0], record[1]], queue_name=self.publish_queue
             )
@@ -111,9 +122,8 @@ class CounterByPlatform:
 
         storage.delete_directory(client_dir)
 
-
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
         self._got_sigterm = True
-        #self._middleware.stop_consuming_gracefully()
+        # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()

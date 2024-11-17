@@ -7,13 +7,14 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from pathlib import Path
 import unittest
 from activity_log import ActivityLog
-from operations import Operation, RecoveryOperation
-from constants import * 
 from typing import * 
+
+GENERAL_LOG_FILE_NAME="general_log.txt"
+CLIENT_LOG_FILE_NAME="client_log.csv"
 
 FIELD_LENGTH_BYTES_AMOUNT = 4
 
-# TODO: Habria que hacer que herede de protocolo i solo re-implemente los
+# TODO: Habria que hacer que herede de protocolo y solo re-implemente los
 # metodos de encode y decode, pero por alguna razon no se puede importar
 # protocol a este archivo (a activity_log.py si), importa un protocol
 # random que tiene que ver con cosas de matematica

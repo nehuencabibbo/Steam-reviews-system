@@ -155,19 +155,21 @@ class DropNulls:
                 logging.debug("Dropped prev value")
                 continue
 
-            client_id = message[0]
+            client_id = message[GAMES_SESSION_ID]
+            msg_id = message[GAMES_MSG_ID]
             for platform, platform_index in PLATFORMS.items():
                 platform_supported = message[platform_index]
                 if platform_supported.lower() == "true":
                     node_id = node_id_to_send_to(
                         client_id, platform, self.count_by_platform_nodes
                     )
+                    message_to_send = [client_id, msg_id, platform]
                     self._middleware.publish(
-                        [client_id, platform],
+                        message_to_send,
                         f"{node_id}_{self.q1_platform}",
                     )
                     logging.debug(
-                        f"Q1: Sent {[client_id, platform]} to {node_id}_{self.q1_platform}"
+                        f"Q1: Sent {message_to_send} to {node_id}_{self.q1_platform}"
                     )
 
             self._middleware.publish(

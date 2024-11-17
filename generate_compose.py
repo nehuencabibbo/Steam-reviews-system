@@ -438,7 +438,7 @@ def generate_joins(
         add_join(**kwargs, num=i, debug=debug, instances_of_myself=amount_of_joins)
 
 
-def generate_q1(output=Dict, debug=True):
+def generate_q1(output=Dict, debug=False):
     add_counter_by_platform(
         output=output,
         query="q1",
@@ -934,31 +934,31 @@ def generate_output():
         # reviews_file_path="data/reviews_sample.csv",
         games_file_path="data/games_sample.csv",
         reviews_file_path="data/reviews_sample.csv",
-        debug=False,
+        debug=True,
     )
-    add_client(
-        output,
-        num=2,
-        # games_file_path="data/games.csv",
-        # reviews_file_path="data/reviews_sample.csv",
-        games_file_path="data/games.csv",
-        reviews_file_path="data/filtered_reviews.csv",
-        debug=False,
-    )
-    add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
+    # add_client(
+    #     output,
+    #     num=2,
+    #     # games_file_path="data/games.csv",
+    #     # reviews_file_path="data/reviews_sample.csv",
+    #     games_file_path="data/games.csv",
+    #     reviews_file_path="data/filtered_reviews.csv",
+    #     debug=False,
+    # )
+    add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT)
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=True)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=False)
+    generate_q1(output=output, debug=True)
     # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=False)
+    # generate_q2(output=output, debug=False)
     # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=False)
+    # generate_q3(output=output, debug=False)
     # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=False)
+    # generate_q4(output=output, debug=False)
     # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=False)
+    # generate_q5(output=output, debug=False)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

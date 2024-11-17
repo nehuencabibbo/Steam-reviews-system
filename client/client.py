@@ -36,6 +36,9 @@ class Client:
         self._reviews_file_path = config.get("REVIEWS_FILE_PATH")
         self._sending_wait_time = config.get("SENDING_WAIT_TIME")
 
+        # TODO: Encapsular esto en el middleware
+        self._msg_id = 0 
+
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     @staticmethod
@@ -72,8 +75,9 @@ class Client:
                 if self._got_sigterm:
                     return
                 logging.debug(f"Sending appID {row[0]}")
-
-                self._middleware.send(row)
+                
+                self._middleware.send([str(self._msg_id)] + row)
+                self._msg_id += 1
                 time.sleep(self._sending_wait_time)
 
         logging.debug("Sending file end")
