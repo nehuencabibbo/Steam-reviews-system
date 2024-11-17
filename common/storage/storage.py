@@ -6,7 +6,10 @@ import shutil
 # TODO: use threads for all functions or some parallelization tool (maybe)
 
 
-def save(path: str, record: list[str]):
+def save(path: str, record: list[str], dir: str = None):
+    if dir:
+        os.makedirs(dir, exist_ok=True)
+
     with open(path, "a") as f:
         writer = csv.writer(f)
         writer.writerow(record)
@@ -307,7 +310,6 @@ def add_to_sorted_file(dir: str, record: str):
 
 
 def read_sorted_file(dir: str):
-
     file_path = os.path.join(dir, "sorted_file.csv")
     os.makedirs(dir, exist_ok=True)
 
@@ -321,6 +323,25 @@ def read_sorted_file(dir: str):
 
 
 # ------------------------ BATCHES -------------------------------------------
+
+
+# Given a batch with messages of the type: (client_id, ...)
+# stores in client_id/file_name the given records
+# def save_multiclient_batch(dir: str, records: list[list[str]], file_name: str):
+#     batchs_per_client = _get_batch_per_client(records)
+
+#     for client_id, batchs in batchs_per_client.items():
+#         _write_batch_on_file(dir=f"{dir}/{client_id}/", file_name=file_name, records=batchs)
+
+
+def save_multiclient_batch(
+    dir: str, batchs_per_client: dict[str, list[str]], file_name: str
+):
+
+    for client_id, batchs in batchs_per_client.items():
+        _write_batch_on_file(
+            dir=f"{dir}/{client_id}/", file_name=file_name, records=batchs
+        )
 
 
 def _get_batch_per_client(records):
@@ -379,10 +400,10 @@ def group_by_file(
     return records_per_file
 
 
-def _write_batch_on_file(dir:str, file_name:str, records: list[list[str]]):
+def _write_batch_on_file(dir: str, file_name: str, records: list[list[str]]):
     os.makedirs(dir, exist_ok=True)
 
-    #for file_name, records in records_per_file.items():
+    # for file_name, records in records_per_file.items():
     file_path = os.path.join(dir, file_name)
     with open(file_path, "a", newline="") as f:
         writer = csv.writer(f)
@@ -393,8 +414,8 @@ def _write_batch_on_file(dir:str, file_name:str, records: list[list[str]]):
 def _group_records(file_name: str, records: dict[str, int]) -> dict[str, list[str]]:
     records_per_file = {}
     for record_id, value in records.items():
-            records_per_file[file_name] = records_per_file.get(file_name, [])
-            records_per_file[file_name].append([record_id, value])
+        records_per_file[file_name] = records_per_file.get(file_name, [])
+        records_per_file[file_name].append([record_id, value])
 
     return records_per_file
 
@@ -408,8 +429,11 @@ def sum_platform_batch_to_records_per_client(
         client_dir = os.path.join(dir, client_id)
         records_for_file = _group_records("platform_count.csv", new_records)
 
-        #it does not use range
-        _sum_batch_to_records(client_dir, range_not_used, records_for_file, partition=False)
+        # it does not use range
+        _sum_batch_to_records(
+            client_dir, range_not_used, records_for_file, partition=False
+        )
+
 
 def sum_batch_to_records_per_client(
     dir: str, range: int, new_records_per_client: dict[str, dict[str, int]]
@@ -442,7 +466,12 @@ def _group_by_file_dict(
     return records_per_file
 
 
-def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list[(str,int)]], partition:bool = True):
+def _sum_batch_to_records(
+    dir: str,
+    range: int,
+    records_per_file: dict[str, list[(str, int)]],
+    partition: bool = True,
+):
 
     os.makedirs(dir, exist_ok=True)
     # file_prefix = "partition"
@@ -456,7 +485,7 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
             if partition:
                 _write_batch_by_range(dir, range, records)
             else:
-                #todos los records del cliente, van en un mismo archivo
+                # todos los records del cliente, van en un mismo archivo
                 _write_batch_on_file(dir, file_name, records)
             continue
 
@@ -474,7 +503,7 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
                 read_record_value = int(row[1])
 
                 for i, record in enumerate(records):
-                    #key = int(record[0]) #app_id
+                    # key = int(record[0]) #app_id
                     key = str(record[0])
                     if read_record_key == key:
                         writer.writerow(
@@ -600,7 +629,11 @@ def delete_files_from_directory(dir: str) -> bool:
 
     for filename in os.listdir(dir):
 
-        if filename.startswith("sorted") or filename.startswith("partition"):
+        if (
+            filename.startswith("sorted")
+            or filename.startswith("partition")
+            or filename.startswith("Q")
+        ):
             file_path = os.path.join(dir, filename)
             try:
                 os.remove(file_path)

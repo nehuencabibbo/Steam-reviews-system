@@ -15,6 +15,12 @@ from common.storage import storage
 END_TRANSMISSION_MESSAGE = "END"
 APP_ID = 0
 
+CLIENT_INFO_QUEUE_NAME_INDEX = 0
+CLIENT_INFO_TIMER_INDEX = 1
+CLIENT_INFO_CONNECTION_ID_INDEX = 2
+CLIENT_INFO_FINISHED_QUERIES_INDEX = 3
+CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX = 4
+
 
 class ClientHandler:
 
@@ -35,6 +41,7 @@ class ClientHandler:
         self._q4_result_queue = kwargs["Q4_RESULT_QUEUE"]
         self._q5_result_queue = kwargs["Q5_RESULT_QUEUE"]
         self._got_sigterm = threading.Event()
+
         logging.info(f"_reviews_queue_name: {self._reviews_queue_name}")
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
@@ -77,6 +84,8 @@ class ClientHandler:
                 self._games_queue_name,
                 t[0],
                 connection_id,
+                set(),
+                threading.Lock(),
             ]
 
             self._client_middleware.send_multipart(
@@ -86,9 +95,13 @@ class ClientHandler:
             t[0].start()
         else:
             session_id, message = self._client_middleware.get_session_id(message)
+            client_info = self._clients_info[session_id]
+            # Cancel timer
+            client_info[CLIENT_INFO_TIMER_INDEX].cancel()
+
             logging.info(f"SESSION_ID: {session_id}")
 
-            forwarding_queue_name = self._clients_info[session_id][0]
+            forwarding_queue_name = client_info[CLIENT_INFO_QUEUE_NAME_INDEX]
 
             self._middleware.add_client_id_and_send_batch(
                 queue_name=forwarding_queue_name,
@@ -105,23 +118,16 @@ class ClientHandler:
                     # del self._clients_info[session_id]
                     return
                 logging.debug("Setting forwarding queue to reviews")
-                # TODO: update timer
 
-                client_info = self._clients_info[session_id]
-                client_info[1].cancel()
+                client_info[CLIENT_INFO_QUEUE_NAME_INDEX] = self._reviews_queue_name
 
-                t = (
-                    threading.Timer(
-                        100000.0, self.handle_client_timeout, args=[session_id]
-                    ),
-                )
-
-                self._clients_info[session_id] = (
-                    self._reviews_queue_name,
-                    t[0],
-                    client_info[2],
-                )
-                t[0].start()
+            t = (
+                threading.Timer(
+                    100000.0, self.handle_client_timeout, args=[session_id]
+                ),
+            )
+            client_info[CLIENT_INFO_TIMER_INDEX] = t[0]
+            t[0].start()
 
     def handle_clients(self):
         self._client_middleware.create_socket(zmq.ROUTER)
@@ -140,46 +146,7 @@ class ClientHandler:
                 connection_id, msg_type, msg = self._client_middleware.recv_multipart()
                 logging.info(f"Session: {connection_id} | msg_type: {msg_type}")
                 self.process_message(msg_type, connection_id, msg)
-                # client_id_hex = client_id.hex()
-                # logging.debug(f"Received message from {client_id_hex}: {message}")
 
-                # if client_id not in self._clients_info.keys():
-                #     logging.debug("Setting forwarding queue to games")
-                #     t = (
-                #         threading.Timer(
-                #             100000.0, self.handle_client_timeout, args=[client_id_hex]
-                #         ),
-                #     )
-
-                #     self._clients_info[client_id] = [
-                #         self._games_queue_name,
-                #         t[0],
-                #     ]
-
-                #     t[0].start()
-
-                # forwarding_queue_name = self._clients_info[client_id][0]
-
-                # self._middleware.add_client_id_and_send_batch(
-                #     queue_name=forwarding_queue_name,
-                #     client_id=client_id_hex,
-                #     batch=message,
-                # )
-
-                # if message[-3:] == b"END":
-                #     # TODO: publish batch
-                #     if forwarding_queue_name == self._reviews_queue_name:
-                #         logging.info(
-                #             f"Final end received from client: {client_id}. Removing from the record."
-                #         )
-                #         del self._clients_info[client_id]
-                #         continue
-
-                #     logging.debug("Setting forwarding queue to reviews")
-                #     # TODO: update timer
-                #     self._clients_info[client_id] = (
-                #         self._reviews_queue_name
-                #     )
         except MiddlewareError as e:
             logging.error(e.message)
         finally:
@@ -193,8 +160,15 @@ class ClientHandler:
         )
         self._middleware.publish_message([client_id, "TIMEOUT"], self._games_queue_name)
 
+        # remove all client data
+        client_info = self._clients_info[client_id]
+        storage.delete_files_from_directory(f"/tmp/{client_id}")
+
+        client_info[CLIENT_INFO_TIMER_INDEX].cancel()
+        # TODO: Ver que onda si se cae por aca
+        del client_info
+
     def handle_client_timeout(self, client_id):
-        # del
         self._middleware.execute_from_another_thread(
             functools.partial(self.send_timeout, client_id=client_id)
         )
@@ -214,20 +188,63 @@ class ClientHandler:
             self.results_middleware.shutdown()
 
     def on_message(self, channel, method_frame, header_frame, body):
-        client_id = self.results_middleware.get_rows_from_message(body)[0][0]
+        rows = self.results_middleware.get_rows_from_message(body)
+        logging.info(f"Rows: {rows}")
 
-        logging.info(
-            f"received results from queue: {method_frame.routing_key} from client: {client_id}"
+        client_id = rows[0][0]
+        query = method_frame.routing_key
+
+        logging.info(f"received results from queue: {query} from client: {client_id}")
+
+        connection_id = self._clients_info[client_id][CLIENT_INFO_CONNECTION_ID_INDEX]
+        batch_per_client, client_ends = self._get_batch_per_client_and_ends(rows)
+
+        # Update client info
+        storage.save_multiclient_batch(
+            dir="/tmp",
+            batchs_per_client=batch_per_client,
+            file_name=query,
         )
 
-        connection_id = self._clients_info[client_id][2]
+        self._add_finished_query_to_clients(clients=client_ends, query=query)
 
         self._client_middleware.send_query_results(
-            connection_id, message=body, query=method_frame.routing_key
+            connection_id, message=body, query=query
         )
+
         channel.basic_ack(delivery_tag=method_frame.delivery_tag)
 
     def __sigterm_handler(self, sig, frame):
         logging.info("Shutting down Client Handler")
         self._got_sigterm.set()
         raise SystemExit
+
+    # Given a batch that can possibly contain multiple clients info (only used for query results),
+    # returns a dictionary with client_id: batch, and also a set with client_ids, which represents
+    # all the ENDs found in the batch (for every query), in order to identify them
+    def _get_batch_per_client_and_ends(
+        self, records: list[list[str]]
+    ) -> Tuple[dict[str, list[str]], set[str]]:
+        batch_per_client = {}
+        clients_ends = set()
+        # Get the batch for every client
+        for record in records:
+            client_id = record[0]
+            record = record[1:]
+            if record[0] == "END":
+                clients_ends.add(client_id)
+            if not client_id in batch_per_client:
+                batch_per_client[client_id] = []
+
+            batch_per_client[client_id].append(record)
+        return (batch_per_client, clients_ends)
+
+    def _add_finished_query_to_clients(self, clients: set[str], query: str):
+        for client_id in clients:
+            client_info = self._clients_info[client_id]
+
+            with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
+                client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX].add(query)
+                logging.info(
+                    f"Client: {client_id} | {self._clients_info[client_id][CLIENT_INFO_FINISHED_QUERIES_INDEX]}"
+                )
