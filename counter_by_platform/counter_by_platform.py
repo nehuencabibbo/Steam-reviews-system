@@ -1,3 +1,5 @@
+import csv
+import os
 import signal
 import logging
 from common.middleware.middleware import Middleware, MiddlewareError
@@ -31,6 +33,9 @@ class CounterByPlatform:
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
+        self.__recover_state()
+        
+
     def run(self):
         consume_queue_name = f"{self.node_id}_{self.consume_queue_suffix}"
 
@@ -49,6 +54,21 @@ class CounterByPlatform:
         finally:
             self._middleware.shutdown()
 
+    def __recover_state(self):
+        full_file_path, file_state = self._activity_log.recover()
+        
+        if not full_file_path or not file_state: 
+            return 
+        
+        dir, file_name = full_file_path.rsplit(maxsplit=1)
+        temp_file = os.path.join(dir, f"temp_{file_name}")
+        with open(temp_file, mode='w', newline='') as temp:
+            writer = csv.writer(temp)
+            for line in file_state:
+                writer.write(line)
+
+        os.replace(temp_file, full_file_path)
+
     def __handle_message(self, delivery_tag: int, body: List[List[str]]):
         body = self._middleware.get_rows_from_message(body)
 
@@ -63,9 +83,18 @@ class CounterByPlatform:
 
             return
 
-        # {client_id: {Windows: 2, Linux: 10, Mac: 20}, ...}
+        # {client_id: {
+        #   Windows: [MSG_ID1, MSG_ID2, ...], 
+        #   Linux: [MSG_ID1, MSG_ID2, ...], 
+        #   Mac: [MSG_ID1, MSG_ID2, ...]}, 
+        # ...}
         count_per_record_by_client_id = self.__count_per_client_id(body)
-        logging.debug(f"Count per record by client id: {count_per_record_by_client_id}")
+        clone = count_per_record_by_client_id.copy()
+        self.__purge_duplicates(count_per_record_by_client_id)
+        
+        if clone != count_per_record_by_client_id: 
+            logging.debug(f'BEFORE: {clone}')
+            logging.debug(f'AFTER: {count_per_record_by_client_id}')
 
         storage.sum_platform_batch_to_records_per_client(
             self.storage_dir,
@@ -74,6 +103,23 @@ class CounterByPlatform:
         )
 
         self._middleware.ack(delivery_tag)
+
+    def __purge_duplicates(self, count_per_platform_by_client_id: Dict[str, Dict[str, List[str]]]):
+        # Para cada cliente o se actualizo el archivo completo o no se actualizo, eso queire decir
+        # que si al menos UNO de los msg_id ya estaba loggeado, ya se proceso totalemente ese cliente
+
+        client_ids_to_remove = [] # No se puede remover claves de un dict mientras se itera
+        for client_id, count_per_platform in count_per_platform_by_client_id.items():
+            for platform, msg_ids in count_per_platform.items(): # TODO: Por ahi hay alguna forma mejor de hacer esto
+                an_arbitrary_message_id = msg_ids[0]
+                if self._activity_log.is_msg_id_already_processed(client_id, an_arbitrary_message_id):
+                    client_ids_to_remove.append(client_id)
+                
+                break
+        
+        for client_id in client_ids_to_remove:
+            del count_per_platform_by_client_id[client_id]
+
 
     def __count_per_client_id(
         self, body: list[list]

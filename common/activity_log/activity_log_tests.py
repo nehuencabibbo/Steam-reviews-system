@@ -134,14 +134,26 @@ class ActivityLogTests(unittest.TestCase):
         msg_ids = ['1', '2']
         self._activity_log._log_to_general_log(client_id, data, msg_ids)
 
-        for msg in self._activity_log.read_general_log():
-            read_client_id = msg[0]
-            read_data = msg[1:3]
-            read_msg_ids = msg[3:]
+        for index, msg in enumerate(self._activity_log.read_general_log()):
+            if index == 0: 
+                self.assertEqual(data, msg)
+            else: 
+                read_client_id = msg[0]
+                read_msg_ids = msg[1:]
 
-            self.assertEqual(client_id, read_client_id)
-            self.assertEqual(data, read_data)
-            self.assertEqual(msg_ids, read_msg_ids)
+                self.assertEqual(client_id, read_client_id)
+                self.assertEqual(msg_ids, read_msg_ids)
+
+    def test_07_already_present_processed_lines_are_skipped(self):
+        client_id = 1
+        msg_ids = ['2', '3', '2', '5', '4', '1', '4']
+        for msg_id in msg_ids:
+            self._activity_log._log_to_processed_lines(client_id, msg_id)
+
+        for index, line in enumerate(self._activity_log.read_processed_lines_log(client_id)):
+           self.assertEqual(str(index + 1), line[0])
+
+        self.assertEqual(index + 1, 5)
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@ from os import SEEK_END, makedirs, path
 import os
 import csv
 import shutil
+import logging 
 from pathlib import Path
 
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
@@ -44,15 +45,17 @@ class ActivityLog:
         if client_id: msg = [client_id] + msg
         return self._protocol.encode(msg, add_checksum=True)
 
-    def _log_to_processed_lines(self,  client_id: str, msg_id: str):
+    def _log_to_processed_lines(self, client_id: str, msg_id: str):
         '''
-        Lines are added in an arbitrary order 
+        Lines are added in ascending order. If line is already present, then it's skipped
+        as msg ids for a determined client should be unique
         '''
         self.__create_client_log_file(client_id)
 
         full_path = f"{self._dir}/{client_id}/{CLIENT_LOG_FILE_NAME}"
         full_temp_file_path = f"{self._dir}/{client_id}/temp_sorted.csv"
         
+        duplicated_msg_id = False 
         inserted_new_msg_id = False
         with open(full_path, mode="r") as infile, open(
             full_temp_file_path, mode="w", newline=""
@@ -62,16 +65,26 @@ class ActivityLog:
             for read_msg_id in reader:
                 read_msg_id = read_msg_id[0]
 
-                if not inserted_new_msg_id and msg_id < read_msg_id:
-                    writer.writerow([msg_id])
-                    inserted_new_msg_id = True
-                
+                if not inserted_new_msg_id:
+                    if msg_id < read_msg_id:
+                        writer.writerow([msg_id])
+                        inserted_new_msg_id = True
+                    elif msg_id == read_msg_id:
+                        # No habia que updatear nada en el archivo, no puede
+                        # haber duplicados
+                        duplicated_msg_id = True 
+                        break
+
                 writer.writerow([read_msg_id])
 
-            if not inserted_new_msg_id:
+            if not inserted_new_msg_id and not duplicated_msg_id:
                 writer.writerow([msg_id])
 
-        os.replace(full_temp_file_path, full_path) 
+        if not duplicated_msg_id:
+            os.replace(full_temp_file_path, full_path) 
+        else: 
+            # si no se remueve no hay problema pq despues se vuelve a pisar 
+            os.remove(full_temp_file_path)
 
     def _log_to_general_log(self, client_id: str, data: List[str], msg_ids: List[str]): 
         # La linea se pisa todo el rato, pq? porque si yo estoy escribiendo 
@@ -107,9 +120,8 @@ class ActivityLog:
         '''
         with open(self._general_log_path, 'rb') as log:
             for line in log:
+                line = line.strip()
                 decoded_line = self._protocol.decode(line, has_checksum=True)
-                if len(decoded_line) != 0:
-                    decoded_line[-1] = decoded_line[-1].strip()
 
                 yield decoded_line
 
@@ -142,17 +154,66 @@ class ActivityLog:
 
     def is_msg_id_already_processed(self, client_id: str, msg_id: str):
         # TODO: Cambiar por algo mas eficiente, particionar al guardar
-        # o hacer binary search de alguna forma 
+        # o hacer binary search de alguna forma (no se puede sin hacer
+        # demasiadas syscalls al pedo)
         full_path = f'{self._dir}/{client_id}/{CLIENT_LOG_FILE_NAME}'
-        with open(full_path, 'r') as log:
+        if not os.path.exists(full_path):
+            return False 
+        
+        with open(full_path) as log:
             reader = csv.reader(log)
-
             for row in reader:
                 row = row[0]
                 if row == msg_id:
                     return True
                 
         return False 
+    
+    def recover(self) -> Tuple[Optional[str], Optional[List[str]]]: 
+        '''
+        Returns state to recover based on the general log.
+        File state and name is returned as what to do with it is dependant on the user.
+        Processed messages state is automatically recovered by this function.
+        '''
+        # EL log general es el que sirve para recuperacion, tiene dos lineas nada mas,
+        # el ultimo estado updateado de un determinado archivo, y los msg ids que involucraron
+        # ese cambio de estado.
+        # Aca hay varios casos en donde se puede romeper:
+        #       - 1: Se rompe sin loggear ni la primera linea
+        #       - 2: Se rompe en a mitad de la linea del log 
+        #       - 3: Se rompe justo despues de terminar de escribir la primera linea del log
+        #       - 4: Se rompe durante la linea de los msg ids
+        #       - 5: Se rompe justo despues de la linea de los msg_ids
+        #
+        # Soluciones:
+        #       - 1, 2, 3, 4: No se recupera nada, ya sea porque el estado nuevo es
+        #           invalido o porque no puedo saber que mensajes produjeron ese
+        #           estado, lo cual traeria problemas a la hora de detectar duplicados
+        #       - 5: Hay que updatear el archivo indicado al estado que corresponde, porque
+        #           no sabemos si el os.replace se hizo por completo o se aborto. 
+        #           Tambien hay que recuperar los msg_ids, ya que primero se loggea a este log y luego
+        #           se bajan a disco los msg_ids (ver log(...)), por lo tanto se pudo haber 
+        #           loggeado solo parte de los msg_ids 
+        FILE_STATE_LINE = 0
+        MSG_IDS_LINE = 1
+        full_file_path_to_recover = None 
+        file_state = None 
+        client_id = None 
+        msg_ids = None 
+        try:
+            for line_type, line in enumerate(self.read_general_log()):
+                if line_type == FILE_STATE_LINE: 
+                    full_file_path_to_recover = line[0]
+                    file_state = line[1:]
+                elif line_type == MSG_IDS_LINE: 
+                    client_id, msg_ids = line[0], line[1:]
+                    for msg_id in msg_ids: 
+                        self._log_to_processed_lines(client_id, msg_id)
+
+        except ProtocolError as _:
+            logging.debug('General log was corrupted, will not update state')
+
+        return full_file_path_to_recover, file_state
 
     # https://stackoverflow.com/questions/2301789/how-to-read-a-file-in-reverse-order
     def read_general_log_in_reverse(self, full_path: str, buf_size=8192):
