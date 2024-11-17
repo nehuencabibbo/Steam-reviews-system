@@ -1,78 +1,106 @@
 import sys
 from os import SEEK_END, makedirs, path
+import os
+import csv
+import shutil
+from pathlib import Path
 
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
+from constants import *
 from typing import * 
 from operations import Operation, RecoveryOperation
 from protocol.protocol import Protocol, ProtocolError
 
-# TODO: Volar el BEGIN 
 class ActivityLog:
-    '''
-    REDO de BDD: 
-    - Ti modifica el item X reemplazando un valor vold
-    por v, se escibe (WRITE; Ti; X; vnew) en el log
-    - Ti hace commit, se escribe (COMMIT, Ti) en el log
-    y se hace flush del log a disco. Luego de esto se
-    escribe el valor del dato a disco
-    - Al reiniciar se abortan las transacciones no 
-    commiteadas
-    - Aca, como esto es secuencial (se procesa un batch,
-    luego otro y asi), no hacen falta checkpoints.
-    - No hace falta re-hacer todo lo que commiteo porque aca
-    no hay dependencias, es como si el solapamiento fuera secuencial
-    de multiples transacciones Ti (que son procesar el batch i)
-    '''
-    def __init__(self, output_file_name: str, protocol=Protocol(), show_corrupted=False):
-        self._output_file_name = output_file_name + "_log.txt"
+    def __init__(self, protocol=Protocol(), show_corrupted=False):
         self._dir = './log'
         makedirs(self._dir, exist_ok=True)
 
-        self._full_log_path = f'{self._dir}/{self._output_file_name}'
-        self.__create_log_file()
+        # Tengo un log General (que es el ultimo mensaje nada mas) y 
+        # un log por cliente, que solamente se guarda el numero de mensaje
+        # para loggearlo
+        self._general_log_path = f'{self._dir}/{GENERAL_LOG_FILE_NAME}'
+        self.__create_log_file(self._general_log_path)
 
         self._protocol = protocol
         self._show_corrupted_lines = show_corrupted
 
-    def __create_log_file(self):
-        if not path.exists(self._full_log_path):
-            open(self._full_log_path, 'w').close()
-
-    def log_begin(self, batch_number: str):
-        self.__log(Operation.BEGIN, batch_number)
-
-    def log_write(self, batch_number: str, data: List[str]):
-        self.__log(Operation.WRITE, batch_number, data)
-
-    def log_commit(self, batch_number: str):
-        self.__log(Operation.COMMIT, batch_number)
-
-    def __log(self, operation: Operation, batch_number: str, data: List[str] = None): 
-        line = [operation.message(), batch_number]
-        if data: line += data
-
-        line_to_write = self._protocol.encode(line, add_checksum=True) + b'\n'
-
-        with open(self._full_log_path, 'ab') as log:
-            log.write(line_to_write)
-
-    def get_last_batch_number(self) -> str:
+    def __create_client_log_file(self, client_id: str):
         '''
-        Returns the last batch's number. If log is empty 
-        an empty string is returned instead
+        Only creates it if it doesn't already exist
+        ''' 
+        full_client_dir_path = f'{self._dir}/{client_id}'
+        makedirs(full_client_dir_path, exist_ok=True)
+
+        full_path = f'{full_client_dir_path}/{CLIENT_LOG_FILE_NAME}'
+        self.__create_log_file(full_path)
+
+
+    def __create_log_file(self, full_path: str):
+        if not path.exists(full_path):
+            open(full_path, 'w').close()
+
+    def __get_line_for_general_log(self, client_id: str, data: List[str], msg_ids: List[str]) -> bytes:
+        row = [client_id] + data + msg_ids
+        return self._protocol.encode(row, add_checksum=True)
+
+    def _log_to_processed_lines(self,  client_id: str, msg_id: str):
         '''
-        for line in self.read_log_in_reverse():
-            return line[1]
+        Lines are added in an arbitrary order 
+        '''
+        self.__create_client_log_file(client_id)
+
+        full_path = f"{self._dir}/{client_id}/{CLIENT_LOG_FILE_NAME}"
+        full_temp_file_path = f"{self._dir}/{client_id}/temp_sorted.csv"
         
-        return ''
+        inserted_new_msg_id = False
+        with open(full_path, mode="r") as infile, open(
+            full_temp_file_path, mode="w", newline=""
+        ) as outfile:
+            reader = csv.reader(infile)
+            writer = csv.writer(outfile)
+            for read_msg_id in reader:
+                read_msg_id = read_msg_id[0]
 
-    def read_log(self):
+                if not inserted_new_msg_id and msg_id < read_msg_id:
+                    writer.writerow([msg_id])
+                    inserted_new_msg_id = True
+                
+                writer.writerow([read_msg_id])
+
+            if not inserted_new_msg_id:
+                writer.writerow([msg_id])
+
+        os.replace(full_temp_file_path, full_path) 
+
+    def _log_to_general_log(self, client_id: str, data: List[str], msg_ids: List[str]): 
+        # La linea se pisa todo el rato, pq? porque si yo estoy escribiendo 
+        # denuevo una linea (llegue hasta esta funcion), eso quiere decir
+        # que ya se termino de bajar a disco la linea anterior (es
+        # secuencial), por lo tanto ya no necesito la linea anterior
+        line = self.__get_line_for_general_log(client_id, data, msg_ids)
+        with open(self._general_log_path, 'wb') as log: 
+            log.write(line)
+
+    def __log(self, client_id: str, data: List[str], msg_ids: List[str]): 
+        # Si se rompe mientras se hace el log general 
+        #       -> Si no se llego a loggear completo salta el checksum y no se re-hace nada
+        #       -> Si se llego a loggear completo, se re-hace el bajado a disco (se guarda estado por lo tanto
+        #          se puede hacer multiples veces)
+        #       -> Para cada msg_id involucrado en el log, me fijo si se pudo bajar 
+        #          a disco, si no se pudo bajar lo agrego, entonces no hay problema 
+        #          conque se rompa mientras se guardan las lineas que se procesaron
+        self.__log_to_general_log(client_id, data)    
+        for msg_id in msg_ids:
+            self.__log_to_processed_lines(client_id, msg_id)
+
+    def read_general_log(self):
         '''
         Generator that returns each line of the file, the \n
         at the end of the line is not returned 
         '''
-        with open(self._full_log_path, 'rb') as log:
+        with open(self._general_log_path, 'rb') as log:
             for line in log:
                 decoded_line = self._protocol.decode(line, has_checksum=True)
                 if len(decoded_line) != 0:
@@ -80,13 +108,54 @@ class ActivityLog:
 
                 yield decoded_line
 
+    def read_processed_lines_log(self, client_id: str):
+        '''
+        Generator that returns each line of the file, the \n
+        at the end of the line is not returned 
+        '''
+        full_path = f'{self._dir}/{client_id}/{CLIENT_LOG_FILE_NAME}'
+        with open(full_path) as log:
+            reader = csv.reader(log)
+            for row in reader:
+                yield row
+
+    def remove_client_logs(self, client_id: str):
+        '''
+        Removes client log folder and it's contents
+        '''
+        client_folder_full_path = f'{self._dir}/{client_id}'
+        if Path(client_folder_full_path).exists():
+            shutil.rmtree(client_folder_full_path)
+
+    def remove_all_logs(self):
+        '''
+        Removes every client log, the general log
+        and the log folder
+        '''
+        if Path(self._dir).exists():
+            shutil.rmtree(self._dir)
+
+    def is_msg_id_already_processed(self, client_id: str, msg_id: str):
+        # TODO: Cambiar por algo mas eficiente, particionar al guardar
+        # o hacer binary search de alguna forma 
+        full_path = f'{self._dir}/{client_id}/{CLIENT_LOG_FILE_NAME}'
+        with open(full_path, 'r') as log:
+            reader = csv.reader(log)
+
+            for row in reader:
+                row = row[0]
+                if row == msg_id:
+                    return True
+                
+        return False 
+
     # https://stackoverflow.com/questions/2301789/how-to-read-a-file-in-reverse-order
-    def read_log_in_reverse(self, buf_size=8192):
+    def read_general_log_in_reverse(self, full_path: str, buf_size=8192):
         """
         A generator that returns the lines of a file in reverse order.
         Supports UTF-8 encoding
         """
-        with open(self._full_log_path, 'rb') as fh:
+        with open(full_path, 'rb') as fh:
             segment = None
             offset = 0
             fh.seek(0, SEEK_END)
