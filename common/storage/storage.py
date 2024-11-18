@@ -474,11 +474,6 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
         create_file_if_unexistent(file_path)
 
         temp_file = os.path.join(dir, f"temp_{file_name}")
-        logging.debug('State before adding batch...')
-        with open(file_path, mode="r") as de:
-            reader = csv.reader(de)
-            for line in reader:
-                logging.debug(f'{line}')
 
         # De aca para abajo las operaciones son atomicas, o pasan o no pasan
         msg_ids_used_in_file = []
@@ -490,14 +485,13 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
             writer = csv.writer(outfile)
 
             for row in reader:
-                logging.debug(f'Linea rompe: {row}')
                 record_was_updated = False
                 read_record_key = row[0]
                 read_record_value = int(row[1])
 
                 for i, record in enumerate(records):
                     # cada record es: [WINDOWS, MSG_ID_LIST]
-                    #key = int(record[0]) #app_id
+                    # key = int(record[0]) #app_id
                     key = record[0]
                     msg_ids = record[1]
                     msg_ids_used_in_file.extend(msg_ids)

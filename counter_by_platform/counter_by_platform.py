@@ -56,9 +56,8 @@ class CounterByPlatform:
 
     def __recover_state(self):
         full_file_path, file_state = self._activity_log.recover()
-        logging.debug(f'RECOVERY RESULT: {full_file_path}, {file_state}')
         if not full_file_path or not file_state: 
-            logging.debug('General log was corrupted, not recovering any state')
+            logging.debug('General log was corrupted, not recovering any state.')
             return 
         
         logging.debug(f'Recovering state, overriding {full_file_path} with: ')
@@ -66,6 +65,13 @@ class CounterByPlatform:
             logging.debug(line)
 
         dir, file_name = full_file_path.rsplit('/', maxsplit=1)
+        if not os.path.exists(dir):
+            logging.debug((
+                f'Ended up aborting state recovery, as {dir} '
+                f'was cleaned up after receiving END'
+            ))
+            return 
+
         temp_file = os.path.join(dir, f"temp_{file_name}")
         with open(temp_file, mode='w', newline='') as temp:
             writer = csv.writer(temp)

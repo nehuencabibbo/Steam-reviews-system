@@ -12,12 +12,24 @@ from typing import *
 # from operations import Operation, RecoveryOperation
 from protocol.protocol import Protocol, ProtocolError
 from storage.storage import create_file_if_unexistent
+from .constants import * 
 
-GENERAL_LOG_FILE_NAME="general_log.bin"
-CLIENT_LOG_FILE_NAME="client_log.csv"
+# GENERAL_LOG_FILE_NAME="general_log.bin"
+# CLIENT_LOG_FILE_NAME="client_log.csv"
+
+FIELD_LENGTH_BYTES = 4
+CHECKSUM_LENGTH_BYTES = 4
+
+class ActivityLogError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self):
+        return self.message
 
 class ActivityLog:
-    def __init__(self, protocol=Protocol(), show_corrupted=False):
+    def __init__(self, show_corrupted=False):
         self._dir = './log'
         makedirs(self._dir, exist_ok=True)
 
@@ -27,9 +39,11 @@ class ActivityLog:
         self._general_log_path = f'{self._dir}/{GENERAL_LOG_FILE_NAME}'
         create_file_if_unexistent(self._general_log_path)
 
-        self._protocol = protocol
         self._show_corrupted_lines = show_corrupted
 
+    '''
+    UTILITY
+    '''
     def __create_client_log_file(self, client_id: str):
         '''
         Only creates it if it doesn't already exist
@@ -40,11 +54,69 @@ class ActivityLog:
         full_path = f'{full_client_dir_path}/{CLIENT_LOG_FILE_NAME}'
         create_file_if_unexistent(full_path)
 
+    def __add_checksum(self, line: bytes) -> bytes: 
+        length = len(line).to_bytes(4, byteorder='big', signed=False)
 
+        return length + line
+    '''
+    GENREAL LOG 
+    ''' 
+    # TODO: Moverlo a una clase y que lo reciba por parametro asi puedo mockear y 
+    # testear corruptos
     def __get_line_for_general_log(self, msg: List[str], client_id: str = None) -> bytes:
         if client_id: msg = [client_id] + msg
-        return self._protocol.encode(msg, add_checksum=True)
+        return self.__encode_for_general_log(msg)
+    
+    def __encode_for_general_log(self, line: List[str]) -> bytes:
+        result = b""
+        for field in line:
+            encoded_field = field.encode("utf-8")
+            encoded_field_length = len(encoded_field).to_bytes(
+                FIELD_LENGTH_BYTES, "big", signed=False
+            )
+            result += encoded_field_length
+            result += encoded_field
 
+        result = self.__add_checksum(result)
+
+        return result
+
+    def __decode_general_log_line(self, line: bytes) -> Tuple[List[str], int]:
+        '''
+        Returns a decoded line and the amount of bytes read.
+        Validates checksum
+        '''
+        checksum_bytes = line[:CHECKSUM_LENGTH_BYTES]
+        if len(checksum_bytes) < CHECKSUM_LENGTH_BYTES: 
+            raise ActivityLogError((
+                f'Invalid checksum length, should be {CHECKSUM_LENGTH_BYTES}, '
+                f'but was {len(checksum_bytes)}'
+            ))
+        
+        checksum = int.from_bytes(checksum_bytes, byteorder='big')
+        line = line[CHECKSUM_LENGTH_BYTES:] # Saco los bytes del checksum
+
+        line = line[:checksum] # Me quedo solo con la linea a leer 
+        if len(line) < checksum:
+            raise ActivityLogError('Checksum does not match')
+        
+        result = []
+        while len(line) > 0:
+            field_length = int.from_bytes(line[:FIELD_LENGTH_BYTES], "big", signed=False)
+            line = line[FIELD_LENGTH_BYTES:]
+
+            field = line[:field_length]
+            field = field.decode("utf-8")
+            result.append(field)
+            line = line[field_length:]
+
+        return (result, CHECKSUM_LENGTH_BYTES + checksum)
+
+
+    '''
+    GENERAL LOGGING
+    '''
+    # TODO: Mover a una clase
     def _log_to_processed_lines(self, client_id: str, msg_id: str):
         '''
         Lines are added in ascending order. If line is already present, then it's skipped
@@ -93,8 +165,8 @@ class ActivityLog:
         # secuencial), por lo tanto ya no necesito la linea anterior
         data_in_bytes = self.__get_line_for_general_log(data)
         msg_ids_in_bytes = self.__get_line_for_general_log(msg_ids, client_id=client_id)
-        logging.debug(f'EXPECTED DATA: {data_in_bytes}')
-        logging.debug(f'EXPECTED MSG_IDS: {msg_ids_in_bytes}')
+        # logging.debug(f'EXPECTED DATA: {data_in_bytes}')
+        # logging.debug(f'EXPECTED MSG_IDS: {msg_ids_in_bytes}')
         with open(self._general_log_path, 'wb') as log: 
             log.write(data_in_bytes)
             log.write(msg_ids_in_bytes)
@@ -112,35 +184,27 @@ class ActivityLog:
 
         # Para que el general log sea valido tiene que tener dos lineas y ambas tienen que estar
         # integras 
-        logging.debug("Voy a loggear...")
-        logging.debug(f"DATA: {data}")
-        logging.debug(f'MSG_IDS: {msg_ids}')
         self._log_to_general_log(client_id, data, msg_ids)
         for msg_id in msg_ids:
             self._log_to_processed_lines(client_id, msg_id)
 
+    '''
+    READING LOG
+    '''
     def read_general_log(self):
         '''
         Generator that returns each line of the file, the \n
         at the end of the line is not returned 
         '''
         with open(self._general_log_path, 'rb', buffering=0) as log:
-        #     for index, line in enumerate(log):
-        #         logging.debug(f'index {index}, line: {line}')
             data = log.read()
         
-        # TODO: Esto esta recontra acoplado, hacerse un ActivityLogProtocol y Listo
         while len(data) > 0:
-            checksum = int.from_bytes(data[:4], byteorder='big')
-            data = data[4:]
-
-            if len(data) < checksum:
-                raise ProtocolError('Checksum does not match')
+            line, bytes_read = self.__decode_general_log_line(data)
         
-            message = data[:checksum]
-            data = data[checksum:]
+            data = data[bytes_read:]
 
-            yield self._protocol.decode(message)
+            yield line
 
 
     def read_processed_lines_log(self, client_id: str):
@@ -154,6 +218,11 @@ class ActivityLog:
             for row in reader:
                 yield row[0]
 
+    '''
+    CLEAN UP
+    '''
+    # TODO: Llamar a estas funciones cuando llega el sigterm y purgear los temp
+    # files el arrancar
     def remove_client_logs(self, client_id: str):
         '''
         Removes client log folder and it's contents
@@ -170,6 +239,9 @@ class ActivityLog:
         if Path(self._dir).exists():
             shutil.rmtree(self._dir)
 
+    '''
+    DUPLICATE FILTER
+    '''
     def is_msg_id_already_processed(self, client_id: str, msg_id: str):
         # TODO: Cambiar por algo mas eficiente, particionar al guardar
         # o hacer binary search de alguna forma (no se puede sin hacer
@@ -187,6 +259,9 @@ class ActivityLog:
                 
         return False 
     
+    '''
+    RECOVERY
+    '''
     def recover(self) -> Tuple[Optional[str], Optional[List[str]]]: 
         '''
         Returns state to recover based on the general log.
@@ -240,46 +315,3 @@ class ActivityLog:
             return None, None 
 
         return full_file_path_to_recover, file_state
-
-    # https://stackoverflow.com/questions/2301789/how-to-read-a-file-in-reverse-order
-    def read_general_log_in_reverse(self, full_path: str, buf_size=8192):
-        """
-        A generator that returns the lines of a file in reverse order.
-        Supports UTF-8 encoding
-        """
-        with open(full_path, 'rb') as fh:
-            segment = None
-            offset = 0
-            fh.seek(0, SEEK_END)
-            file_size = remaining_size = fh.tell()
-            while remaining_size > 0:
-                offset = min(file_size, offset + buf_size)
-                fh.seek(file_size - offset)
-                buffer = fh.read(min(remaining_size, buf_size))
-                # remove file's last "\n" if it exists, only for the first buffer
-                if remaining_size == file_size and buffer[-1] == ord('\n'):
-                    buffer = buffer[:-1]
-                remaining_size -= buf_size
-                lines = buffer.split('\n'.encode())
-                # append last chunk's segment to this chunk's last line
-                if segment is not None:
-                    lines[-1] += segment
-                segment = lines[0]
-                lines = lines[1:]
-                # yield lines in this chunk except the segment
-                for line in reversed(lines):
-                    # only decode on a parsed line, to avoid utf-8 decode error
-                    # print(line)
-                    try: 
-                        yield self._protocol.decode(line, has_checksum=True)
-                    except ProtocolError as e: 
-                        if self._show_corrupted_lines:
-                            print(f"[ACTIVITY LOG] {str(e)}")
-            # Don't yield None if the file was empty
-            if segment is not None:
-                # print(segment)
-                try:
-                    yield self._protocol.decode(segment, has_checksum=True)
-                except ProtocolError as e: 
-                    if self._show_corrupted_lines:
-                        print(f"[ACTIVITY LOG] {str(e)}")
