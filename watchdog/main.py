@@ -16,9 +16,13 @@ def get_config():
             "LOGGING_LEVEL", config["DEFAULT"]["LOGGING_LEVEL"]
         )
 
-        config_params["NODE_ID"] = os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"])
+        config_params["NODE_ID"] = int(os.getenv("NODE_ID", config["DEFAULT"]["NODE_ID"]))
         config_params["PORT"] = int(os.getenv("PORT", config["DEFAULT"]["PORT"]))
-
+        config_params["ELECTION_PORT"] = int(os.getenv("ELECTION_PORT", config["DEFAULT"]["ELECTION_PORT"]))
+        config_params["LEADER_COMUNICATION_PORT"] = int(os.getenv("LEADER_COMUNICATION_PORT",
+                                                        config["DEFAULT"]["LEADER_COMUNICATION_PORT"])
+                                                    )
+        
         config_params["WAIT_BETWEEN_HEARTBEAT"] = float(
             os.getenv("WAIT_BETWEEN_HEARTBEAT", 
             config["DEFAULT"]["WAIT_BETWEEN_HEARTBEAT"],

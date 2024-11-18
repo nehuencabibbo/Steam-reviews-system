@@ -18,14 +18,16 @@ class WatchdogClient:
 
     def __init__(self, monitor_ip, monitor_port, client_name:str, client_middleware: Middleware):
         self._stop = False
-        self._monitor_ip = monitor_ip
+        self._monitor_ip =  "watchdog_2" #monitor_ip
         self._monitor_port = monitor_port
         self._client_name = client_name
         self._client_middleware = client_middleware
+        self._connection = None
 
     def start(self):
 
         try:
+            sleep(3)
             self._connection = self._conect_to_monitor()
             logging.info(f"[MONITOR] Sending name: {self._client_name}")
             self._connection.send(self._client_name)#envio el nombre

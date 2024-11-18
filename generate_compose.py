@@ -5,9 +5,15 @@ from typing import *
 
 
 CLIENTS_PORT = 7777
-WATCHDOG_PORT = 8080
-WAIT_BETWEEN_HEARTBEAT = 5.0
 
+#WATCHDOG
+WATCHDOG_PORT = 8080
+WATCHDOG_ELECTION_PORT=9000  
+WATCHDOG_LEADER_COMUNICATION_PORT=9500
+WAIT_BETWEEN_HEARTBEAT = 5.0
+AMOUNT_OF_WATCHDOGS = 3
+
+#ALL QUERIES
 AMOUNT_OF_DROP_FILTER_COLUMNS = 5
 AMOUNT_OF_DROP_NULLS = 5
 # Q2
@@ -55,9 +61,10 @@ def add_volumes(output: Dict):
     output["volumes"] = {"rabbitmq_data": {}}
 
 def add_watchdog(output, port, debug=False, num=1):
-    output["services"][f"watchdog"] = {
+
+    output["services"][f"watchdog_{num}"] = {
         "image": "watchdog:latest",
-        "container_name": f"watchdog",
+        "container_name": f"watchdog_{num}",
         "volumes": [
             "/var/run/docker.sock:/var/run/docker.sock"
         ],
@@ -65,7 +72,9 @@ def add_watchdog(output, port, debug=False, num=1):
             f"NODE_ID={num}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"PORT={port}",
-            f"WAIT_BETWEEN_HEARTBEAT={WAIT_BETWEEN_HEARTBEAT}"
+            f"WAIT_BETWEEN_HEARTBEAT={WAIT_BETWEEN_HEARTBEAT}",
+            f"ELECTION_PORT= {WATCHDOG_ELECTION_PORT}",
+            f"LEADER_COMUNICATION_PORT={WATCHDOG_LEADER_COMUNICATION_PORT}",
         ],
         "networks": ["net"],
     }
@@ -376,6 +385,10 @@ def add_percentile(
         "restart": "on-failure",
     }
 
+
+def generate_watchdogs(output, amount, debug):
+    for i in range(amount):
+        add_watchdog(output, port=WATCHDOG_PORT, debug=debug, num=i)
 
 def generate_drop_nulls(output: Dict, amount: int, debug=False):
     for i in range(amount):
@@ -971,45 +984,46 @@ def generate_output():
 
     output["services"] = {}
     add_rabbit(output)
-    add_watchdog(output, port=WATCHDOG_PORT, debug=False)
+
+    generate_watchdogs(output, AMOUNT_OF_WATCHDOGS, debug=False)
     # GAME_FILE_PATH=data/games_sample.csv
     # REVIEWS_FILE_PATH=data/reviews_sample.csv
 
     # ; GAME_FILE_PATH=data/filtered_games.csv
     # ; REVIEWS_FILE_PATH=data/filtered_reviews.csv
 
-    add_client(
-        output,
-        num=1,
-        # games_file_path="data/games.csv",
-        # reviews_file_path="data/reviews_sample.csv",
-        games_file_path="data/games_sample.csv",
-        reviews_file_path="data/reviews_sample.csv",
-        debug=False,
-    )
-    add_client(
-        output,
-        num=2,
-        # games_file_path="data/games.csv",
-        # reviews_file_path="data/reviews_sample.csv",
-        games_file_path="data/games.csv",
-        reviews_file_path="data/filtered_reviews.csv",
-        debug=False,
-    )
-    add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
+    # add_client(
+    #     output,
+    #     num=1,
+    #     # games_file_path="data/games.csv",
+    #     # reviews_file_path="data/reviews_sample.csv",
+    #     games_file_path="data/games_sample.csv",
+    #     reviews_file_path="data/reviews_sample.csv",
+    #     debug=False,
+    # )
+    # add_client(
+    #     output,
+    #     num=2,
+    #     # games_file_path="data/games.csv",
+    #     # reviews_file_path="data/reviews_sample.csv",
+    #     games_file_path="data/games.csv",
+    #     reviews_file_path="data/filtered_reviews.csv",
+    #     debug=False,
+    # )
+    #add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
     generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
+    #generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=False)
+    #generate_q1(output=output, debug=False)
     # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=False)
+    #generate_q2(output=output, debug=False)
     # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=False)
+    #generate_q3(output=output, debug=False)
     # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=False)
+    #generate_q4(output=output, debug=False)
     # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=False)
+    #generate_q5(output=output, debug=False)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
