@@ -8,6 +8,9 @@ class ServerSocket:
         self._port = port
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+        #so it can use the port when program ends abruptly
+        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
     def bind(self):
         self._server_socket.bind(('', self._port))
         self._server_socket.listen(5)

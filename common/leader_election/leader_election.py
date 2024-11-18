@@ -1,6 +1,11 @@
 import threading
 import socket
 import logging
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from udpsocket.udp_socket import UDPSocket
 
 ELECTION_COMMAND = "E"
 OK_COMMAND = "O"
@@ -15,16 +20,22 @@ class LeaderElection:
     def __init__(self, node_id, election_port):
         self._id = node_id
         self._amount_of_nodes = 3 #dont hardcode this
-        self._leader = None #it should be shared between threads. SHould not be a problem due to event locking
+        self._leader = None #SharedValue?
         self._got_ok = threading.Event()
         self._not_running_election = threading.Event()
         self._not_running_election.set()
 
-        self._stop = False
+        self._stop = False #shared value?
 
-        #TODO: Hacer stop and wait for reliability or something else /selective repeat?
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._socket.bind(('', election_port + node_id)) #so i can receive msg here
+        self._sender_lock = threading.Lock() # delete it?
+        self._sender_socket = UDPSocket() #it is not necessary to bind it
+        self._receiver_socket = UDPSocket()
+        self._receiver_socket.bind(("", election_port + node_id))
+
+        #TODO: Hacer stop and wait for reliability
+        # for safe sockets, i need 1 socket for sending and another or receiving so it does no mix ACK with a message
+        # self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # self._socket.bind(('', election_port + node_id)) #so i can receive msg here
 
         self._election_port = election_port
 
@@ -60,17 +71,17 @@ class LeaderElection:
         #esto se recibe todo en otro thread aparte. #Al mismo tiempo que envio, debo poder recibir los mensajes
         
         while not self._stop:
-            msg : bytes = self._socket.recv(1024) #.receive()
+            #msg : bytes = self._socket.recv(1024) #.receive()
+            msg = self._receiver_socket.recv_message(3)
 
-            command, node_id = msg.decode("utf-8").split(",")
+            #command, node_id = msg.decode("utf-8").split(",")
+            command, node_id = msg.split(",")
             node_id = int(node_id)
 
             logging.info(f"NODE {self._id} | Got message: {command} from {node_id}")
             if command == ELECTION_COMMAND:
                 if self._id > node_id:
                     self._send_ok_message(node_id)
-                    #con multithreading no hace falta, pero debería ver donde hacerle join
-                    threading.Thread(target=self.start_leader_election(), daemon=True).start() 
 
             elif command == OK_COMMAND:
                 self._got_ok.set()
@@ -92,33 +103,40 @@ class LeaderElection:
 
     def stop(self):
         self._stop = True
-        self._socket.close()
+        self._receiver_socket.close()
+        self._sender_socket.close()
+        #nodes waiting for election can have a greful exit during the election
+        self._not_running_election.set() 
 
 
     def _send_election_message(self):
-        message = f'E,{self._id}'.encode("utf-8")
+        message = f'E,{self._id}'
         for node_id in range(self._id + 1, self._amount_of_nodes):
             if self._stop:
                 return
-            self._socket.sendto(message, self._node_id_to_addr(node_id))
+            with self._sender_lock:
+                self._sender_socket.send_message(message, self._node_id_to_addr(node_id))
 
 
     def _send_leader_message(self):
-        message = f'C,{self._id}'.encode("utf-8")
+        message = f'C,{self._id}'
         for node_id in range(0, self._amount_of_nodes):
             if self._stop:
                 return
             if node_id == self._id:
                 continue
-            self._socket.sendto(message, self._node_id_to_addr(node_id))
+
+            with self._sender_lock:
+                self._sender_socket.send_message(message, self._node_id_to_addr(node_id))
 
 
     def _send_ok_message(self, node_id):   
         if self._stop:
             return
         
-        message = f'O,{self._id}'.encode("utf-8")
-        self._socket.sendto(message, self._node_id_to_addr(node_id))
+        message = f'O,{self._id}'
+        with self._sender_lock:
+            self._sender_socket.send_message(message, self._node_id_to_addr(node_id))
 
 
     def _node_id_to_addr(self, node_id):

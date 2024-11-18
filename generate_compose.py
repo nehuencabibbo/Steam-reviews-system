@@ -1011,7 +1011,7 @@ def generate_output():
     #     debug=False,
     # )
     #add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
+    # generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
     #generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
 
     # -------------------------------------------- Q1 -----------------------------------------
