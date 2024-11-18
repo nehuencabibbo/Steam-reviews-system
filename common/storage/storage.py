@@ -411,13 +411,11 @@ def sum_platform_batch_to_records_per_client(
     range_not_used = 0
     for client_id, new_records in new_records_per_client.items():
         # new_records = {Windows: [msg_id_1, msg_id_2, .., ], Linux: ....} 
-        print(f"CLIENT_ID: {client_id}")
-        print(f"NEW RECORDS: {new_records}")
+
         # client_id = numerito
         client_dir = os.path.join(dir, client_id)
         records_for_file = _group_records("platform_count.csv", new_records)
         # {platform_count.csv: [[WINDOWS, MSG_ID_LIST], [LINUX, MSG_ID_LIST]]}
-        print(f"RECORDS FOR FILE: {records_for_file}")
 
         # final_path = client_dir/platform_count.csv
         _sum_batch_to_records(client_dir, range_not_used, records_for_file, logger, partition=False)

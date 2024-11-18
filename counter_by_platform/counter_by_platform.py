@@ -88,28 +88,28 @@ class CounterByPlatform:
         #   Linux: [MSG_ID1, MSG_ID2, ...], 
         #   Mac: [MSG_ID1, MSG_ID2, ...]}, 
         # ...}
-        count_per_record_by_client_id = self.__count_per_client_id(body)
-        clone = count_per_record_by_client_id.copy()
-        self.__purge_duplicates(count_per_record_by_client_id)
+        msg_ids_per_record_by_client_id = self.__group_msg_ids_per_client_by_platform(body)
+        # clone = msg_ids_per_record_by_client_id.copy()
+        self.__purge_duplicates(msg_ids_per_record_by_client_id)
         
-        if clone != count_per_record_by_client_id: 
-            logging.debug(f'BEFORE: {clone}')
-            logging.debug(f'AFTER: {count_per_record_by_client_id}')
+        # if clone != msg_ids_per_record_by_client_id: 
+        #     logging.debug(f'BEFORE: {clone}')
+        #     logging.debug(f'AFTER: {msg_ids_per_record_by_client_id}')
 
         storage.sum_platform_batch_to_records_per_client(
             self.storage_dir,
-            count_per_record_by_client_id,
+            msg_ids_per_record_by_client_id,
             self._activity_log
         )
 
         self._middleware.ack(delivery_tag)
 
-    def __purge_duplicates(self, count_per_platform_by_client_id: Dict[str, Dict[str, List[str]]]):
+    def __purge_duplicates(self, msg_ids_per_record_by_client_id: Dict[str, Dict[str, List[str]]]):
         # Para cada cliente o se actualizo el archivo completo o no se actualizo, eso queire decir
         # que si al menos UNO de los msg_id ya estaba loggeado, ya se proceso totalemente ese cliente
 
         client_ids_to_remove = [] # No se puede remover claves de un dict mientras se itera
-        for client_id, count_per_platform in count_per_platform_by_client_id.items():
+        for client_id, count_per_platform in msg_ids_per_record_by_client_id.items():
             for platform, msg_ids in count_per_platform.items(): # TODO: Por ahi hay alguna forma mejor de hacer esto
                 an_arbitrary_message_id = msg_ids[0]
                 if self._activity_log.is_msg_id_already_processed(client_id, an_arbitrary_message_id):
@@ -118,30 +118,41 @@ class CounterByPlatform:
                 break
         
         for client_id in client_ids_to_remove:
-            del count_per_platform_by_client_id[client_id]
+            del msg_ids_per_record_by_client_id[client_id]
 
 
-    def __count_per_client_id(
+    def __group_msg_ids_per_client_by_platform(
         self, body: list[list]
     ) -> Dict[str, Dict[str, List[str]]]:
-        # Retorna una lista con los msg ids involucrados para cada mensaje, sacar la cantidad a sumar
-        # es hacer len(lista) por eso no se guarda el count tambien
-        # {client_id: {Windows: [1, 3, 4, 5], Linux: [2, 10], Mac: [9]}, ...}
-        count_per_record_by_client_id = {}
+        '''
+        Retorna una lista con los msg ids involucrados para cada mensaje, sacar la cantidad a sumar
+        es hacer len(lista) por eso no se guarda el count tambien.
+
+        Se devuelve algo del estilo: 
+        {client_id: {Windows: ['1,W', '3,W', '4,W', '5,W'], Linux: ['2,L', '10,L'], Mac: ['9,M']}, ...}
+
+        Explicacion message id: 
+        Como un mismo mensaje obtiene si el juego esta soportado para una plataforma o no, pero el drop nulls
+        manda todos los mensajes con un mismo msg_id, que esta bien, porque para el es todo un mismo mensaje,
+        yo tengo que agregar un identificador unico para cada uno (porque para el count by platform son distintos 
+        mensajes), para evitar guardar estado, se guarda msg_id,inicial_platform, asi se diferencian
+        '''
+        msg_ids_per_record_by_client_id = {}
         for record in body:
             msg_id = record[REGULAR_MESSAGE_ID]
             client_id = record[REGULAR_MESSAGE_SESSION_ID]
             record_id = record[REGULAR_MESSAGE_FIELD_TO_COUNT_BY]
 
-            if not client_id in count_per_record_by_client_id:
-                count_per_record_by_client_id[client_id] = {}
+            if not client_id in msg_ids_per_record_by_client_id:
+                msg_ids_per_record_by_client_id[client_id] = {}
 
-            if not record_id in count_per_record_by_client_id[client_id]:
-                count_per_record_by_client_id[client_id][record_id] = []
+            if not record_id in msg_ids_per_record_by_client_id[client_id]:
+                msg_ids_per_record_by_client_id[client_id][record_id] = []
 
-            count_per_record_by_client_id[client_id][record_id].append(msg_id)
+            actual_message_id = ','.join([msg_id, record_id[0]]) # Ver explicacion del inicio
+            msg_ids_per_record_by_client_id[client_id][record_id].append(actual_message_id)
 
-        return count_per_record_by_client_id
+        return msg_ids_per_record_by_client_id
 
     def __send_results(self, session_id: str):
         self._middleware.create_queue(self.publish_queue)

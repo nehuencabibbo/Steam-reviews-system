@@ -151,9 +151,29 @@ class ActivityLogTests(unittest.TestCase):
             self._activity_log._log_to_processed_lines(client_id, msg_id)
 
         for index, line in enumerate(self._activity_log.read_processed_lines_log(client_id)):
-           self.assertEqual(str(index + 1), line[0])
+           self.assertEqual(str(index + 1), line)
 
         self.assertEqual(index + 1, 5)
+
+    def test_08_processed_lines_supports_strings_as_values(self):
+        client_id = 1
+        msg_ids = ['2,W', '3,W', '2,L', '3,M', '5,L', '4,W', '4,L']
+        expected = sorted(msg_ids)
+        for msg_id in msg_ids:
+            self._activity_log._log_to_processed_lines(client_id, msg_id)
+
+        for index, line in enumerate(self._activity_log.read_processed_lines_log(client_id)):
+           self.assertEqual(line, expected[index])
+
+    def test_09_processed_lines_correctly_detects_duplicates_when_larger_keys_are_supplied(self):
+        client_id = 1
+        msg_ids = ['2,W', '2,W', '2,L']
+        expected = ['2,L', '2,W']
+        for msg_id in msg_ids:
+            self._activity_log._log_to_processed_lines(client_id, msg_id)
+
+        for index, line in enumerate(self._activity_log.read_processed_lines_log(client_id)):
+           self.assertEqual(line, expected[index])
 
 if __name__ == "__main__":
     unittest.main()

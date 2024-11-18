@@ -134,7 +134,7 @@ class ActivityLog:
         with open(full_path) as log:
             reader = csv.reader(log)
             for row in reader:
-                yield row
+                yield row[0]
 
     def remove_client_logs(self, client_id: str):
         '''
