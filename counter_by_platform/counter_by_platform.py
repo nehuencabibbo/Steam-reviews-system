@@ -56,16 +56,21 @@ class CounterByPlatform:
 
     def __recover_state(self):
         full_file_path, file_state = self._activity_log.recover()
-        
+        logging.debug(f'RECOVERY RESULT: {full_file_path}, {file_state}')
         if not full_file_path or not file_state: 
+            logging.debug('General log was corrupted, not recovering any state')
             return 
         
-        dir, file_name = full_file_path.rsplit(maxsplit=1)
+        logging.debug(f'Recovering state, overriding {full_file_path} with: ')
+        for line in file_state:
+            logging.debug(line)
+
+        dir, file_name = full_file_path.rsplit('/', maxsplit=1)
         temp_file = os.path.join(dir, f"temp_{file_name}")
         with open(temp_file, mode='w', newline='') as temp:
             writer = csv.writer(temp)
             for line in file_state:
-                writer.write(line)
+                writer.writerow([line])
 
         os.replace(temp_file, full_file_path)
 
@@ -89,12 +94,12 @@ class CounterByPlatform:
         #   Mac: [MSG_ID1, MSG_ID2, ...]}, 
         # ...}
         msg_ids_per_record_by_client_id = self.__group_msg_ids_per_client_by_platform(body)
-        # clone = msg_ids_per_record_by_client_id.copy()
+        clone = msg_ids_per_record_by_client_id.copy()
         self.__purge_duplicates(msg_ids_per_record_by_client_id)
         
-        # if clone != msg_ids_per_record_by_client_id: 
-        #     logging.debug(f'BEFORE: {clone}')
-        #     logging.debug(f'AFTER: {msg_ids_per_record_by_client_id}')
+        if clone != msg_ids_per_record_by_client_id: 
+            logging.debug(f'BEFORE: {clone}')
+            logging.debug(f'AFTER: {msg_ids_per_record_by_client_id}')
 
         storage.sum_platform_batch_to_records_per_client(
             self.storage_dir,

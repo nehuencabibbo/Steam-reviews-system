@@ -91,12 +91,12 @@ class ActivityLog:
         # denuevo una linea (llegue hasta esta funcion), eso quiere decir
         # que ya se termino de bajar a disco la linea anterior (es
         # secuencial), por lo tanto ya no necesito la linea anterior
-        data = self.__get_line_for_general_log(data) + b'\n' # Se trimea al leer, no afecta al checksum
-        msg_ids = self.__get_line_for_general_log(msg_ids, client_id=client_id) + b'\n'
-        with open(self._general_log_path, 'wb') as log: 
-            log.write(data)
-            log.write(msg_ids)
-
+        data_in_bytes = self.__get_line_for_general_log(data) + b'\n' # Se trimea al leer, no afecta al checksum
+        msg_ids_in_bytes = self.__get_line_for_general_log(msg_ids, client_id=client_id) + b'\n'
+        logging.debug(f'EXPECTED MSG_IDS: {msg_ids_in_bytes}')
+        with open(self._general_log_path, 'wb', buffering=0) as log: 
+            log.write(data_in_bytes)
+            log.write(msg_ids_in_bytes)
 
     def log(self, client_id: str, data: List[str], msg_ids: List[str]): 
         # Si se rompe mientras se hace el log general 
@@ -121,6 +121,7 @@ class ActivityLog:
         with open(self._general_log_path, 'rb') as log:
             for line in log:
                 line = line.strip()
+                logging.debug(f'GENERAL LOG LINE BEFORE DECODING: {line}')
                 decoded_line = self._protocol.decode(line, has_checksum=True)
 
                 yield decoded_line
@@ -202,6 +203,7 @@ class ActivityLog:
         msg_ids = None 
         try:
             for line_type, line in enumerate(self.read_general_log()):
+                logging.debug(f'GENERAL LOG LINE: {line}')
                 if line_type == FILE_STATE_LINE: 
                     full_file_path_to_recover = line[0]
                     file_state = line[1:]
@@ -211,7 +213,7 @@ class ActivityLog:
                         self._log_to_processed_lines(client_id, msg_id)
 
         except ProtocolError as _:
-            logging.debug('General log was corrupted, will not update state')
+            return None, None 
 
         return full_file_path_to_recover, file_state
 

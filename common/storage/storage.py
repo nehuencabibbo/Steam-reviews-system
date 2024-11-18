@@ -474,6 +474,11 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
         create_file_if_unexistent(file_path)
 
         temp_file = os.path.join(dir, f"temp_{file_name}")
+        logging.debug('State before adding batch...')
+        with open(file_path, mode="r") as de:
+            reader = csv.reader(de)
+            for line in reader:
+                logging.debug(f'{line}')
 
         # De aca para abajo las operaciones son atomicas, o pasan o no pasan
         msg_ids_used_in_file = []
@@ -520,6 +525,7 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
         # TODO: esto lo deberia recibir por parametro y el path se deberia armar aca...
         client_id = dir.rsplit('/', maxsplit=1)[-1]
         logger.log(client_id, [file_path] + new_file_lines, msg_ids_used_in_file)
+        
         os.replace(temp_file, file_path)
 
 
