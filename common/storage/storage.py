@@ -490,6 +490,7 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
             writer = csv.writer(outfile)
 
             for row in reader:
+                logging.debug(f'Linea rompe: {row}')
                 record_was_updated = False
                 read_record_key = row[0]
                 read_record_value = int(row[1])
@@ -525,7 +526,7 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
         # TODO: esto lo deberia recibir por parametro y el path se deberia armar aca...
         client_id = dir.rsplit('/', maxsplit=1)[-1]
         logger.log(client_id, [file_path] + new_file_lines, msg_ids_used_in_file)
-        
+
         os.replace(temp_file, file_path)
 
 

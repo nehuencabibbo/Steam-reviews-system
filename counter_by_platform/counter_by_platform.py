@@ -70,7 +70,7 @@ class CounterByPlatform:
         with open(temp_file, mode='w', newline='') as temp:
             writer = csv.writer(temp)
             for line in file_state:
-                writer.writerow([line])
+                writer.writerow(line.split(','))
 
         os.replace(temp_file, full_file_path)
 

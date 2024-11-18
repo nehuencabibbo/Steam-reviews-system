@@ -13,7 +13,7 @@ from typing import *
 from protocol.protocol import Protocol, ProtocolError
 from storage.storage import create_file_if_unexistent
 
-GENERAL_LOG_FILE_NAME="general_log.txt"
+GENERAL_LOG_FILE_NAME="general_log.bin"
 CLIENT_LOG_FILE_NAME="client_log.csv"
 
 class ActivityLog:
@@ -91,12 +91,15 @@ class ActivityLog:
         # denuevo una linea (llegue hasta esta funcion), eso quiere decir
         # que ya se termino de bajar a disco la linea anterior (es
         # secuencial), por lo tanto ya no necesito la linea anterior
-        data_in_bytes = self.__get_line_for_general_log(data) + b'\n' # Se trimea al leer, no afecta al checksum
-        msg_ids_in_bytes = self.__get_line_for_general_log(msg_ids, client_id=client_id) + b'\n'
+        data_in_bytes = self.__get_line_for_general_log(data)
+        msg_ids_in_bytes = self.__get_line_for_general_log(msg_ids, client_id=client_id)
+        logging.debug(f'EXPECTED DATA: {data_in_bytes}')
         logging.debug(f'EXPECTED MSG_IDS: {msg_ids_in_bytes}')
-        with open(self._general_log_path, 'wb', buffering=0) as log: 
+        with open(self._general_log_path, 'wb') as log: 
             log.write(data_in_bytes)
             log.write(msg_ids_in_bytes)
+            log.flush()
+            os.fsync(log.fileno())
 
     def log(self, client_id: str, data: List[str], msg_ids: List[str]): 
         # Si se rompe mientras se hace el log general 
@@ -109,6 +112,9 @@ class ActivityLog:
 
         # Para que el general log sea valido tiene que tener dos lineas y ambas tienen que estar
         # integras 
+        logging.debug("Voy a loggear...")
+        logging.debug(f"DATA: {data}")
+        logging.debug(f'MSG_IDS: {msg_ids}')
         self._log_to_general_log(client_id, data, msg_ids)
         for msg_id in msg_ids:
             self._log_to_processed_lines(client_id, msg_id)
@@ -118,13 +124,24 @@ class ActivityLog:
         Generator that returns each line of the file, the \n
         at the end of the line is not returned 
         '''
-        with open(self._general_log_path, 'rb') as log:
-            for line in log:
-                line = line.strip()
-                logging.debug(f'GENERAL LOG LINE BEFORE DECODING: {line}')
-                decoded_line = self._protocol.decode(line, has_checksum=True)
+        with open(self._general_log_path, 'rb', buffering=0) as log:
+        #     for index, line in enumerate(log):
+        #         logging.debug(f'index {index}, line: {line}')
+            data = log.read()
+        
+        # TODO: Esto esta recontra acoplado, hacerse un ActivityLogProtocol y Listo
+        while len(data) > 0:
+            checksum = int.from_bytes(data[:4], byteorder='big')
+            data = data[4:]
 
-                yield decoded_line
+            if len(data) < checksum:
+                raise ProtocolError('Checksum does not match')
+        
+            message = data[:checksum]
+            data = data[checksum:]
+
+            yield self._protocol.decode(message)
+
 
     def read_processed_lines_log(self, client_id: str):
         '''
@@ -201,18 +218,25 @@ class ActivityLog:
         file_state = None 
         client_id = None 
         msg_ids = None 
+        read_lines = 0
         try:
             for line_type, line in enumerate(self.read_general_log()):
                 logging.debug(f'GENERAL LOG LINE: {line}')
+                read_lines += 1
                 if line_type == FILE_STATE_LINE: 
                     full_file_path_to_recover = line[0]
                     file_state = line[1:]
                 elif line_type == MSG_IDS_LINE: 
-                    client_id, msg_ids = line[0], line[1:]
+                    client_id = line[0]
+                    msg_ids =  line[1:]
                     for msg_id in msg_ids: 
                         self._log_to_processed_lines(client_id, msg_id)
 
         except ProtocolError as _:
+            return None, None 
+        
+        if read_lines != 2: 
+            # Es re dificil que pase, pero puede llegar a leer solo una bien
             return None, None 
 
         return full_file_path_to_recover, file_state

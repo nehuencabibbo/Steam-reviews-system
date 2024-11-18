@@ -171,6 +171,16 @@ class TestProtocol(unittest.TestCase):
         # Assert the result
         self.assertEqual(decoded, expected_decoded)
 
+    def test_for_log(self):
+        data = ['/tmp/006b8b4567/platform_count.csv', 'WINDOWS,722', 'MAC,133', 'LINUX,85']
+        msg_ids = ['006b8b4567', '729,L', '773,L', '770,W', '771,W', '772,W', '773,W', '775,W', '776,W', '729,L', '773,L', '773,M', '776,M', '729,L', '773,L']
+
+        encoded_data = Protocol.encode(data, add_checksum=True)
+        encoded_msg_ids = Protocol.encode(msg_ids, add_checksum=True)
+
+        print(encoded_data)
+        print("----------------------------------------")
+        print(encoded_msg_ids)
 
 if __name__ == "__main__":
     unittest.main()
