@@ -16,8 +16,7 @@ NUM_OF_RETRIES = 3
 
 class Watchdog:
     def __init__(self, server_socket: ServerSocket, config: dict):
-        #server socket must e initialize only if its a leader
-        #so i should not receive it as a parameter (or at least i should not connect on constructor)
+
         self._node_id = config["NODE_ID"]
         self._wait_between_heartbeats = config["WAIT_BETWEEN_HEARTBEAT"]
         self._election_port = config["ELECTION_PORT"]
@@ -30,7 +29,7 @@ class Watchdog:
         self._got_sigterm = multiprocessing.Event()
 
         self._peers_lock = threading.Lock()
-        self._peers: list[ClientConnection] = [] #so i can send updates to them
+        self._peers: list[ClientConnection] = []
 
         self._leader_election = LeaderElection(self._node_id, self._election_port)
         signal.signal(signal.SIGTERM, self._sigterm_handler)
@@ -90,7 +89,7 @@ class Watchdog:
                 thread = multiprocessing.Process(target=handler.start, daemon=True)
                 thread.start()
                 
-                if node_name in self._nodes:
+                if node_name in self._nodes and self._nodes[node_name] is not None:
                     self._nodes[node_name].join()
 
                 self._nodes[node_name] = thread
@@ -99,7 +98,7 @@ class Watchdog:
             if not self._got_sigterm.is_set():
                 logging.error(f"ERROR: {e}")
         finally:
-            [thread.join() for thread in self._nodes.values()] #error here
+            self._release_threads()
     
 
     def _listen_to_leader(self):
@@ -153,7 +152,7 @@ class Watchdog:
                 if i == NUM_OF_RETRIES:
                     raise e
                 logging.info("Leader is still preparing. Retrying..")
-                sleep(2)
+                sleep(3)
 
     
 
@@ -168,6 +167,13 @@ class Watchdog:
                     if self._got_sigterm: return
                     self._peers.pop(i)
 
+
+    def _release_threads(self):
+
+        for thread in self._nodes.values():
+            if thread is not None:
+                thread.join()
+      
 
     def _sigterm_handler(self, signal, frame):
         self._got_sigterm.set()

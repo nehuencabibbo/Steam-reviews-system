@@ -1,5 +1,4 @@
 import threading
-import socket
 import logging
 import sys
 import os
@@ -11,7 +10,7 @@ ELECTION_COMMAND = "E"
 OK_COMMAND = "O"
 LEADER_COMMAND = "C"
 
-LIDER_ELECTON_TIMEOUT = 10
+LIDER_ELECTION_TIMEOUT = 5
 
 
 #TODO: How one node detects the failure of the leader? -> when sync the other nodes
@@ -20,22 +19,18 @@ class LeaderElection:
     def __init__(self, node_id, election_port):
         self._id = node_id
         self._amount_of_nodes = 3 #dont hardcode this
-        self._leader = None #SharedValue?
+        
+        self._leader = None
         self._got_ok = threading.Event()
         self._not_running_election = threading.Event()
         self._not_running_election.set()
 
-        self._stop = False #shared value?
+        self._stop = False
 
-        self._sender_lock = threading.Lock() # delete it?
+        self._sender_lock = threading.Lock() 
         self._sender_socket = UDPSocket() #it is not necessary to bind it
         self._receiver_socket = UDPSocket()
         self._receiver_socket.bind(("", election_port + node_id))
-
-        #TODO: Hacer stop and wait for reliability
-        # for safe sockets, i need 1 socket for sending and another or receiving so it does no mix ACK with a message
-        # self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # self._socket.bind(('', election_port + node_id)) #so i can receive msg here
 
         self._election_port = election_port
 
@@ -55,7 +50,7 @@ class LeaderElection:
         self._send_election_message()
 
         # wait until timeout to check if you received an OK or not
-        self._got_ok.wait(LIDER_ELECTON_TIMEOUT)
+        self._got_ok.wait(LIDER_ELECTION_TIMEOUT)
         if self._got_ok.is_set():
             logging.info(f"NODE {self._id} | Got OK, waiting for leader")
             return    
@@ -72,7 +67,12 @@ class LeaderElection:
         
         while not self._stop:
             #msg : bytes = self._socket.recv(1024) #.receive()
-            msg = self._receiver_socket.recv_message(3)
+            try:
+                msg = self._receiver_socket.recv_message(3)
+            except OSError as e:
+                if not self._stop:
+                    logging.error(f"Got error while listening peers {e}")
+                return
 
             #command, node_id = msg.decode("utf-8").split(",")
             command, node_id = msg.split(",")

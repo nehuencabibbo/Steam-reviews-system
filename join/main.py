@@ -83,7 +83,7 @@ def get_config():
         config_params["REVIEWS_COLUMNS_TO_KEEP"] = reviews_columns_to_keep
 
         # # Monitor
-        config_params["WATCHDOG_IP"] = os.getenv("WATCHDOG_IP")
+        config_params["WATCHDOGS_IP"] = os.getenv("WATCHDOGS_IP").split(",")
 
         config_params["WATCHDOG_PORT"] = int(os.getenv("WATCHDOG_PORT"))
 
@@ -117,7 +117,7 @@ def main():
 
     protocol = Protocol()
 
-    monitor_ip = config.pop("WATCHDOG_IP")
+    monitor_ip = config.pop("WATCHDOGS_IP")
     monitor_port = config.pop("WATCHDOG_PORT")
     node_name = config.pop("NODE_NAME")
     monitor = WatchdogClient(monitor_ip, monitor_port, node_name, middleware)

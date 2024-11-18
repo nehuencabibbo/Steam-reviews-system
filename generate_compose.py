@@ -88,7 +88,7 @@ def add_filter_columns(output: Dict, num: int, debug: bool):
             f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_FILTER_COLUMNS}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'filter_columns{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -107,7 +107,7 @@ def add_drop_nulls(output: Dict, num: int, debug: bool):
             f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_NULLS}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'drop_nulls{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -134,7 +134,7 @@ def add_counter_by_platform(
             f"PUBLISH_QUEUE={publish_queue}",
             f"LOGGING_LEVEL={'DEBUG' if debug else 'INFO'}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_counter{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -165,7 +165,7 @@ def add_counter_by_app_id(
             f"AMOUNT_OF_FORWARDING_QUEUES={amount_of_forwarding_queues}",
             f"NEEDED_ENDS={needed_ends}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_counter{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -195,7 +195,7 @@ def add_top_k(
             f"AMOUNT_OF_RECEIVING_QUEUES={amount_of_receiving_queues}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_top_k{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -225,7 +225,7 @@ def add_top_k_aggregator(
             f"AMOUNT_OF_RECEIVING_QUEUES={amount_of_top_k_nodes}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_top_k{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -265,7 +265,7 @@ def add_filter_by_language(
             f"BATCH_SIZE={batch_size}",
             f"PREFETCH_COUNT={prefetch_count}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_filter_{filter_name}{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -308,7 +308,7 @@ def add_filter_by_value(
             f"BATCH_SIZE={batch_size}",
             f"PREFETCH_COUNT={prefetch_count}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_filter_{filter_name}{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -348,7 +348,7 @@ def add_join(
             f"REVIEWS_COLUMNS_TO_KEEP={reviews_columns_to_keep}",
             f"INSTANCES_OF_MYSELF={instances_of_myself}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_join{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -377,7 +377,7 @@ def add_percentile(
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"NEEDED_ENDS_TO_FINISH={needed_ends_to_finish}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_percentile_{num}'}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
@@ -455,7 +455,7 @@ def add_client_handler(output: Dict, num: int, debug: bool, port: int):
             f"GAMES_QUEUE_NAME=games",  # see filter_columns/config.ini
             f"REVIEWS_QUEUE_NAME=reviews",  # see filter_columns/config.ini
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
-            f"WATCHDOG_IP=watchdog",
+            f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'client_handler{num}'}", #name of the service not container
         ],
         "volumes": ["./data/:/data"],
@@ -1010,20 +1010,20 @@ def generate_output():
     #     reviews_file_path="data/filtered_reviews.csv",
     #     debug=False,
     # )
-    #add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
-    # generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
-    #generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
+    add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    #generate_q1(output=output, debug=False)
+    generate_q1(output=output, debug=False)
     # -------------------------------------------- Q2 -----------------------------------------
-    #generate_q2(output=output, debug=False)
+    generate_q2(output=output, debug=False)
     # -------------------------------------------- Q3 -----------------------------------------
-    #generate_q3(output=output, debug=False)
+    generate_q3(output=output, debug=False)
     # -------------------------------------------- Q4 -----------------------------------------
-    #generate_q4(output=output, debug=False)
+    generate_q4(output=output, debug=False)
     # -------------------------------------------- Q5 -----------------------------------------
-    #generate_q5(output=output, debug=False)
+    generate_q5(output=output, debug=False)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
