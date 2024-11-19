@@ -14,6 +14,8 @@ from typing import *
 
 FILE_END_MSG = "END"
 AMMOUNT_OF_QUERIES = 5
+MAX_HEARTBEAT_RETRIES = 5
+MAX_RESTART_SESSION_RETRIES = 8
 
 
 class Client:
@@ -43,6 +45,8 @@ class Client:
         self._start_line = 0
         self._last_acked_message = None
         self._heartbeat_timeout = threading.Event()
+        self._restart_session_timeout = threading.Event()
+        self._has_restarted = False
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -71,18 +75,22 @@ class Client:
             # self._middleware.create_socket(zmq.DEALER)
             # self._middleware.connect_to(ip=self._server_ip, port=self._server_port)
             # self._middleware.set_session_id(self._session_id)
-            try:
-                self.__send_file(self._game_file_path)
-            except ConnectionError:
-                self.__send_file(self._game_file_path, must_sync=True)
-            try:
-                self.__send_file(self._reviews_file_path, must_check_status=True)
-            except ConnectionError:
-                self.__send_file(
-                    self._reviews_file_path, must_sync=True, must_check_status=True
-                )
+
+            # if self._got_sigterm:
+            #     return
+
+            self.__try_send_file(self._game_file_path)
+
+            # if self._got_sigterm:
+            #     return
+
+            self.__try_send_file(self._reviews_file_path, must_check_status=True)
+
+            # if self._got_sigterm:
+            #     return
 
             self.__get_results()
+
         except zmq.error.ZMQError:
             if not self._got_sigterm:
                 raise
@@ -99,27 +107,45 @@ class Client:
 
                 return
 
+    def __try_send_file(
+        self,
+        file_path,
+        must_sync: bool = False,
+        must_check_status: bool = False,
+    ):
+        initial_next_message_id = self._next_message_id
+        while True:
+            # Restartea -> actualiza last acked message
+            # next_message -> 0
+            # hasta que next_message no llegue a last acked no parar
+            is_ok = self.__send_file(file_path, must_sync, must_check_status)
+
+            if is_ok:
+                break
+
+            # Failed to send, must sync with last_acked_message
+            must_sync = True
+            self._next_message_id = initial_next_message_id
+
+    # The bool returned represents if there was a session restart and the file must be sent again
+    # from a certain point
     def __send_file(
         self, file_path, must_sync: bool = False, must_check_status: bool = False
-    ):
-        # self._last_read_line = 0
-        is_sync = must_sync
-
+    ) -> bool:
         with open(file_path, "r") as file:
             reader = csv.reader(file)
             next(reader, None)  # skip header
             for row in reader:
                 if self._got_sigterm:
-                    return
+                    return True
                 if must_sync:
-                    if not is_sync and self._last_read_line == self._next_message_id:
+                    if self._next_message_id == self._last_acked_message:
                         # Starting line was found
-                        is_sync = True
-                        self._next_message_id = self._last_read_line
-                    if not is_sync:
-                        # Actual line is behind the starting line
-                        self._last_read_line += 1
-                        continue
+                        must_sync = False  # in order to avoid all the additional checks
+                        self._next_message_id = self._last_acked_message
+
+                    self._next_message_id += 1
+                    continue
 
                 logging.debug(f"Sending appID {row[0]}")
                 row.insert(0, str(self._next_message_id))
@@ -131,14 +157,22 @@ class Client:
                     self._middleware.send_batch(
                         message_type="D", session_id=self._session_id
                     )
+
                     self._check_status()
+
+                    if self._has_restarted:
+                        self._has_restarted = False
+                        return False
 
                 self._next_message_id += 1
 
                 time.sleep(self._sending_wait_time)
         logging.debug("Sending file end")
 
-        if self._last_read_line >= self._start_line:
+        if not self._last_acked_message or (
+            self._last_acked_message
+            and self._next_message_id >= self._last_acked_message
+        ):
             self._middleware.send_end(
                 session_id=self._session_id,
                 end_message=[str(self._next_message_id), FILE_END_MSG],
@@ -147,6 +181,8 @@ class Client:
                 self._check_status()
 
             self._next_message_id += 1
+
+        return True
 
     def __print_results_for_query(self, query):
         for result in self._query_results[query]:
@@ -196,38 +232,56 @@ class Client:
     def _set_heartbeat_timeout(self):
         self._heartbeat_timeout.set()
 
-    # def _check_status(self):
-    #     # C: Continue
-    #     self._middleware.send_message(["C", self._session_id])
+    def _set_restart_session_timeout(self):
+        self._heartbeat_timeout.set()
 
-    #     t = threading.Timer(2.0, self._raise_connection_error)
-    #     t.start()
+    def _restart_session(self, timeout: float = 2.0, retry_number: int = 0):
+        # C: Continue
+        restart_session_id = str(uuid.uuid4())
 
-    #     while not self._got_sigterm:
-    #         logging.info("Pollin")
-    #         if self._middleware.has_message():
-    #             res = self._middleware.recv_batch()
-    #             last_acked_message = int(res[0][1])
+        self._middleware.send_message(["C", self._session_id, restart_session_id])
 
-    #             logging.info(f"Received: {res}")
-    #             if self._next_message_id == last_acked_message:
-    #                 self._last_acked_message = last_acked_message
-    #                 return
-    #             else:
-    #                 logging.error(
-    #                     f"Expected: {self._next_message_id}. got: {last_acked_message}"
-    #                 )
-    #                 raise ValueError()
+        t = threading.Timer(timeout, self._set_restart_session_timeout)
+        t.start()
 
-    def _check_status(self, timeout: float = 1.0):
+        while not self._got_sigterm and not self._restart_session_timeout.is_set():
+            logging.info("Pollin")
+            if not self._middleware.has_message():
+                continue
+
+            res = self._middleware.recv_batch()
+            logging.info(f"Restar session received: {res}")
+
+            if res[0][0] == "C" and res[0][1] == restart_session_id:
+                t.cancel()
+                self._last_acked_message = int(res[0][2])
+                self._has_restarted = True
+                return
+
+        # Retry
+        self._restart_session_timeout.clear()
+
+        retry_number += 1
+        if retry_number == MAX_RESTART_SESSION_RETRIES:
+            logging.info(
+                f"Max number of retries reached: {MAX_RESTART_SESSION_RETRIES}. Aborting."
+            )
+            raise ConnectionError()
+
+        logging.error(
+            f"Restar session timeout, retrying with timeout: {timeout * 2} | Retry number: {retry_number}"
+        )
+        self._restart_session(timeout=timeout * 2, retry_number=retry_number)
+
+    def _check_status(self, timeout: float = 0.0, retry_number: int = 0):
         # H: Heartbeat
         heartbeat_id = str(uuid.uuid4())
-        # self._middleware.send_message(["H", self._session_id, heartbeat_id])
+        self._middleware.send_message(["H", self._session_id, heartbeat_id])
         t = threading.Timer(timeout, self._set_heartbeat_timeout)
         t.start()
 
         while not self._got_sigterm and not self._heartbeat_timeout.is_set():
-            logging.info("Polling for heartbeat echo")
+            logging.debug("Polling for heartbeat echo")
             if not self._middleware.has_message():
                 continue
 
@@ -236,10 +290,31 @@ class Client:
             if res[0][0] == "H" and res[0][1] == heartbeat_id:
                 t.cancel()
                 return
-        logging.error(f"Heartbeat timeout, retrying with timeout: {timeout * 2}")
+
         self._heartbeat_timeout.clear()
-        self._check_status(timeout=timeout * 2)
+        retry_number += 1
+
+        if retry_number == MAX_HEARTBEAT_RETRIES:
+            self._restart_session()
+            return
+
+        logging.error(
+            f"Heartbeat timeout, retrying with timeout: {timeout * 2} | Retry number: {retry_number}"
+        )
+        self._check_status(timeout=timeout * 2, retry_number=retry_number)
 
     def __sigterm_handler(self, signal, frame):
         self._got_sigterm = True
         self._middleware.shutdown()
+        # raise SystemExit()
+
+
+# Starts sending file
+# After a few messages, starts a heartbeat which must be answered
+# If heartbeat is answered correctly -> continues sending
+# If not -> retires up to MAX_HEARTBEAT_RETRIES
+# If MAX_HEARTBEAT_RETRIES was reached, starts trying to restart session
+# Restart session will send a message to ask for the last acked message
+# If the server answers correctly, it will resume the session
+# It will retry up to MAX_RESTART_SESSION_RETIRES
+# If it gets no answer, an error will be raised an the session will finish

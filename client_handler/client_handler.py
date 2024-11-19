@@ -132,12 +132,16 @@ class ClientHandler:
         elif msg_type == "C":
             rows = self._client_middleware.get_row_from_message(message)
             session_id = rows[0]
-            logging.info(f"Received shall continue from {session_id}")
+            logging.info(f"Received last message from {session_id} | {rows}")
             client_info = self._clients_info[session_id]
+
             self._client_middleware.send_multipart(
                 connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
                 message=[
                     "C",
+                    rows[
+                        1
+                    ],  # contains restart session id, its used for detecting duplicates
                     str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
                 ],
                 needs_encoding=True,
