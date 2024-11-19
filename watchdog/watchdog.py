@@ -15,6 +15,7 @@ from time import sleep
 WAIT_FOR_CONNECTIONS = 5
 NUM_OF_RETRIES = 3
 TIMEOUT_BEFORE_FALLEN_CHECK = 60
+REGISTRATION_CONFIRM = "K"
 
 class Watchdog:
     def __init__(self, server_socket: ServerSocket, config: dict):
@@ -77,7 +78,6 @@ class Watchdog:
 
     def _monitor_nodes(self):
 
-        #To restart nodes that did not reconnect
         self._server_socket.settimeout(TIMEOUT_BEFORE_FALLEN_CHECK)
         while not self._got_sigterm.is_set():
             try:
@@ -87,7 +87,11 @@ class Watchdog:
                 node_name = conn.recv()
 
                 self._send_registration_to_peers(node_name)
-                #TODO: send registration confirmation message?
+
+                # If child nodes already know all the nodes' names,
+                # then there is no need to comunicate messages
+                # only send a heartbeat (probably)
+                conn.send(REGISTRATION_CONFIRM)
 
                 logging.info(f"Node {node_name} connected.")
 

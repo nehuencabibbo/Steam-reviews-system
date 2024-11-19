@@ -12,6 +12,7 @@ from server_socket.client_connection import ClientConnection
 
 
 NACK_MSG = "N"
+REGISTRATION_CONFIRM = "K"
 MIN_MEMORY_SPACE = 1024 # 1KB
 WAIT_BETWEEN_TRIES = 5
 MAX_RETRIES = 3
@@ -36,8 +37,8 @@ class WatchdogClient:
                     logging.error("Could not connect to any monitor")
                     return
                 
-                logging.info(f"[MONITOR] Connected to monitor. Sending name: {self._client_name}")
-                self._connection.send(self._client_name)#envio el nombre
+                logging.info(f"[MONITOR] Connected to monitor. Checking in...")
+                self._register()
 
                 self._answer_heartbeats()
 
@@ -48,6 +49,14 @@ class WatchdogClient:
             finally:
                 if self._connection:
                     self._connection.close()
+
+
+    def _register(self):
+        self._connection.send(self._client_name)#envio el nombre
+        msg = self._connection.recv()
+        if msg == REGISTRATION_CONFIRM:
+            logging.info("[MONITOR] Registration confirmed")
+
 
     def stop(self):
         self._stop = True
