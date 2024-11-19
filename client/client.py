@@ -42,6 +42,7 @@ class Client:
         self._last_read_line = 0
         self._start_line = 0
         self._last_acked_message = None
+        self._heartbeat_timeout = threading.Event()
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -192,8 +193,8 @@ class Client:
                     message_type="Q", session_id=self._session_id
                 )
 
-    def _raise_connection_error(self):
-        raise ConnectionError()
+    def _set_heartbeat_timeout(self):
+        self._heartbeat_timeout.set()
 
     # def _check_status(self):
     #     # C: Continue
@@ -218,21 +219,26 @@ class Client:
     #                 )
     #                 raise ValueError()
 
-    def _check_status(self):
+    def _check_status(self, timeout: float = 1.0):
         # H: Heartbeat
         heartbeat_id = str(uuid.uuid4())
-        self._middleware.send_message(["H", self._session_id, heartbeat_id])
-        t = threading.Timer(30.0, self._raise_connection_error)
+        # self._middleware.send_message(["H", self._session_id, heartbeat_id])
+        t = threading.Timer(timeout, self._set_heartbeat_timeout)
         t.start()
 
-        while not self._got_sigterm:
+        while not self._got_sigterm and not self._heartbeat_timeout.is_set():
             logging.info("Polling for heartbeat echo")
-            if self._middleware.has_message():
-                res = self._middleware.recv_batch()
-                logging.info(f"Heartbeat res: {res}")
-                if res[0][0] == "H" and res[0][1] == heartbeat_id:
-                    t.cancel()
-                    return
+            if not self._middleware.has_message():
+                continue
+
+            res = self._middleware.recv_batch()
+            logging.info(f"Heartbeat res: {res}")
+            if res[0][0] == "H" and res[0][1] == heartbeat_id:
+                t.cancel()
+                return
+        logging.error(f"Heartbeat timeout, retrying with timeout: {timeout * 2}")
+        self._heartbeat_timeout.clear()
+        self._check_status(timeout=timeout * 2)
 
     def __sigterm_handler(self, signal, frame):
         self._got_sigterm = True
