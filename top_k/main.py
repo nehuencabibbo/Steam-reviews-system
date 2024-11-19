@@ -2,7 +2,7 @@
 import os
 
 from common.middleware.middleware import Middleware
-from common.protocol.protocol import Protocol
+from common.activity_log.activity_log import ActivityLog
 
 from configparser import ConfigParser
 import logging
@@ -70,7 +70,9 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    top_k = TopK(middleware, config)
+    activity_log = ActivityLog()
+
+    top_k = TopK(middleware, config, activity_log)
     top_k.start()
 
 

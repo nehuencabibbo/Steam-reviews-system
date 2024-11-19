@@ -1,18 +1,20 @@
 import logging
+import os
 import signal
+from common.activity_log.activity_log import ActivityLog
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
     read_sorted_file,
     add_batch_to_sorted_file_per_client,
     delete_directory,
+    _add_batch_to_sorted_file
 )
-from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
 
 
 class TopK:
-    def __init__(self, middleware: Middleware, config: dict[str, str]):
+    def __init__(self, middleware: Middleware, config: dict[str, str], activity_log: ActivityLog):
         self.__middleware = middleware
         self.__total_ends_received_per_client = {}
         self._got_sigterm = False
@@ -21,9 +23,12 @@ class TopK:
         self._amount_of_receiving_queues = config["AMOUNT_OF_RECEIVING_QUEUES"]
         self._output_top_k_queue_name = config["OUTPUT_TOP_K_QUEUE_NAME"]
         self._k = config["K"]
+        self._activity_log = activity_log
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
+
+        self.__recover_state()
 
     def __signal_handler(self, sig, frame):
         logging.debug(f"Gracefully shutting down...")
@@ -53,6 +58,35 @@ class TopK:
                 logging.error(e)
         finally:
             self.__middleware.shutdown()
+
+    def __recover_state(self):
+        full_file_path, lines = self._activity_log.recover()
+
+        if not full_file_path or not lines: 
+            logging.debug('General log was corrupted, not recovering any state.')
+            return
+        
+        logging.debug(f'Recovering state, {full_file_path} is being processed with batch: ')
+        for line in lines:
+            logging.debug(line)
+        dir = full_file_path.rsplit('/', maxsplit=1)[0]
+
+        if not os.path.exists(dir):
+            logging.debug((
+                f'Ended up aborting state recovery, as {dir} '
+                f'was cleaned up after receiving END'
+            ))
+            return 
+
+        lines = map(lambda x: x.rsplit(',', maxsplit=2), lines)
+        _add_batch_to_sorted_file(
+            dir, 
+            lines, 
+            self._activity_log, 
+            ascending=False, 
+            limit=self._k
+        )
+
 
     def __callback(self, delivery_tag, body, message_type):
         body = self.__middleware.get_rows_from_message(body)
@@ -91,7 +125,7 @@ class TopK:
 
         try:
             add_batch_to_sorted_file_per_client(
-                "tmp", body, ascending=False, limit=int(self._k)
+                "tmp", body, self._activity_log, ascending=False, limit=int(self._k)
             )
 
         except ValueError as e:
@@ -102,9 +136,21 @@ class TopK:
         self.__middleware.ack(delivery_tag)
 
     def __send_top(self, forwarding_queue_name, client_id):
+        NAME = 0
+        COUNT = 1
+        MSG_ID = 2
+        logging.debug('Sending the following top:')
         for record in read_sorted_file(f"tmp/{client_id}"):
-            # if not "Q" in forwarding_queue_name:
-            record.insert(0, client_id)
+            # Si no se lo paso a un agregador, sino que se lo estoy mandando al cliente,
+            # le tengo que mandar solo lo que le interesa
+            if "Q" in forwarding_queue_name:
+                record = [client_id, record[NAME], record[COUNT]]
+            # Si se lo paso a un agregador, se lo tengo que pasar en el orden
+            # en el que yo mismo lo espero
+            else: 
+                record = [client_id, record[MSG_ID], record[NAME], record[COUNT]]
+
+            logging.debug(record)
             self.__middleware.publish(record, forwarding_queue_name, "")
 
         self.__middleware.publish_batch(forwarding_queue_name)

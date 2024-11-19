@@ -308,7 +308,7 @@ def add_to_sorted_file(dir: str, record: str):
 def read_sorted_file(dir: str):
 
     file_path = os.path.join(dir, "sorted_file.csv")
-    os.makedirs(dir, exist_ok=True)
+    os.makedirs(dir, exist_ok=True) # ???
 
     if not os.path.exists(file_path):
         return []  # No records
@@ -537,24 +537,42 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
 
 # Esta la usa el TOP
 def add_batch_to_sorted_file_per_client(
-    dir: str, new_records: List[List[str]], ascending: bool = True, limit: int = float("inf")
+    dir: str, new_records: List[List[str]], logger, ascending: bool = True, limit: int = float("inf")
 ):
     logging.debug(f'NEW RECORDS: {new_records}')
     # NEW_RECORDS = [[client_id, msg_id, name, avg_playtime_forever]]
     batch_per_client = _get_batch_per_client(new_records)
+    #batch_per_client = {
+    # client_id: [
+    #       [msg_id, name, avg_playtime_forever], 
+    #       [...], ...,
+    # ...}
 
     for client_id, batch in batch_per_client.items():
         client_dir = os.path.join(dir, client_id)
 
-        _add_batch_to_sorted_file(client_dir, batch, ascending, limit)
+        _add_batch_to_sorted_file(client_dir, batch, logger, ascending=ascending, limit=limit)
 
 
 def _add_batch_to_sorted_file(
     dir: str,
-    new_records: list[str],
+    new_records: List[List[str]],
+    logger,
     ascending: bool = True,
     limit: int = float("inf"),
-):
+):  
+    # TODO: Para hacer una recuperacion eficiente para TopK con K relativamente grande, se
+    # pueden loggear solamente las lineas a updatear, y repetir el proceso de un batch normal,
+    # pero para esas lineas, eso implicaria handelear la igualdad aca y NO tolerarla, si se encuentra
+    # un elemento duplicado en el top tiene que ser descartado.
+    #
+    # FOLLOW UP: Se puede tener la funcion especifica de recuperacion en el top k, pero hay que agregar 
+    # un identificador aca para cada elemento del top para poder diferenciar, Pq?:
+    # 
+    # si tengo varios juegos con el mismo nombre, y justo me coinciden en el count, y justo entran en el top, 
+    # entonces un top con repetidos seria valido, por lo tanto no puedo filtrar por igualdad de name,count
+
+    # NEW_RECORDS = [[MSG_ID, NAME, AVG_PLAYTIME_FOREVER]]
     if limit <= 0:
         logging.error(f"Error, K must be > 0. Got: {limit}")
         return
@@ -563,24 +581,17 @@ def _add_batch_to_sorted_file(
     else:
         sorting_key = lambda x: (-int(x[1]), x[0])
 
+    new_records = [[record[1], record[2], record[0]] for record in new_records]
+    logging.debug(f'Mapped new records: {new_records}')
     sorted_records = sorted(new_records, key=sorting_key)
 
     file_path = os.path.join(dir, f"sorted_file.csv")
     os.makedirs(dir, exist_ok=True)
 
-    if not os.path.exists(file_path):
-        with open(file_path, "w") as f:
-            writer = csv.writer(f)
-            for i, record in enumerate(sorted_records):
-                if i == limit:
-                    break
-                writer.writerow(record)
-
-        return
+    create_file_if_unexistent(file_path)
 
     temp_file = f"temp_sorted.csv"
     amount_of_records_in_top = 0
-
     with open(file_path, mode="r") as infile, open(
         temp_file, mode="w", newline=""
     ) as outfile:
@@ -592,8 +603,8 @@ def _add_batch_to_sorted_file(
                 break
             old_line_saved = False
 
-            read_name = line[0]
-            read_value = int(line[1])
+            read_name, read_value, read_msg_id = line
+            read_value = int(read_value)
 
             if not ascending:
                 read_value = -read_value
@@ -602,14 +613,15 @@ def _add_batch_to_sorted_file(
                 if amount_of_records_in_top == limit:
                     break
 
-                new_record_name = new_record[0]
-                new_record_value = int(new_record[1])
+                new_record_name, new_record_value, new_record_msg_id = new_record
+                new_record_value = int(new_record_value)
 
                 if not ascending:
                     new_record_value = -new_record_value
 
                 amount_of_records_in_top += 1
 
+                # Extra parameter 
                 if new_record_value < read_value:
                     writer.writerow(new_record)
                 elif new_record_value == read_value and new_record_name < read_name:
@@ -636,6 +648,10 @@ def _add_batch_to_sorted_file(
                 writer.writerow(new_record)
                 amount_of_records_in_top += 1
 
+    client_id = dir.rsplit('/', maxsplit=1)[-1]
+    new_record_msg_ids = list(map(lambda x: x[2], new_records)) # Me quedo solo con los ids
+    new_records = list(map(lambda x: ','.join(x), new_records)) # Para recuperarlo hacer un rsplit(maxsplit=2)
+    logger.log(client_id, [file_path] + new_records, new_record_msg_ids)
     os.replace(temp_file, file_path)
 
 

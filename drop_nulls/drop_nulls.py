@@ -168,9 +168,6 @@ class DropNulls:
                         message_to_send,
                         f"{node_id}_{self.q1_platform}",
                     )
-                    logging.debug(
-                        f"Q1: Sent {message_to_send} to {node_id}_{self.q1_platform}"
-                    )
 
             self._middleware.publish(
                 [
