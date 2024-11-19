@@ -175,6 +175,7 @@ class DropNulls:
             self._middleware.publish(
                 [
                     client_id,
+                    message[GAMES_MSG_ID],
                     message[GAMES_APP_ID],
                     message[GAMES_NAME],
                     message[GAMES_RELEASE_DATE],
@@ -188,6 +189,7 @@ class DropNulls:
                 self._middleware.publish(
                     [
                         client_id,
+                        message[GAMES_MSG_ID],
                         message[GAMES_APP_ID],
                         message[GAMES_NAME],
                         message[GAMES_GENRE],
@@ -229,7 +231,12 @@ class DropNulls:
             client_id = message[0]
             for queue in [self.q3_reviews, self.q5_reviews]:
                 self._middleware.publish(
-                    [client_id, message[REVIEW_APP_ID], message[REVIEW_SCORE]],
+                    [
+                        client_id, 
+                        message[REVIEW_MSG_ID],
+                        message[REVIEW_APP_ID], 
+                        message[REVIEW_SCORE]
+                    ],
                     queue,
                 )
 
@@ -237,6 +244,7 @@ class DropNulls:
             self._middleware.publish(
                 [
                     client_id,
+                    message[REVIEW_MSG_ID],
                     message[REVIEW_APP_ID],
                     message[REVIEW_TEXT],
                     message[REVIEW_SCORE],

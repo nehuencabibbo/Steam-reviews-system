@@ -322,7 +322,19 @@ def read_sorted_file(dir: str):
 # ------------------------ BATCHES -------------------------------------------
 
 
-def _get_batch_per_client(records):
+def _get_batch_per_client(records: List[List[str]]) -> Dict[str,List[List[str]]]:
+    '''
+    Given a list of records, it groups based on the first element of it
+    and returns the groups.
+
+    Ex:
+
+    records = [['a', '1', '2'], ['b', '1', '2'], ['a', '3', '4']]
+
+    returns:
+
+    {'a': [['1', '2'], ['3', '4']], 'b': [['1', '2']]}
+    '''
     batch_per_client = {}
 
     # Get the batch for every client
@@ -523,11 +535,12 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
 
         os.replace(temp_file, file_path)
 
-
+# Esta la usa el TOP
 def add_batch_to_sorted_file_per_client(
-    dir: str, new_records: list[str], ascending: bool = True, limit: int = float("inf")
+    dir: str, new_records: List[List[str]], ascending: bool = True, limit: int = float("inf")
 ):
-
+    logging.debug(f'NEW RECORDS: {new_records}')
+    # NEW_RECORDS = [[client_id, msg_id, name, avg_playtime_forever]]
     batch_per_client = _get_batch_per_client(new_records)
 
     for client_id, batch in batch_per_client.items():
