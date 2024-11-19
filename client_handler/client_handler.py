@@ -20,6 +20,7 @@ CLIENT_INFO_TIMER_INDEX = 1
 CLIENT_INFO_CONNECTION_ID_INDEX = 2
 CLIENT_INFO_FINISHED_QUERIES_INDEX = 3
 CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX = 4
+CLIENT_INFO_LAST_MESSAGE_INDEX = 5
 
 
 class ClientHandler:
@@ -63,43 +64,21 @@ class ClientHandler:
         self.results_middleware.attach_callback(self._q5_result_queue, self.on_message)
         self.results_middleware.start_consuming()
 
-    def process_message(self, msg_type, connection_id, message):
+    def process_message(self, msg_type: str, connection_id, message: bytes):
         # N: New session
         # R: Return session
         # H: Heartbeat
+        # C: Continue?
 
         logging.debug(f"Received message of type: {msg_type} | message: {message}")
 
-        if msg_type == "N":
-            logging.debug("Setting forwarding queue to games")
-            session_id = str(uuid.uuid4())
-
-            t = (
-                threading.Timer(
-                    100000.0, self.handle_client_timeout, args=[session_id]
-                ),
-            )
-
-            self._clients_info[session_id] = [
-                self._games_queue_name,
-                t[0],
-                connection_id,
-                set(),
-                threading.Lock(),
-            ]
-
-            self._client_middleware.send_multipart(
-                connection_id, session_id, needs_encoding=True
-            )
-
-            t[0].start()
-        else:
+        if msg_type == "D":
             session_id, message = self._client_middleware.get_session_id(message)
+            # logging.info(f"Last message number: {message_number}")
             client_info = self._clients_info[session_id]
+
             # Cancel timer
             client_info[CLIENT_INFO_TIMER_INDEX].cancel()
-
-            logging.info(f"SESSION_ID: {session_id}")
 
             forwarding_queue_name = client_info[CLIENT_INFO_QUEUE_NAME_INDEX]
 
@@ -109,25 +88,83 @@ class ClientHandler:
                 batch=message,
             )
 
+            client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] = (
+                self._client_middleware.get_last_message_id(message)
+            )
+
             if message[-3:] == b"END":
                 logging.debug(f"Received  END from session: {session_id}")
-                # TODO: publish batch
+
                 if forwarding_queue_name == self._reviews_queue_name:
                     logging.info(f"Final end received from client: {session_id}.")
-                    # self._clients_info[session_id][1].cancel()
-                    # del self._clients_info[session_id]
                     return
+
                 logging.debug("Setting forwarding queue to reviews")
 
                 client_info[CLIENT_INFO_QUEUE_NAME_INDEX] = self._reviews_queue_name
 
-            t = (
-                threading.Timer(
-                    100000.0, self.handle_client_timeout, args=[session_id]
-                ),
+            t = threading.Timer(100000.0, self.handle_client_timeout, args=[session_id])
+            client_info[CLIENT_INFO_TIMER_INDEX] = t
+            t.start()
+
+        elif msg_type == "Q":
+            rows = self._middleware.get_rows_from_message(message)
+            logging.info(f"Req: {rows}")
+
+            self._send_query_results_if_there_are(
+                session_id=rows[0][0], query=rows[1][0]
             )
-            client_info[CLIENT_INFO_TIMER_INDEX] = t[0]
-            t[0].start()
+        elif msg_type == "H":
+            rows = self._client_middleware.get_row_from_message(message)
+            session_id = rows[0]
+
+            logging.debug(f"Received heartbeat from {session_id}")
+            self._client_middleware.send_multipart(
+                connection_id=self._clients_info[session_id][
+                    CLIENT_INFO_CONNECTION_ID_INDEX
+                ],
+                message=[
+                    "H",
+                    rows[1],
+                ],  # rows[1] contains heartbeat id, its used for detecting duplicates
+                needs_encoding=True,
+            )
+        elif msg_type == "C":
+            rows = self._client_middleware.get_row_from_message(message)
+            session_id = rows[0]
+            logging.info(f"Received shall continue from {session_id}")
+            client_info = self._clients_info[session_id]
+            self._client_middleware.send_multipart(
+                connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+                message=[
+                    "C",
+                    str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
+                ],
+                needs_encoding=True,
+            )
+
+        elif msg_type == "N":
+            logging.debug("Setting forwarding queue to games")
+            session_id = str(uuid.uuid4())
+
+            t = threading.Timer(100000.0, self.handle_client_timeout, args=[session_id])
+
+            self._clients_info[session_id] = [
+                self._games_queue_name,
+                t,
+                connection_id,
+                set(),
+                threading.Lock(),
+                0,
+            ]
+
+            self._client_middleware.send_multipart(
+                connection_id, [session_id], needs_encoding=True
+            )
+
+            t.start()
+        else:
+            logging.info(f"Message type: {msg_type} not recognized")
 
     def handle_clients(self):
         self._client_middleware.create_socket(zmq.ROUTER)
@@ -143,8 +180,10 @@ class ClientHandler:
                 if not self._client_middleware.has_message():
                     continue
 
+                # message format: (msg_type, msg)
+                # -> msg must contain (if its the case) the session id
                 connection_id, msg_type, msg = self._client_middleware.recv_multipart()
-                logging.info(f"Session: {connection_id} | msg_type: {msg_type}")
+                # logging.info(f"Session: {connection_id} | msg_type: {msg_type}")
                 self.process_message(msg_type, connection_id, msg)
 
         except MiddlewareError as e:
@@ -208,9 +247,9 @@ class ClientHandler:
 
         self._add_finished_query_to_clients(clients=client_ends, query=query)
 
-        self._client_middleware.send_query_results(
-            connection_id, message=body, query=query
-        )
+        # self._client_middleware.send_query_results(
+        #     connection_id, message=body, query=query
+        # )
 
         channel.basic_ack(delivery_tag=method_frame.delivery_tag)
 
@@ -248,3 +287,29 @@ class ClientHandler:
                 logging.info(
                     f"Client: {client_id} | {self._clients_info[client_id][CLIENT_INFO_FINISHED_QUERIES_INDEX]}"
                 )
+
+    def _send_query_results_if_there_are(self, session_id: str, query: str):
+        try:
+            client_info = self._clients_info[session_id]
+            with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
+                if query in client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX]:
+                    self._read_and_send_results(session_id, query)
+
+        except KeyError:
+            logging.error(
+                f"Not processing results request from {session_id}. No client was found with that session."
+            )
+
+    def _read_and_send_results(self, session_id: str, query: str):
+        client_info = self._clients_info[session_id]
+        res = storage.read(f"/tmp/{session_id}/{query}")
+
+        self._client_middleware.send_query_results_from_generator(
+            client_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+            results=res,
+            query=query,
+        )
+
+        logging.info(
+            f"Sent results of query: {query} to client with sesion: {session_id}"
+        )

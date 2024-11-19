@@ -1,4 +1,6 @@
 import threading
+from time import sleep
+from typing import Any, Generator
 import uuid
 import logging
 
@@ -53,19 +55,35 @@ class ClientMiddleware:
             msg,
         )
 
-    def send_multipart(self, client_id, message, needs_encoding=False):
+    def send_multipart(self, connection_id, message: list[str], needs_encoding=False):
         # Send a reply back to the client using its identifier
-        logging.debug(f"Sending: {message} to {client_id}")
+        logging.debug(f"Sending: {message} to {connection_id}")
         if needs_encoding:
             self.__socket.send_multipart(
-                [client_id, Protocol.add_to_batch(b"", [message])]
+                [connection_id, Protocol.add_to_batch(b"", message)]
             )
         else:
-            self.__socket.send_multipart([client_id, b"", message])
+            self.__socket.send_multipart([connection_id, b"", message])
 
-    def send_query_results(self, client_id, message, query):
+    def send_query_results(self, client_id, message: bytes, query: str):
         message = self.__protocol.add_to_batch(message, [query])
         self.send_multipart(client_id, message)
+
+    def send_query_results_from_generator(
+        self, client_id, results: Generator[list[str], Any, None], query: str
+    ):
+        batch = b""
+        for res in results:
+            batch = self.__protocol.add_to_batch(batch, res)
+
+        message = self.__protocol.add_to_batch(batch, [query])
+        logging.info(f"sending multipart to: {client_id}")
+        self.send_multipart(client_id, message)
+
+    def send_message(self, message: list[str]):
+        batch = self.__protocol.add_to_batch(b"", message)
+        logging.info(f"Sending: {batch}")
+        self.__socket.send(batch)
 
     # D: Data
     def send(self, message: list[str], message_type="D", session_id=None):
@@ -104,10 +122,10 @@ class ClientMiddleware:
         self.__socket.send(batch)
         self.__batch = [b"", 0]
 
-    def send_end(self, session_id, end_message: str = END_TRANSMISSION_MESSAGE):
+    def send_end(self, session_id, end_message: str = [END_TRANSMISSION_MESSAGE]):
         type_message = self.__protocol.add_to_batch(b"", ["D"])
         session_id_message = self.__protocol.add_to_batch(type_message, [session_id])
-        end_message = self.__protocol.add_to_batch(session_id_message, [end_message])
+        end_message = self.__protocol.add_to_batch(session_id_message, end_message)
 
         self.send_batch(
             message_type="D", session_id=session_id
@@ -122,8 +140,8 @@ class ClientMiddleware:
         socks = dict(self.__poller.poll(MAX_POLL_TIME))
         return self.__socket in socks and socks[self.__socket] == zmq.POLLIN
 
-    def set_session_id(self, session_id):
-        self.__socket.setsockopt(zmq.IDENTITY, session_id)
+    # def set_session_id(self, session_id):
+    #     self.__socket.setsockopt(zmq.IDENTITY, session_id)
 
     def disconnect(self, ip, port):
         self.__socket.disconnect(f"tcp://{ip}:{port}")
@@ -139,3 +157,21 @@ class ClientMiddleware:
     def shutdown(self, linger=5000):
         self.__context.destroy(linger)
         self.__context.term()
+
+    def get_last_message_id(self, batch: bytes) -> int:
+        rows_left = batch
+        last_row = None
+        # get last batch
+        while True:
+            row, row_length = self.__protocol.get_first_row(rows_left)
+
+            rows_left = rows_left[row_length:]
+
+            if rows_left == b"":
+                last_row = row
+                break
+        # get first field from last batch
+        return int(self.__protocol.get_row_field(field=0, encoded_row=last_row))
+
+    def get_row_from_message(self, message: bytes) -> list[str]:
+        return self.__protocol.decode(message)

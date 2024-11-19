@@ -88,8 +88,25 @@ class Protocol:
         # In order to avoid the decoding+encoding in the client_handler, we only extract and decode this part
         session_id_length = int.from_bytes(message[4:8], "big", signed=False)
         session_id = message[8 : 8 + session_id_length].decode("utf8")
-        logging.info(f"PROTOCOL | session id: {session_id}")
         return session_id, message[8 + session_id_length :]
+
+    @staticmethod
+    def get_row_length(message: bytes) -> int:
+        return Protocol.decode_length(message[:FIELD_LENGTH_BYTES_AMOUNT])
+
+    @staticmethod
+    def get_first_row(message: bytes) -> Tuple[int, int]:
+        length = (
+            Protocol.decode_length(message[:FIELD_LENGTH_BYTES_AMOUNT])
+            + FIELD_LENGTH_BYTES_AMOUNT
+        )
+        return message[FIELD_LENGTH_BYTES_AMOUNT:length], length
+
+    @staticmethod
+    def get_row_field(field: int, encoded_row: bytes) -> int:
+        return Protocol.decode(encoded_row)[
+            field
+        ]  # [:4] in order to avoid the row total length
 
 
 class TestProtocol(unittest.TestCase):
