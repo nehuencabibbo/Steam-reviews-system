@@ -609,6 +609,9 @@ def _add_batch_to_sorted_file(
             if not ascending:
                 read_value = -read_value
 
+
+            _check_for_duplicate(sorted_records, read_msg_id)
+
             for i, new_record in enumerate(sorted_records):
                 if amount_of_records_in_top == limit:
                     break
@@ -653,6 +656,16 @@ def _add_batch_to_sorted_file(
     new_records = list(map(lambda x: ','.join(x), new_records)) # Para recuperarlo hacer un rsplit(maxsplit=2)
     logger.log(client_id, [file_path] + new_records, new_record_msg_ids)
     os.replace(temp_file, file_path)
+
+
+def _check_for_duplicate(sorted_records:list[list[str]], read_msg_id: str):
+    for record in sorted_records:
+
+        if read_msg_id in record[2]:
+            sorted_records.remove(record)
+            return True
+        
+    return False
 
 
 def delete_files_from_directory(dir: str) -> bool:
