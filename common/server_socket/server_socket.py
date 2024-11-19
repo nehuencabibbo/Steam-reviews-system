@@ -15,12 +15,12 @@ class ServerSocket:
         self._server_socket.bind(('', self._port))
         self._server_socket.listen(5)
 
-    def accept_connection(self, connection_timeout=None) -> ClientConnection:
+    def accept_connection(self) -> ClientConnection:
 
         conn, _ = self._server_socket.accept()
-        if connection_timeout:
-            conn.settimeout(connection_timeout)
-        return ClientConnection(conn, connection_timeout)
+        # if connection_timeout:
+        #     conn.settimeout(connection_timeout)
+        return ClientConnection(conn)
     
     def settimeout(self, timeout):
         self._server_socket.settimeout(timeout)

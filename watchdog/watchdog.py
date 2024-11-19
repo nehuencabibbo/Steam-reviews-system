@@ -9,10 +9,12 @@ import signal
 import logging
 import threading
 import socket
+import subprocess
 from time import sleep
 
 WAIT_FOR_CONNECTIONS = 5
 NUM_OF_RETRIES = 3
+TIMEOUT_BEFORE_FALLEN_CHECK = 60
 
 class Watchdog:
     def __init__(self, server_socket: ServerSocket, config: dict):
@@ -75,11 +77,12 @@ class Watchdog:
 
     def _monitor_nodes(self):
 
-        try:
-            while not self._got_sigterm.is_set():
-
-                #TODO: MAKE TIMEOUT FOR ACCEPT SO IT CAN CHECK NODES THAT DIDNT RECONNECT
-                conn = self._server_socket.accept_connection(5)
+        #To restart nodes that did not reconnect
+        self._server_socket.settimeout(TIMEOUT_BEFORE_FALLEN_CHECK)
+        while not self._got_sigterm.is_set():
+            try:
+            
+                conn = self._server_socket.accept_connection()
             
                 node_name = conn.recv()
 
@@ -96,13 +99,17 @@ class Watchdog:
                     self._nodes[node_name].join()
 
                 self._nodes[node_name] = thread
+            except socket.timeout:
+                self._reconnect_fallen_nodes()
+                continue
 
-        except (OSError, ConnectionError) as e:
-            if not self._got_sigterm.is_set():
-                logging.error(f"ERROR: {e}")
-        finally:
-            self._release_threads()
-    
+            except (OSError, ConnectionError) as e:
+                if not self._got_sigterm.is_set():
+                    logging.error(f"ERROR: {e}")
+                    break
+            
+        self._release_threads()
+        
 
     def _listen_to_leader(self):
        
@@ -151,7 +158,7 @@ class Watchdog:
         for i in range(NUM_OF_RETRIES):
             try:
                 client_socket.connect((leader_ip, self._leader_comunicaton_port))
-                return ClientConnection(client_socket, None)
+                return ClientConnection(client_socket)
             except OSError as e:
                 if i == NUM_OF_RETRIES:
                     raise e
@@ -159,7 +166,6 @@ class Watchdog:
                 sleep(3)
 
     
-
     def _send_registration_to_peers(self, node_name):
         logging.info("Sending registration to peers")
         #TODO: send in order from higher id to lower id
@@ -169,7 +175,14 @@ class Watchdog:
                     self._peers[i].send(node_name) 
                 except (OSError, ConnectionError) as _:
                     if self._got_sigterm: return
-                    self._peers.pop(i)
+                    self._peers.pop(i) # peer was down
+
+    def _reconnect_fallen_nodes(self):
+        for node, conn in self._nodes.items():
+            if not conn:
+                logging.info(f"Node {node} never reconnected. Starting it...")
+                subprocess.run(['docker', 'stop', node], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(['docker', 'start', node], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
     def _release_threads(self):

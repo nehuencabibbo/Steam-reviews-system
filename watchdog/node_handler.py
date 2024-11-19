@@ -8,10 +8,12 @@ class AbnormalNodeStatus(Exception):
 
 HEARTBEAT_MESSAGE = "A"
 NACK_MESSAGE = "N"
+RECV_TIMEOUT = 3
 class NodeHandler:
 
     def __init__(self, node_conn: ClientConnection, node_name: str, got_sigterm, wait_between_heartbeats: float):
         self._node_conn = node_conn
+        self._node_conn.settimeout(RECV_TIMEOUT)
         self._node_name = node_name
         self._got_sigterm = got_sigterm #multiprocessing Event
         self._wait_between_heartbeats = wait_between_heartbeats

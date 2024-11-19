@@ -80,7 +80,7 @@ class WatchdogClient:
                 if self._stop: return 
                 try:
                     client_socket.connect((monitor_ip,  self._monitor_port))
-                    return ClientConnection(client_socket, None)
+                    return ClientConnection(client_socket)
                 
                 except OSError as _:
                     if j == MAX_RETRIES:
