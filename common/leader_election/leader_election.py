@@ -2,7 +2,7 @@ import threading
 import logging
 import sys
 import os
-
+import socket
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from udpsocket.udp_socket import UDPSocket
 
@@ -38,12 +38,12 @@ class LeaderElection:
     
     
     def start_leader_election(self):
-        # si empezó la eleccion, no la hago otra vez
-        
+
         if not self._not_running_election.is_set():
             logging.info(f"NODE {self._id} | election was running")
             return
         
+        self._leader = None
         logging.info(f"NODE {self._id} | running election")
         self._not_running_election.clear()
 
@@ -63,18 +63,23 @@ class LeaderElection:
 
 
     def receive(self):
-        #esto se recibe todo en otro thread aparte. #Al mismo tiempo que envio, debo poder recibir los mensajes
-        
+
         while not self._stop:
-            #msg : bytes = self._socket.recv(1024) #.receive()
+
             try:
                 msg = self._receiver_socket.recv_message(3)
+            except socket.timeout:
+                logging.info("No response from leader candidate.")
+                #leader will be none, and it will be handled form the outside
+                self._got_ok.clear()
+                self._not_running_election.set()
+                self._receiver_socket.settimeout(None)
+
             except OSError as e:
                 if not self._stop:
                     logging.error(f"Got error while listening peers {e}")
                 return
 
-            #command, node_id = msg.decode("utf-8").split(",")
             command, node_id = msg.split(",")
             node_id = int(node_id)
 
@@ -85,11 +90,16 @@ class LeaderElection:
 
             elif command == OK_COMMAND:
                 self._got_ok.set()
+                # so i can detect if the one that will be the leader crashed or not
+                # if that happens it nevers send the coordinator message
+                # and i cant know if it disconnected or not
+                self._receiver_socket.settimeout(10)
 
             elif command == LEADER_COMMAND:
                 self._leader = node_id
                 self._got_ok.clear()
                 self._not_running_election.set()
+                self._receiver_socket.settimeout(None)
 
 
     def i_am_leader(self):
@@ -105,7 +115,7 @@ class LeaderElection:
         self._stop = True
         self._receiver_socket.close()
         self._sender_socket.close()
-        #nodes waiting for election can have a greful exit during the election
+        #nodes waiting for election can have a greceful exit during the election
         self._not_running_election.set() 
 
 

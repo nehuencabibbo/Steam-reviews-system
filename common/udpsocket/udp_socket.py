@@ -79,6 +79,9 @@ class UDPSocket:
     def close(self):
         self._socket.close()
 
+    def settimeout(self, timeout):
+        self._socket.settimeout(timeout)
+
 
 
 

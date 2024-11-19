@@ -66,6 +66,9 @@ class Watchdog:
             else:
                 if self._got_sigterm.is_set(): return
 
+                if self._leader_election.get_leader_id() is None:
+                    continue
+
                 logging.info("I'm not the leader")
                 self._listen_to_leader()
 
@@ -111,7 +114,8 @@ class Watchdog:
             try:
                 node_name = leader_connection.recv()
                 logging.info(f"Leader sent a message: {node_name}")
-                self._nodes[node_name] = None # i register it, but it has no thread since child does not monitor
+                # i register it, but it has no thread since child does not monitor
+                self._nodes[node_name] = None 
             except (OSError, ConnectionError):
                 if not self._got_sigterm.is_set():
                     logging.info("The leader is down")
