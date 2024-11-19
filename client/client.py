@@ -26,7 +26,6 @@ class Client:
         middleware: ClientMiddleware,
     ):
         self._middleware = middleware
-        self._got_sigterm = False
         self._q4_ends_to_wait_for = 0  # TODO: Change to send a single end message
         self._queries_results_left = {"Q1", "Q2", "Q3", "Q4", "Q5"}
 
@@ -76,24 +75,14 @@ class Client:
             # self._middleware.connect_to(ip=self._server_ip, port=self._server_port)
             # self._middleware.set_session_id(self._session_id)
 
-            # if self._got_sigterm:
-            #     return
-
             self.__try_send_file(self._game_file_path)
-
-            # if self._got_sigterm:
-            #     return
-
             self.__try_send_file(self._reviews_file_path, must_check_status=True)
-
-            # if self._got_sigterm:
-            #     return
-
             self.__get_results()
 
-        except zmq.error.ZMQError:
-            if not self._got_sigterm:
-                raise
+        except zmq.error.ZMQError as e:
+            logging.info(f"ZMQ Error: {e}")
+        except SystemExit:
+            logging.info("Graceful shutdown")
 
     def __send_start_of_new_session(self):
         self._middleware.send_message(["N"])
@@ -109,10 +98,17 @@ class Client:
 
     def __try_send_file(
         self,
-        file_path,
+        file_path: str,
         must_sync: bool = False,
         must_check_status: bool = False,
     ):
+        """_summary_
+
+        Args:
+            file_path (str): path to input file
+            must_sync (bool, optional): if there has been a desconnection, must_sync will be true, representing it has to reach the last_acked message to continue. Defaults to False.
+            must_check_status (bool, optional): if true, it will make a heartbeat request after to check if the server is alive and processing messages. Defaults to False.
+        """
         initial_next_message_id = self._next_message_id
         while True:
             # Restartea -> actualiza last acked message
@@ -130,14 +126,22 @@ class Client:
     # The bool returned represents if there was a session restart and the file must be sent again
     # from a certain point
     def __send_file(
-        self, file_path, must_sync: bool = False, must_check_status: bool = False
+        self, file_path: str, must_sync: bool = False, must_check_status: bool = False
     ) -> bool:
+        """_summary_
+
+        Args:
+            file_path (str): path to input file
+            must_sync (bool, optional): if there has been a desconnection, must_sync will be true, representing it has to reach the last_acked message to continue. Defaults to False.
+            must_check_status (bool, optional): if true, it will make a heartbeat request after everything has been sent to check if the server is alive and processing messages. Defaults to False.
+
+        Returns:
+            bool: True if there has been a session restart. False if everything went okay.
+        """
         with open(file_path, "r") as file:
             reader = csv.reader(file)
             next(reader, None)  # skip header
             for row in reader:
-                if self._got_sigterm:
-                    return True
                 if must_sync:
                     if self._next_message_id == self._last_acked_message:
                         # Starting line was found
@@ -207,13 +211,10 @@ class Client:
                 return
             self._query_results[query].append(result)
 
-        # for result in results:
-        #     self._query_results[query].append(result)  # [1:] to remove client_id
-
     def __get_results(self):
         logging.info("Waiting for results...")
 
-        while not self._got_sigterm and len(self._queries_results_left) > 0:
+        while len(self._queries_results_left) > 0:
             logging.info("Pollin results")
             if self._middleware.has_message():
                 res = self._middleware.recv_batch()
@@ -236,6 +237,15 @@ class Client:
         self._heartbeat_timeout.set()
 
     def _restart_session(self, timeout: float = 2.0, retry_number: int = 0):
+        """_summary_
+
+        Args:
+            timeout (float, optional): max time awaited for the timeout to take place. Defaults to 2.0.
+            retry_number (int, optional): number of previous retries. Defaults to 0.
+
+        Raises:
+            ConnectionError: if MAX_RESTART_SESSION_RETRIES has been reached. It represents that after multiple tries, the server is not working.
+        """
         # C: Continue
         restart_session_id = str(uuid.uuid4())
 
@@ -244,7 +254,7 @@ class Client:
         t = threading.Timer(timeout, self._set_restart_session_timeout)
         t.start()
 
-        while not self._got_sigterm and not self._restart_session_timeout.is_set():
+        while not self._restart_session_timeout.is_set():
             logging.info("Pollin")
             if not self._middleware.has_message():
                 continue
@@ -258,7 +268,7 @@ class Client:
                 self._has_restarted = True
                 return
 
-        # Retry
+        # Retry logic
         self._restart_session_timeout.clear()
 
         retry_number += 1
@@ -274,13 +284,19 @@ class Client:
         self._restart_session(timeout=timeout * 2, retry_number=retry_number)
 
     def _check_status(self, timeout: float = 0.0, retry_number: int = 0):
+        """_summary_
+
+        Args:
+            timeout (float, optional): max time awaited for the timeout to take place. Defaults to 2.0.
+            retry_number (int, optional): number of previous retries. Defaults to 0.
+        """
         # H: Heartbeat
         heartbeat_id = str(uuid.uuid4())
         self._middleware.send_message(["H", self._session_id, heartbeat_id])
         t = threading.Timer(timeout, self._set_heartbeat_timeout)
         t.start()
 
-        while not self._got_sigterm and not self._heartbeat_timeout.is_set():
+        while not self._heartbeat_timeout.is_set():
             logging.debug("Polling for heartbeat echo")
             if not self._middleware.has_message():
                 continue
@@ -304,9 +320,8 @@ class Client:
         self._check_status(timeout=timeout * 2, retry_number=retry_number)
 
     def __sigterm_handler(self, signal, frame):
-        self._got_sigterm = True
         self._middleware.shutdown()
-        # raise SystemExit()
+        raise SystemExit()
 
 
 # Starts sending file
