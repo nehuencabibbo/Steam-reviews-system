@@ -528,6 +528,12 @@ def add_batch_to_sorted_file_per_client(
 
         _add_batch_to_sorted_file(client_dir, batch, logger, ascending=ascending, limit=limit)
 
+# JUST FOR _add_batch_to_sorted_file use 
+def _remove_duplicate_msg_ids_from_records(sorted_records:list[list[str]], read_msg_id: str):
+    for record in sorted_records:
+
+        if read_msg_id in record[2]:
+            sorted_records.remove(record)
 
 def _add_batch_to_sorted_file(
     dir: str,
@@ -600,7 +606,7 @@ def _add_batch_to_sorted_file(
                 read_value = -read_value
 
 
-            _check_for_duplicate(sorted_records, read_msg_id)
+            _remove_duplicate_msg_ids_from_records(sorted_records, read_msg_id)
 
             for i, new_record in enumerate(sorted_records):
                 if amount_of_records_in_top == limit:
@@ -642,16 +648,6 @@ def _add_batch_to_sorted_file(
                 amount_of_records_in_top += 1
 
     os.replace(temp_file, file_path)
-
-
-def _check_for_duplicate(sorted_records:list[list[str]], read_msg_id: str):
-    for record in sorted_records:
-
-        if read_msg_id in record[2]:
-            sorted_records.remove(record)
-            return True
-        
-    return False
 
 
 def delete_files_from_directory(dir: str) -> bool:
