@@ -100,12 +100,7 @@ class CounterByPlatform:
         #   Mac: [MSG_ID1, MSG_ID2, ...]}, 
         # ...}
         msg_ids_per_record_by_client_id = self.__group_msg_ids_per_client_by_platform(body)
-        clone = msg_ids_per_record_by_client_id.copy()
         self.__purge_duplicates(msg_ids_per_record_by_client_id)
-        
-        if clone != msg_ids_per_record_by_client_id: 
-            logging.debug(f'BEFORE: {clone}')
-            logging.debug(f'AFTER: {msg_ids_per_record_by_client_id}')
 
         storage.sum_platform_batch_to_records_per_client(
             self.storage_dir,
@@ -119,7 +114,7 @@ class CounterByPlatform:
         # Para cada cliente o se actualizo el archivo completo o no se actualizo, eso queire decir
         # que si al menos UNO de los msg_id ya estaba loggeado, ya se proceso totalemente ese cliente
 
-        client_ids_to_remove = [] # No se puede remover claves de un dict mientras se itera
+        client_ids_to_remove = []
         for client_id, count_per_platform in msg_ids_per_record_by_client_id.items():
             for platform, msg_ids in count_per_platform.items(): # TODO: Por ahi hay alguna forma mejor de hacer esto
                 an_arbitrary_message_id = msg_ids[0]
@@ -127,9 +122,10 @@ class CounterByPlatform:
                     client_ids_to_remove.append(client_id)
                 
                 break
-        
-        for client_id in client_ids_to_remove:
+
+        for client_id in client_ids_to_remove: 
             del msg_ids_per_record_by_client_id[client_id]
+        
 
 
     def __group_msg_ids_per_client_by_platform(

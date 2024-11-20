@@ -9,6 +9,8 @@ from common.storage.storage import (
     delete_directory,
     _add_batch_to_sorted_file
 )
+from utils.utils import get_batch_per_client
+from typing import * 
 
 END_TRANSMISSION_MESSAGE = "END"
 
@@ -22,7 +24,7 @@ class TopK:
         self._input_top_k_queue_name = config["INPUT_TOP_K_QUEUE_NAME"]
         self._amount_of_receiving_queues = config["AMOUNT_OF_RECEIVING_QUEUES"]
         self._output_top_k_queue_name = config["OUTPUT_TOP_K_QUEUE_NAME"]
-        self._k = config["K"]
+        self._k = int(config["K"])
         self._activity_log = activity_log
 
         signal.signal(signal.SIGINT, self.__signal_handler)
@@ -78,7 +80,8 @@ class TopK:
             ))
             return 
 
-        lines = map(lambda x: x.rsplit(',', maxsplit=2), lines)
+        lines = list(map(lambda x: x.rsplit(',', maxsplit=2), lines))
+        logging.debug(f'LINEAS: {lines}')
         _add_batch_to_sorted_file(
             dir, 
             lines, 
@@ -108,6 +111,7 @@ class TopK:
                 forwarding_queue_name = forwarding_queue
 
                 self.__middleware.create_queue(forwarding_queue_name)
+                # TODO: HANDELEAR CASO QUE SE ROMPA MID MANDAR COSAS
                 self.__send_top(forwarding_queue_name, client_id=client_id)
 
                 end_message = [client_id, END_TRANSMISSION_MESSAGE]
@@ -117,15 +121,20 @@ class TopK:
                 )
 
                 client_storage_dir = f"/tmp/{client_id}"
+                # TODO: Si se rompe mientras borra la data del cliente tambien hay que
+                # handelearlo
                 self._clear_client_data(client_id, client_storage_dir)
 
             self.__middleware.ack(delivery_tag)
 
             return
+        
+        records_per_client = get_batch_per_client(body)
+        self.__purge_duplicates(records_per_client)
 
         try:
             add_batch_to_sorted_file_per_client(
-                "tmp", body, self._activity_log, ascending=False, limit=int(self._k)
+                "tmp", records_per_client, self._activity_log, ascending=False, limit=self._k
             )
 
         except ValueError as e:
@@ -134,6 +143,23 @@ class TopK:
             )
 
         self.__middleware.ack(delivery_tag)
+
+
+    def __purge_duplicates(self, records_per_client: Dict[str,List[List[str]]]):
+        # Para cada batch, para cada cliente, se actualiza por completo o no un determinado archivo (firma de 
+        # la func del storage), si al menos UN msg_id para un cliente ya fue procesado, eso quiere decir que 
+        # todos los fueron, por lo tanto no hace falta checkear todos 
+
+        client_ids_to_remove = []
+        for client_id, records in records_per_client.items():
+            for msg_id, name, count in records: # TODO: Por ahi hay alguna forma mejor de hacer esto
+                if self._activity_log.is_msg_id_already_processed(client_id, msg_id): 
+                    client_ids_to_remove.append(client_id)
+
+                break
+
+        for client_id in client_ids_to_remove:
+            del records_per_client[client_id]
 
     def __send_top(self, forwarding_queue_name, client_id):
         NAME = 0

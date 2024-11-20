@@ -4,6 +4,8 @@ import logging
 import shutil
 from typing import * 
 
+from utils.utils import get_batch_per_client
+
 # TODO: use threads for all functions or some parallelization tool (maybe)
 
 
@@ -322,35 +324,10 @@ def read_sorted_file(dir: str):
 # ------------------------ BATCHES -------------------------------------------
 
 
-def _get_batch_per_client(records: List[List[str]]) -> Dict[str,List[List[str]]]:
-    '''
-    Given a list of records, it groups based on the first element of it
-    and returns the groups.
-
-    Ex:
-
-    records = [['a', '1', '2'], ['b', '1', '2'], ['a', '3', '4']]
-
-    returns:
-
-    {'a': [['1', '2'], ['3', '4']], 'b': [['1', '2']]}
-    '''
-    batch_per_client = {}
-
-    # Get the batch for every client
-    for record in records:
-        client_id = record[0]
-        record = record[1:]
-        if not client_id in batch_per_client:
-            batch_per_client[client_id] = []
-
-        batch_per_client[client_id].append(record)
-    return batch_per_client
-
-
+# TODO: Sacar el get_batch_per_client_de_aca
 def write_batch_by_range_per_client(dir: str, range: int, records: list[list[str]]):
 
-    batch_per_client = _get_batch_per_client(records)
+    batch_per_client = get_batch_per_client(records)
 
     for client_id, batch in batch_per_client.items():
         client_dir = os.path.join(dir, client_id)
@@ -535,20 +512,18 @@ def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list
 
         os.replace(temp_file, file_path)
 
-# Esta la usa el TOP
+# Esta la usa el TOP K
 def add_batch_to_sorted_file_per_client(
-    dir: str, new_records: List[List[str]], logger, ascending: bool = True, limit: int = float("inf")
+    dir: str, new_records_per_client: Dict[str,List[List[str]]], logger, ascending: bool = True, limit: int = float("inf")
 ):
-    logging.debug(f'NEW RECORDS: {new_records}')
-    # NEW_RECORDS = [[client_id, msg_id, name, avg_playtime_forever]]
-    batch_per_client = _get_batch_per_client(new_records)
-    #batch_per_client = {
+    logging.debug(f'NEW RECORDS PER CLIENT: {new_records_per_client}')
+    # NEW_RECORDS = {
     # client_id: [
     #       [msg_id, name, avg_playtime_forever], 
     #       [...], ...,
     # ...}
 
-    for client_id, batch in batch_per_client.items():
+    for client_id, batch in new_records_per_client.items():
         client_dir = os.path.join(dir, client_id)
 
         _add_batch_to_sorted_file(client_dir, batch, logger, ascending=ascending, limit=limit)
@@ -561,18 +536,22 @@ def _add_batch_to_sorted_file(
     ascending: bool = True,
     limit: int = float("inf"),
 ):  
-    # TODO: Para hacer una recuperacion eficiente para TopK con K relativamente grande, se
-    # pueden loggear solamente las lineas a updatear, y repetir el proceso de un batch normal,
-    # pero para esas lineas, eso implicaria handelear la igualdad aca y NO tolerarla, si se encuentra
-    # un elemento duplicado en el top tiene que ser descartado.
-    #
-    # FOLLOW UP: Se puede tener la funcion especifica de recuperacion en el top k, pero hay que agregar 
-    # un identificador aca para cada elemento del top para poder diferenciar, Pq?:
-    # 
+    '''
+    Given a series of new_records that has the following format: 
+
+        [
+            [UNIQUE_IDENTIFIER, NAME, FIELD_TO_SORT_BY]
+            , ...
+        ]
+
+    it processed the batch and adds it onto a sorted file.
+
+    Duplicates of UNIQUE_IDENTIFIER are not allowed and will be discarded.
+    '''
+    # Por que hay un msg id para la recuperacion?: 
     # si tengo varios juegos con el mismo nombre, y justo me coinciden en el count, y justo entran en el top, 
     # entonces un top con repetidos seria valido, por lo tanto no puedo filtrar por igualdad de name,count
 
-    # NEW_RECORDS = [[MSG_ID, NAME, AVG_PLAYTIME_FOREVER]]
     if limit <= 0:
         logging.error(f"Error, K must be > 0. Got: {limit}")
         return
@@ -581,14 +560,25 @@ def _add_batch_to_sorted_file(
     else:
         sorting_key = lambda x: (-int(x[1]), x[0])
 
-    new_records = [[record[1], record[2], record[0]] for record in new_records]
-    logging.debug(f'Mapped new records: {new_records}')
-    sorted_records = sorted(new_records, key=sorting_key)
-
+    # File creation
     file_path = os.path.join(dir, f"sorted_file.csv")
     os.makedirs(dir, exist_ok=True)
 
     create_file_if_unexistent(file_path)
+
+    # LOGGING
+    # se hace aca y no antes del replace porque es indistinto, pero al hacerse operaciones
+    # sobre lo que se va a loggear y necesitarse loggear la data original, es mejor hacerlo aca
+    client_id = dir.rsplit('/', maxsplit=1)[-1]
+    new_record_msg_ids_to_log = list(map(lambda x: x[0], new_records)) # Me quedo solo con los ids
+    new_records_to_log = list(map(lambda x: ','.join(x), new_records)) # Para recuperarlo hacer un rsplit(maxsplit=2)
+    logging.debug(f'NEW RECORDS THAT IM LOGGING: {new_records_to_log}')
+    logger.log(client_id, [file_path] + new_records_to_log, new_record_msg_ids_to_log)
+
+    # Records are ordered as needed
+    new_records = [[record[1], record[2], record[0]] for record in new_records]
+    logging.debug(f'Mapped new records: {new_records}')
+    sorted_records = sorted(new_records, key=sorting_key)
 
     temp_file = f"temp_sorted.csv"
     amount_of_records_in_top = 0
@@ -651,10 +641,6 @@ def _add_batch_to_sorted_file(
                 writer.writerow(new_record)
                 amount_of_records_in_top += 1
 
-    client_id = dir.rsplit('/', maxsplit=1)[-1]
-    new_record_msg_ids = list(map(lambda x: x[2], new_records)) # Me quedo solo con los ids
-    new_records = list(map(lambda x: ','.join(x), new_records)) # Para recuperarlo hacer un rsplit(maxsplit=2)
-    logger.log(client_id, [file_path] + new_records, new_record_msg_ids)
     os.replace(temp_file, file_path)
 
 
