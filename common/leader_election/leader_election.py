@@ -39,6 +39,8 @@ class LeaderElection:
     
     def start_leader_election(self):
 
+        ## ask for the leader here? if its None, i start the election?
+        ##Problem: I need to ask to every node if there is a leader
         if not self._not_running_election.is_set():
             logging.info(f"NODE {self._id} | election was running")
             return
@@ -99,7 +101,10 @@ class LeaderElection:
                 self._leader = node_id
                 self._got_ok.clear()
                 self._not_running_election.set()
-                self._receiver_socket.settimeout(None)
+                self._receiver_socket.settimeout(None) 
+            
+            ##Agrego mensaje para cuando se consulta sobre lider
+            ##Agrego mensaje para la respuesta de quien es el lider
 
 
     def i_am_leader(self):

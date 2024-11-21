@@ -10,6 +10,7 @@ import logging
 import threading
 import socket
 import subprocess
+import json
 from time import sleep
 
 WAIT_FOR_CONNECTIONS = 5
@@ -28,7 +29,7 @@ class Watchdog:
         self._server_socket = server_socket
         self._peers_socket = ServerSocket(self._leader_comunicaton_port)
 
-        self._nodes = {}
+        #self._nodes = {}
         self._got_sigterm = multiprocessing.Event()
 
         self._peers_lock = threading.Lock()
@@ -36,6 +37,17 @@ class Watchdog:
 
         self._leader_election = LeaderElection(self._node_id, self._election_port)
         signal.signal(signal.SIGTERM, self._sigterm_handler)
+
+        self._watchdog_setup()
+
+    def _watchdog_setup(self):
+        with open("names/node_names.json", "r") as file:
+            nodes_names = json.load(file)
+            self._nodes = {key: None for key in nodes_names}
+        
+        # TODO: add monitor names file if needed
+           
+
 
     #TODO: I HAVE TOO MUCH TRY EXCEPT
     def start(self):
@@ -85,8 +97,10 @@ class Watchdog:
                 conn = self._server_socket.accept_connection()
             
                 node_name = conn.recv()
-
-                self._send_registration_to_peers(node_name)
+                
+                #since i read form file, i do not need to wait for nodes to register
+                #TODO:remove registration?
+                #self._send_registration_to_peers(node_name)
 
                 # If child nodes already know all the nodes' names,
                 # then there is no need to comunicate messages
