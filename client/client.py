@@ -234,7 +234,7 @@ class Client:
         self._heartbeat_timeout.set()
 
     def _set_restart_session_timeout(self):
-        self._heartbeat_timeout.set()
+        self._restart_session_timeout.set()
 
     def _restart_session(self, timeout: float = 2.0, retry_number: int = 0):
         """_summary_
@@ -246,6 +246,7 @@ class Client:
         Raises:
             ConnectionError: if MAX_RESTART_SESSION_RETRIES has been reached. It represents that after multiple tries, the server is not working.
         """
+        logging.info(f"Trying to restart session: {self._session_id}")
         # C: Continue
         restart_session_id = str(uuid.uuid4())
 
@@ -258,6 +259,10 @@ class Client:
             logging.info("Pollin")
             if not self._middleware.has_message():
                 continue
+
+            # Its blocked polling, so the timeout could have happened in between
+            if self._restart_session_timeout.is_set():
+                break
 
             res = self._middleware.recv_batch()
             logging.info(f"Restar session received: {res}")
@@ -283,7 +288,7 @@ class Client:
         )
         self._restart_session(timeout=timeout * 2, retry_number=retry_number)
 
-    def _check_status(self, timeout: float = 0.0, retry_number: int = 0):
+    def _check_status(self, timeout: float = 2.0, retry_number: int = 0):
         """_summary_
 
         Args:
@@ -300,6 +305,9 @@ class Client:
             logging.debug("Polling for heartbeat echo")
             if not self._middleware.has_message():
                 continue
+
+            if self._heartbeat_timeout.is_set():
+                break
 
             res = self._middleware.recv_batch()
             logging.info(f"Heartbeat res: {res}")

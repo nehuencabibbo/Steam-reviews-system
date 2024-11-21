@@ -220,11 +220,12 @@ class FilterColumnByValue:
         try:
             column_to_use = float(column_to_use)
             value_to_filter_by = float(self._value_to_filter_by)
+
+            if column_to_use == value_to_filter_by:
+                self.__send_message(body)
+
         except ValueError as e:
             logging.debug(f"Failed float conversion: {e}")
-
-        if column_to_use == value_to_filter_by:
-            self.__send_message(body)
 
     def __filter_columns(self, data: List[str]):
         # No filter needed

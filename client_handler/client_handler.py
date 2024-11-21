@@ -1,5 +1,6 @@
 import functools
 import logging
+import random
 import signal
 import threading
 from typing import *
@@ -115,6 +116,9 @@ class ClientHandler:
                 session_id=rows[0][0], query=rows[1][0]
             )
         elif msg_type == "H":
+            # if random.randint(0, 1):
+            #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
+            #     return
             rows = self._client_middleware.get_row_from_message(message)
             session_id = rows[0]
 
@@ -130,9 +134,12 @@ class ClientHandler:
                 needs_encoding=True,
             )
         elif msg_type == "C":
+            # if random.randint(0, 1):
+            #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
+            #     return
             rows = self._client_middleware.get_row_from_message(message)
             session_id = rows[0]
-            logging.info(f"Received last message from {session_id} | {rows}")
+            logging.info(f"Received session restart from: {session_id} | {rows}")
             client_info = self._clients_info[session_id]
 
             self._client_middleware.send_multipart(

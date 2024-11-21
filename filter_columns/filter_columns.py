@@ -100,7 +100,9 @@ class FilterColumns:
         # Have to check if it's a client end, in which case only "END" is received, otherwise, the client ID comes
         # first
         # peers_that_recived_end = body[1:] if len(body) == 1 else body[2:]
-        peers_that_recived_end = body[1:]
+        peers_that_recived_end = (
+            body[1:] if body[0] == END_TRANSMISSION_MESSAGE else body[2:]
+        )
 
         if len(peers_that_recived_end) == int(self._instances_of_myself):
             logging.debug("Sending real END")
@@ -191,7 +193,12 @@ class FilterColumns:
 
                 return
 
-            if message[0] == END_TRANSMISSION_MESSAGE:
+            # TODO: handle message ids
+            if (
+                message[0] == END_TRANSMISSION_MESSAGE
+                or len(message) > 1
+                and message[1] == END_TRANSMISSION_MESSAGE
+            ):
                 logging.debug(f"Recived END of games: {message}")
                 self.__handle_end_transmission(
                     message,
@@ -251,9 +258,14 @@ class FilterColumns:
 
                 return
 
+            # TODO: handle message ids
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
-            if message[0] == END_TRANSMISSION_MESSAGE:
+            if (
+                message[0] == END_TRANSMISSION_MESSAGE
+                or len(message) > 1
+                and message[1] == END_TRANSMISSION_MESSAGE
+            ):
                 logging.debug(f"Recived END of reviews: {message}")
 
                 self.__handle_end_transmission(
