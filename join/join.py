@@ -1,5 +1,8 @@
 import logging
 import signal
+import threading
+
+from time import sleep
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
     read,
@@ -11,6 +14,7 @@ from common.storage.storage import (
 )
 from common.protocol.protocol import Protocol
 from utils.utils import node_id_to_send_to
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 END_TRANSMISSION_MESSAGE = "END"
 SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
@@ -18,13 +22,15 @@ SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
 class Join:
     def __init__(
-        self, protocol: Protocol, middleware: Middleware, config: dict[str, str]
+        self, protocol: Protocol, middleware: Middleware, monitor: WatchdogClient, config: dict[str, str]
     ):
         self.__middleware = middleware
         self._amount_of_games_ends_recived = {}
         self._amount_of_reviews_ends_recived = {}
         self._amount_of_timeouts_per_client_received = {}
         self._got_sigterm = False
+        self._client_monitor = monitor
+
         self._input_games_queue_name = config["INPUT_GAMES_QUEUE_NAME"]
         self._input_reviews_queue_name = config["INPUT_REVIEWS_QUEUE_NAME"]
         self._output_queue_name = config["OUTPUT_QUEUE_NAME"]
@@ -44,9 +50,14 @@ class Join:
         logging.debug(f"Gracefully shutting down...")
         self._got_sigterm = True
         self.__middleware.shutdown()
-        # self.__middleware.stop_consuming_gracefully()
+        self._client_monitor.stop()
+        #self.__middleware.stop_consuming_gracefully()
 
     def start(self):
+
+        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        monitor_thread.start()
+
         # gotta check this as it could be the last node, then a prefix shouldn't be used
         self.__middleware.create_queue(self._input_games_queue_name)
         self.__middleware.create_queue(self._input_reviews_queue_name)
@@ -80,6 +91,7 @@ class Join:
                 logging.error(e)
         finally:
             self.__middleware.shutdown()
+            monitor_thread.join()
 
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
         body = self.__middleware.get_rows_from_message(body)

@@ -1,9 +1,9 @@
 import os
-from percentile import Percentile
-from configparser import ConfigParser
 import logging
+from configparser import ConfigParser
+from percentile import Percentile
 from common.middleware.middleware import Middleware
-from common.protocol.protocol import Protocol
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 def get_config():
     config_params = {}
@@ -33,6 +33,13 @@ def get_config():
         # broker ip
         config_params["RABBIT_IP"] = os.getenv('RABBIT_IP', config["DEFAULT"]["RABBIT_IP"])
 
+        # # Monitor
+        config_params["WATCHDOG_IP"] = os.getenv("WATCHDOG_IP")
+
+        config_params["WATCHDOG_PORT"] = int(os.getenv("WATCHDOG_PORT"))
+
+        config_params["NODE_NAME"] = os.getenv("NODE_NAME")
+
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
     except ValueError as e:
@@ -56,12 +63,18 @@ def main():
 
     logging_level = config.pop("LOGGING_LEVEL")
     init_logger(logging_level)
+    logging.debug("Logging configuration:")
+    [logging.debug(f"{key}: {value}") for key, value in config.items()]
     
     broker_ip = config.pop("RABBIT_IP")
     middleware = Middleware(broker_ip)
-    protocol = Protocol()
 
-    percentile = Percentile(config, middleware, protocol)
+    monitor_ip = config.pop("WATCHDOG_IP")
+    monitor_port = config.pop("WATCHDOG_PORT")
+    node_name = config.pop("NODE_NAME")
+    monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
+
+    percentile = Percentile(config, middleware, monitor)
     percentile.run()
 
 

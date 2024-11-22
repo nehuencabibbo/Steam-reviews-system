@@ -1,20 +1,25 @@
 import logging
 import signal
+import threading
+
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
     read_sorted_file,
     add_batch_to_sorted_file_per_client,
     delete_directory,
 )
-from common.protocol.protocol import Protocol
+from common.watchdog_client.watchdog_client import WatchdogClient
+
 
 END_TRANSMISSION_MESSAGE = "END"
 SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
 
 class TopK:
-    def __init__(self, middleware: Middleware, config: dict[str, str]):
+    def __init__(self, middleware: Middleware, monitor: WatchdogClient, config: dict[str, str]):
         self.__middleware = middleware
+        self._client_monitor = monitor
+
         self.__total_ends_received_per_client = {}
         self.__total_timeouts_received_per_client = {}
         self._got_sigterm = False
@@ -32,8 +37,13 @@ class TopK:
         self._got_sigterm = True
         # self.__middleware.stop_consuming_gracefully()
         self.__middleware.shutdown()
+        self._client_monitor.stop()
 
     def start(self):
+        
+        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        monitor_thread.start()
+
         self.__middleware.create_queue(
             f"{self._node_id}_{self._input_top_k_queue_name}"
         )
@@ -55,6 +65,7 @@ class TopK:
                 logging.error(e)
         finally:
             self.__middleware.shutdown()
+            monitor_thread.join()
 
     def __callback(self, delivery_tag, body, message_type):
         body = self.__middleware.get_rows_from_message(body)

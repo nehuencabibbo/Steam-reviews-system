@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.middleware.middleware import Middleware
 from filter_columns import FilterColumns
 from common.protocol.protocol import Protocol
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 from configparser import ConfigParser
 import logging
@@ -62,6 +63,14 @@ def get_config():
             "RABBIT_IP", config["DEFAULT"]["RABBIT_IP"]
         )
 
+
+        # # Monitor
+        config_params["WATCHDOG_IP"] = os.getenv("WATCHDOG_IP")
+
+        config_params["WATCHDOG_PORT"] = int(os.getenv("WATCHDOG_PORT"))
+
+        config_params["NODE_NAME"] = os.getenv("NODE_NAME")
+        
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
     except ValueError as e:
@@ -88,9 +97,14 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
+    monitor_ip = config.pop("WATCHDOG_IP")
+    monitor_port = config.pop("WATCHDOG_PORT")
+    node_name = config.pop("NODE_NAME")
+    monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
+
     protocol = Protocol()
 
-    filter_columns = FilterColumns(protocol, middleware, config)
+    filter_columns = FilterColumns(protocol, middleware, monitor, config)
     filter_columns.start()
 
 

@@ -1,9 +1,12 @@
 import signal
 import logging
+import math
+import threading
+
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage import storage
-from common.protocol.protocol import Protocol
-import math
+
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 END_TRANSMISSION_MESSAGE = "END"
 SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
@@ -13,9 +16,11 @@ NO_RECORDS = 0
 
 class Percentile:
 
-    def __init__(self, config: dict, middleware: Middleware, protocol: Protocol):
+    def __init__(self, config: dict, middleware: Middleware, monitor: WatchdogClient):
         self._middleware = middleware
         self._got_sigterm = False
+        self._client_monitor = monitor
+
         self._recived_ends = {}
         self._received_client_timeouts = {}
         self._consume_queue = config["CONSUME_QUEUE"]
@@ -26,6 +31,9 @@ class Percentile:
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
+
+        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        monitor_thread.start()
 
         self._middleware.create_queue(self._consume_queue)
         self._middleware.create_queue(self._publish_queue)
@@ -40,6 +48,7 @@ class Percentile:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
+            monitor_thread.join()
 
     def _handle_message(self, ch, method, properties, body):
 
@@ -172,3 +181,4 @@ class Percentile:
         self._got_sigterm = True
         # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
+        self._client_monitor.stop()

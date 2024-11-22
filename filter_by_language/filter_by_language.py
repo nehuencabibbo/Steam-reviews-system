@@ -1,7 +1,5 @@
 import sys, os
 
-from common.storage.storage import write_by_range
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import *
@@ -11,11 +9,13 @@ from common.middleware.middleware import Middleware, MiddlewareError
 from utils.utils import node_id_to_send_to
 from common.watchdog_client.watchdog_client import WatchdogClient
 
+
 import signal
 import logging
+import langid
 import threading
 
-class FilterColumnByValue:
+class FilterByLanguage:
     def __init__(
         self,
         protocol: Protocol,
@@ -39,11 +39,11 @@ class FilterColumnByValue:
         ]
         self._columns_to_keep: List[int] = config["COLUMNS_TO_KEEP"]
         self._column_number_to_use: int = config["COLUMN_NUMBER_TO_USE"]
-        self._value_to_filter_by: str = config["VALUE_TO_FILTER_BY"]
         self._node_id: str = config["NODE_ID"]
         self._receiving_queue_name = config["RECIVING_QUEUE_NAME"]
         self._instances_of_myself = config["INSTANCES_OF_MYSELF"]
-        self._criteria = config["CRITERIA"]
+
+        self._language = config["LANGUAGE"]
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -60,7 +60,6 @@ class FilterColumnByValue:
         self.__create_all_forwarding_queues()
 
         # Attaching callback functions
-        self.__set_callback_according_to_criteria()
         callback = self._middleware.__class__.generate_callback(
             self.__handle_message,
         )
@@ -95,7 +94,7 @@ class FilterColumnByValue:
                 full_queue_name = f"{queue_number}_{queue_name}"
                 self._middleware.create_queue(full_queue_name)
 
-    def __handle_consensus_tranmission(self, body: List[str], consensus_message):
+    def __handle_end_transmission(self, body: List[str]):
         # Si me llego un END...
         # 1) Me fijo si los la cantidad de ids que hay es igual a
         # la cantidad total de instancias de mi mismo que hay.
@@ -108,10 +107,10 @@ class FilterColumnByValue:
         client_id = body[0]
 
         if len(peers_that_recived_end) == int(self._instances_of_myself):
-            self.__send_to_all_forwarding_queues(client_id, consensus_message)
+            self.__send_end_transmission_to_all_forwarding_queues(client_id)
         else:
 
-            message = [client_id, consensus_message]
+            message = [client_id, END_TRANSMISSION_MESSAGE]
             if not self._node_id in peers_that_recived_end:
                 peers_that_recived_end.append(self._node_id)
 
@@ -132,7 +131,7 @@ class FilterColumnByValue:
 
                 self._middleware.publish_batch(full_queue_name)
 
-    def __send_to_all_forwarding_queues(self, client_id: str, message):
+    def __send_end_transmission_to_all_forwarding_queues(self, client_id: str):
         # TODO: Repeated code between this and send last batch, remove
         for i in range(len(self._amount_of_forwarding_queues)):
             amount_of_current_queue = self._amount_of_forwarding_queues[i]
@@ -140,11 +139,11 @@ class FilterColumnByValue:
 
             for queue_number in range(amount_of_current_queue):
                 full_queue_name = f"{queue_number}_{queue_name}"
-                logging.debug(f"Sending {message} to queue: {full_queue_name}")
+                logging.debug(f"Sending END to queue: {full_queue_name}")
 
                 self._middleware.send_end(
                     queue=full_queue_name,
-                    end_message=[client_id, message],
+                    end_message=[client_id, END_TRANSMISSION_MESSAGE],
                 )
 
     def __handle_message(self, delivery_tag: int, body: bytes):
@@ -152,77 +151,23 @@ class FilterColumnByValue:
         for message in body:
             logging.debug(f"Recived message: {message}")
 
-            if message[1] == SESSION_TIMEOUT_MESSAGE:
-                session_id = body[0]
-                logging.info(f"Received TIMEOUT for client: {session_id}")
-                self.__send_last_batch_to_fowarding_queues()
-                self.__handle_consensus_tranmission(message, SESSION_TIMEOUT_MESSAGE)
-                self._middleware.ack(delivery_tag)
-
-                return
-
             if message[1] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"GOT END: {body}")
                 self.__send_last_batch_to_fowarding_queues()
-                self.__handle_consensus_tranmission(message, END_TRANSMISSION_MESSAGE)
+                self.__handle_end_transmission(message)
                 self._middleware.ack(delivery_tag)
 
                 return
 
-            self._filter_by_criteria(message)
+            self.__filter_language(message)
 
         self._middleware.ack(delivery_tag)
 
-    def __set_callback_according_to_criteria(self):
-        criteria = self._criteria
-
-        if criteria == EQUAL_CRITERIA_KEYWORD:
-            self._filter_by_criteria = self.__filter_equal
-
-        elif criteria == GRATER_THAN_CRITERIA_KEYWORD:
-            self._filter_by_criteria = self.__filter_greater_than
-
-        elif criteria == CONTAINS_CRITERIA_KEYWORD:
-            self._filter_by_criteria = self.__filter_contains
-
-        elif criteria == EQUAL_FLOAT_CRITERIA_KEYWORD:
-            self._filter_by_criteria = self.__filter_equal_float
-
-        else:
-            raise Exception(f"Unkown cirteria: {criteria}")
-
-    def __filter_equal(self, body: List[str]):
+    def __filter_language(self, body: List[str]):
         column_to_use = body[self._column_number_to_use]
-        if column_to_use == self._value_to_filter_by:
+        detected_language, _ = langid.classify(column_to_use)
+        if detected_language == self._language.lower():
             self.__send_message(body)
-
-    def __filter_greater_than(self, body: List[str]):
-        column_to_use = body[self._column_number_to_use]
-        try:
-            column_to_use = int(column_to_use)
-            value_to_filter_by = int(self._value_to_filter_by)
-        except ValueError as e:
-            logging.debug(f"Failed integer conversion: {e}")
-
-        if column_to_use > value_to_filter_by:
-            self.__send_message(body)
-
-    def __filter_contains(self, body: List[str]):
-        column_to_use = body[self._column_number_to_use]
-        if self._value_to_filter_by in column_to_use.lower():
-            self.__send_message(body)
-
-    def __filter_equal_float(self, body: List[str]):
-        column_to_use = body[self._column_number_to_use]
-        try:
-            column_to_use = float(column_to_use)
-            value_to_filter_by = float(self._value_to_filter_by)
-
-            if column_to_use == value_to_filter_by:
-                self.__send_message(body)
-
-        except ValueError as e:
-            logging.debug(f"Failed float conversion: {e}")
 
     def __filter_columns(self, data: List[str]):
         # No filter needed
@@ -255,7 +200,6 @@ class FilterColumnByValue:
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
         self._got_sigterm = True
-        # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
         self._client_monitor.stop()
         # self._middleware.shutdown()

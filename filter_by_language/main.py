@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
-from filter_by_column_value import FilterColumnByValue
+from filter_by_language import FilterByLanguage
 from common.watchdog_client.watchdog_client import WatchdogClient
 
 from configparser import ConfigParser
@@ -34,11 +34,9 @@ def get_config():
         config_params["COLUMN_NUMBER_TO_USE"] = int(
             os.getenv("COLUMN_NUMBER_TO_USE", config["DEFAULT"]["COLUMN_NUMBER_TO_USE"])
         )
-        config_params["VALUE_TO_FILTER_BY"] = os.getenv(
-            "VALUE_TO_FILTER_BY", config["DEFAULT"]["VALUE_TO_FILTER_BY"]
-        )
-        config_params["CRITERIA"] = os.getenv("CRITERIA", config["DEFAULT"]["CRITERIA"])
 
+        # Language should be abreviated, english = en, spanish = es, etc
+        config_params["LANGUAGE"] = os.getenv("LANGUAGE", config["DEFAULT"]["LANGUAGE"])
         columns_to_keep = os.getenv(
             "COLUMNS_TO_KEEP", config["DEFAULT"]["COLUMNS_TO_KEEP"]
         ).split(",")
@@ -129,7 +127,7 @@ def main():
     node_name = config.pop("NODE_NAME")
     monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
 
-    filter_column_by_value = FilterColumnByValue(protocol, middleware, monitor, config)
+    filter_column_by_value = FilterByLanguage(protocol, middleware, monitor, config)
     filter_column_by_value.start()
 
 

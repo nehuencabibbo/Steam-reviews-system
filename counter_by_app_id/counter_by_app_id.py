@@ -1,11 +1,11 @@
 import signal
 import logging
 from typing import *
+import threading
 
 from common.middleware.middleware import Middleware, MiddlewareError
-from common.protocol.protocol import Protocol
 from common.storage import storage
-from utils.utils import node_id_to_send_to
+from common.watchdog_client.watchdog_client import WatchdogClient
 
 END_TRANSMISSION_MESSAGE = "END"
 SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
@@ -20,12 +20,12 @@ REGULAR_MESSAGE_APP_ID = 1
 
 class CounterByAppId:
 
-    def __init__(self, config, middleware: Middleware, protocol: Protocol):
+    def __init__(self, config, middleware: Middleware, monitor: WatchdogClient):
         self._config = config
         self._middleware = middleware
         self._got_sigterm = False
         self._ends_received_per_client = {}
-        self.__total_timeouts_received_per_client = {}
+        self._client_monitor = monitor
 
         # Configuration attributes
         self._node_id = config["NODE_ID"]
@@ -39,6 +39,10 @@ class CounterByAppId:
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
+
+        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        monitor_thread.start()
+
         # Creating receiving queue
         consume_queue_name = f"{self._node_id}_{self._consume_queue_suffix}"
         self._middleware.create_queue(consume_queue_name)
@@ -57,6 +61,7 @@ class CounterByAppId:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
+            monitor_thread.join()
 
         logging.debug("Finished")
 
@@ -205,3 +210,4 @@ class CounterByAppId:
         self._got_sigterm = True
         # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
+        self._client_monitor.stop()
