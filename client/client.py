@@ -236,7 +236,7 @@ class Client:
     def _set_restart_session_timeout(self):
         self._restart_session_timeout.set()
 
-    def _restart_session(self, timeout: float = 2.0, retry_number: int = 0):
+    def _restart_session(self, timeout: float = 0.5, retry_number: int = 0):
         """_summary_
 
         Args:
@@ -288,7 +288,7 @@ class Client:
         )
         self._restart_session(timeout=timeout * 2, retry_number=retry_number)
 
-    def _check_status(self, timeout: float = 2.0, retry_number: int = 0):
+    def _check_status(self, timeout: float = 0.5, retry_number: int = 0):
         """_summary_
 
         Args:

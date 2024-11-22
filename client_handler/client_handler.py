@@ -116,7 +116,7 @@ class ClientHandler:
                 session_id=rows[0][0], query=rows[1][0]
             )
         elif msg_type == "H":
-            # if random.randint(0, 1):
+            # if random.randint(0, 3) > 2:
             #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
             #     return
             rows = self._client_middleware.get_row_from_message(message)
@@ -134,7 +134,7 @@ class ClientHandler:
                 needs_encoding=True,
             )
         elif msg_type == "C":
-            # if random.randint(0, 1):
+            # if random.randint(0, 3) > 2:
             #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
             #     return
             rows = self._client_middleware.get_row_from_message(message)
