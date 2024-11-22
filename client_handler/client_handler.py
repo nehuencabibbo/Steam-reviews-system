@@ -5,6 +5,7 @@ import signal
 import threading
 from typing import *
 import uuid
+from common.storage import storage
 import zmq
 import pika
 
@@ -27,7 +28,11 @@ CLIENT_INFO_LAST_MESSAGE_INDEX = 5
 class ClientHandler:
 
     def __init__(
-        self, middleware: Middleware, client_middleware: ClientMiddleware, client_monitor: WatchdogClient, **kwargs
+        self,
+        middleware: Middleware,
+        client_middleware: ClientMiddleware,
+        client_monitor: WatchdogClient,
+        **kwargs,
     ):
         self._middleware = middleware
         self._client_middleware = client_middleware
@@ -117,7 +122,7 @@ class ClientHandler:
                 session_id=rows[0][0], query=rows[1][0]
             )
         elif msg_type == "H":
-            # if random.randint(0, 3) > 2:
+            # if random.randint(0, 9) > 8:
             #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
             #     return
             rows = self._client_middleware.get_row_from_message(message)
@@ -135,7 +140,7 @@ class ClientHandler:
                 needs_encoding=True,
             )
         elif msg_type == "C":
-            # if random.randint(0, 3) > 2:
+            # if random.randint(0, 9) > 8:
             #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
             #     return
             rows = self._client_middleware.get_row_from_message(message)

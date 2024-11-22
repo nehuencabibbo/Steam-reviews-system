@@ -25,6 +25,7 @@ class CounterByAppId:
         self._middleware = middleware
         self._got_sigterm = False
         self._ends_received_per_client = {}
+        self.__total_timeouts_received_per_client = {}
         self._client_monitor = monitor
 
         # Configuration attributes

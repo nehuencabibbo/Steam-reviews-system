@@ -292,6 +292,9 @@ class DropNulls:
                     [client_id, message[REVIEW_APP_ID], message[REVIEW_SCORE]],
                     queue,
                 )
+                logging.info(
+                    f"Sent: {[client_id, message[REVIEW_APP_ID], message[REVIEW_SCORE]]} to: {queue}"
+                )
 
             self.r += 1
             self._middleware.publish(

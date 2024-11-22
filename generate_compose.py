@@ -54,21 +54,21 @@ def add_networks(networks: Dict):
 def add_volumes(output: Dict):
     output["volumes"] = {"rabbitmq_data": {}}
 
+
 def add_watchdog(output, port, debug=False, num=1):
     output["services"][f"watchdog"] = {
         "image": "watchdog:latest",
         "container_name": f"watchdog",
-        "volumes": [
-            "/var/run/docker.sock:/var/run/docker.sock"
-        ],
+        "volumes": ["/var/run/docker.sock:/var/run/docker.sock"],
         "environment": [
             f"NODE_ID={num}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"PORT={port}",
-            f"WAIT_BETWEEN_HEARTBEAT={WAIT_BETWEEN_HEARTBEAT}"
+            f"WAIT_BETWEEN_HEARTBEAT={WAIT_BETWEEN_HEARTBEAT}",
         ],
         "networks": ["net"],
     }
+
 
 def add_filter_columns(output: Dict, num: int, debug: bool):
     output["services"][f"filter_columns{num}"] = {
@@ -223,6 +223,7 @@ def add_top_k_aggregator(
         "networks": ["net"],
         "restart": "on-failure",
     }
+
 
 def add_filter_by_language(
     output: Dict,
@@ -443,7 +444,7 @@ def add_client_handler(output: Dict, num: int, debug: bool, port: int):
             f"REVIEWS_QUEUE_NAME=reviews",  # see filter_columns/config.ini
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOG_IP=watchdog",
-            f"NODE_NAME={f'client_handler{num}'}", #name of the service not container
+            f"NODE_NAME={f'client_handler{num}'}",  # name of the service not container
         ],
         "volumes": ["./data/:/data"],
         "networks": ["net"],
@@ -459,6 +460,7 @@ def generate_filters_by_value(
 ):
     for i in range(amount_of_filters):
         add_filter_by_value(**kwargs, num=i, debug=debug)
+
 
 def generate_filters_by_language(
     amount_of_filters: int,
@@ -817,7 +819,7 @@ def generate_q4(output: Dict, debug=False):
 
     q4_english_reviews_counter_args = {
         "output": output,
-        "query": "q4_second", # q4_second_counter 
+        "query": "q4_second",  # q4_second_counter
         "consume_queue_sufix": "q4_english_reviews",
         "publish_queue": "q4_english_review_count",
         "amount_of_forwarding_queues": 1,  # Next node is a filter -> Filters consume from one queue exlusively
@@ -996,20 +998,20 @@ def generate_output():
         reviews_file_path="data/filtered_reviews.csv",
         debug=False,
     )
-    add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False)
+    add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT)
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=True)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
 
     # -------------------------------------------- Q1 -----------------------------------------
     generate_q1(output=output, debug=False)
     # -------------------------------------------- Q2 -----------------------------------------
     generate_q2(output=output, debug=False)
     # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=False)
+    generate_q3(output=output, debug=True)
     # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=False)
+    generate_q4(output=output, debug=True)
     # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=False)
+    generate_q5(output=output, debug=True)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
