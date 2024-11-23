@@ -110,7 +110,7 @@ class CounterByPlatform:
         logging.debug(f'change: {msg_ids_per_record_by_client_id}')
         self.__purge_duplicates(msg_ids_per_record_by_client_id)
 
-        storage.sum_platform_batch_to_records_per_client(
+        storage.sum_batch_to_records_per_client(
             self.storage_dir,
             msg_ids_per_record_by_client_id,
             self._activity_log

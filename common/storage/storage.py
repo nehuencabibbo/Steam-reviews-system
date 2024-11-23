@@ -200,62 +200,53 @@ def group_by_file(
 
     return records_per_file
 
+# TODO: Armarse primero el diccionario de adentro y dsps hacer dict[file_name] = dict
+def _group_records(records: dict[str, List[str]]) -> Dict[str, List[str]]:
+    FILE_NAME = "platform_count.csv"
 
-def _group_records(file_name: str, records: dict[str, List[str]]) -> Dict[str, List[str]]:
     records_per_file = {}
     for record_id, msg_id_list in records.items():
-        records_per_file[file_name] = records_per_file.get(file_name, [])
-        records_per_file[file_name].append([record_id, msg_id_list])
+        records_per_file[FILE_NAME] = records_per_file.get(FILE_NAME, [])
+        records_per_file[FILE_NAME].append([record_id, msg_id_list])
 
     return records_per_file
 
-# el que usa el count by platform
-def sum_platform_batch_to_records_per_client(
-    dir: str, new_records_per_client: Dict[str, Dict[str, List[str]]], logger
-):
-    range_not_used = 0
-    for client_id, new_records in new_records_per_client.items():
-        # new_records = {Windows: [msg_id_1, msg_id_2, .., ], Linux: ....} 
-
-        # client_id = numerito
-        client_dir = os.path.join(dir, client_id)
-        records_for_file = _group_records("platform_count.csv", new_records)
-        # {platform_count.csv: [[WINDOWS, MSG_ID_LIST], [LINUX, MSG_ID_LIST]]}
-
-        # final_path = client_dir/platform_count.csv
-        _sum_batch_to_records(client_dir, range_not_used, records_for_file, logger, partition=False)
 
 # TODO: Sacar codigo repetido de aca con sum_platform_batch_to_records_per_client
 def sum_batch_to_records_per_client(
-    dir: str, range: int, new_records_per_client: dict[str, dict[str, int]], logger, 
+    dir: str, 
+    new_records_per_client: dict[str, dict[str, int]], 
+    logger,
+    range_for_partition: int = -1 
 ):
     
+    need_to_partition_by_range = range_for_partition != -1
     for client_id, new_records in new_records_per_client.items():
+        logging.debug(f'NEW RECORDS: {new_records}')
 
         client_dir = os.path.join(dir, client_id)
-        file_prefix = "partition"
 
-        logging.debug(f'NEW RECORDS: {new_records}')
-        # get the file for each record in the batch -> {"file": [record1, record2], ....}
-        records_per_file = _group_by_file_dict(file_prefix, range, new_records)
-        logging.debug(f'RECORDS PER FILE: {records_per_file}')
-        # loggeo la ultima linea procesada, mensajes procesados -> 
-        # loggeo que procese los mensajes -> en el archivo del cliente
+        if need_to_partition_by_range:
+            records_per_file = _group_by_file_dict(range_for_partition, new_records)
+            logging.debug(f'RECORDS PER FILE (partition): {records_per_file}')
+        else: 
+            records_per_file = _group_records(new_records)
+            logging.debug(f'RECORDS PER FILE (not partitioned): {records_per_file}')
 
-        # Si se cae entre logs, al hacer la recuperacion, tiene que checkear si los mensajes
-        # procesados del ultimo log estan guardados en el otro log, si ese es el caso, no
-        # hay problema, pero si no estan, los tiene que agregar el
-        _sum_batch_to_records(client_dir, range, records_per_file, logger, partition=True)
+        sum_batch_to_records(client_dir, records_per_file, logger)
 
 
 def _group_by_file_dict(
-    file_prefix: str, range: int, records: dict[str, int]
+    range_for_partition: int, 
+    records: dict[str, int]
 ) -> dict[str, list[str]]:
+    FILE_PREFIX = 'partition'
+
     records_per_file = {}
     for record_id, value in records.items():
         try:
             key = int(record_id)
-            file_name = f"{file_prefix}_{key//range}.csv"
+            file_name = f"{FILE_PREFIX}_{key//range_for_partition}.csv"
             records_per_file[file_name] = records_per_file.get(file_name, [])
             records_per_file[file_name].append([record_id, value])
         except ValueError as e:
@@ -270,26 +261,13 @@ def create_file_if_unexistent(full_path: str):
         open(full_path, 'w').close()
 
 
-def _sum_batch_to_records(
+def sum_batch_to_records(
     dir: str, 
-    range: int, 
     records_per_file: dict[str, list[(str,int)]], 
     logger, 
-    partition: bool = True
     ):
 
     os.makedirs(dir, exist_ok=True)
-
-    # for file_name, records in records_per_file.items():
-    #     file_path = os.path.join(dir, file_name)
-    #     if not os.path.exists(file_path):
-    #         if partition:
-    #             _write_batch_by_range(dir, range, records)
-    #         else:
-    #             # todos los records del cliente, van en un mismo archivo
-    #             _write_batch_on_file(dir, file_name, records)
-    #         continue
-
     for file_name, records in records_per_file.items():
         # file_name = partition.csv
         # records = [[WINDOWS, MSG_ID_LIST], [LINUX, MSG_ID_LIST]]

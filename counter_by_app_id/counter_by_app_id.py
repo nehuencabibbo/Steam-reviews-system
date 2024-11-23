@@ -90,11 +90,12 @@ class CounterByAppId:
             REGULAR_MESSAGE_MSG_ID,
             REGULAR_MESSAGE_APP_ID,
         )
+        
         storage.sum_batch_to_records_per_client(
-            self._storage_dir,
-            self._range_for_partition,
+            self._storage_dir,  
             count_per_client_by_app_id,
-            self._activity_log
+            self._activity_log,
+            range_for_partition=self._range_for_partition,
         )
 
         self._middleware.ack(delivery_tag)
