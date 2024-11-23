@@ -200,24 +200,6 @@ def group_by_file(
 
     return records_per_file
 
-# Solamente la usa el count by platform esta funcion
-def _write_batch_on_file(dir:str, file_name: str, records: list[list[Union[str, List[str]]]]):
-    os.makedirs(dir, exist_ok=True)
-    
-    PLATFORM = 0
-    MSG_IDS = 1
-
-    #for file_name, records in records_per_file.items():
-    file_path = os.path.join(dir, file_name)
-    with open(file_path, "a", newline="") as f:
-        writer = csv.writer(f)
-        for record in records:
-            platform = record[PLATFORM]
-            msg_ids = record[MSG_IDS]
-            count = len(msg_ids)
-
-            writer.writerow([platform, count])
-
 
 def _group_records(file_name: str, records: dict[str, List[str]]) -> Dict[str, List[str]]:
     records_per_file = {}
