@@ -72,10 +72,12 @@ class ClientHandler:
         self.results_middleware.start_consuming()
 
     def process_message(self, msg_type: str, connection_id, message: bytes):
-        # N: New session
-        # R: Return session
+        # N: New session request
+        # D: Data
+        # Q: Query result request
         # H: Heartbeat
-        # C: Continue?
+        # C: Last message acked request
+        # A: Acknowledge session id
 
         logging.debug(f"Received message of type: {msg_type} | message: {message}")
 
@@ -161,10 +163,26 @@ class ClientHandler:
             )
 
         elif msg_type == "N":
-            logging.debug("Setting forwarding queue to games")
-            session_id = str(uuid.uuid4())
+            # if random.randint(0, 9) < 6:
+            #     logging.error(f"Bad luck, message of type: {msg_type} dropped")
+            #     return
 
-            t = threading.Timer(100000.0, self.handle_client_timeout, args=[session_id])
+            session_id = str(uuid.uuid4())
+            logging.info(f"New session request, assigned session id: {session_id}")
+            self._client_middleware.send_multipart(
+                connection_id, ["N", session_id], needs_encoding=True
+            )
+            # logging.debug("Setting forwarding queue to games")
+
+        elif msg_type == "A":
+            # if random.randint(0, 9) < 3:
+            #     logging.error(f"Bad luck, message of type: {msg_type} dropped")
+            #     return
+
+            rows = self._client_middleware.get_row_from_message(message)
+            session_id = rows[0]
+            logging.info(f"Session: {session_id} successfully connected")
+            t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
 
             self._clients_info[session_id] = [
                 self._games_queue_name,
@@ -176,7 +194,7 @@ class ClientHandler:
             ]
 
             self._client_middleware.send_multipart(
-                connection_id, [session_id], needs_encoding=True
+                connection_id, ["A", session_id], needs_encoding=True
             )
 
             t.start()

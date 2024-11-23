@@ -16,6 +16,8 @@ FILE_END_MSG = "END"
 AMMOUNT_OF_QUERIES = 5
 MAX_HEARTBEAT_RETRIES = 5
 MAX_RESTART_SESSION_RETRIES = 8
+MAX_NEW_SESSION_RETRIES = 3
+MAX_SESSION_ACKS_RETRIES = 5
 
 
 class Client:
@@ -33,15 +35,13 @@ class Client:
         self._query_results = {}
         self.__find_and_set_csv_field_size_limit()
         self._next_message_id = 0
-
+        self._session_id = None
         self._server_ip = config.get("SERVER_IP")
         self._server_port = config.get("SERVER_PORT")
         self._game_file_path = config.get("GAME_FILE_PATH")
         self._reviews_file_path = config.get("REVIEWS_FILE_PATH")
         self._sending_wait_time = config.get("SENDING_WAIT_TIME")
         self._check_status_after_messages = 99
-        self._last_read_line = 0
-        self._start_line = 0
         self._last_acked_message = None
         self._heartbeat_timeout = threading.Event()
         self._restart_session_timeout = threading.Event()
@@ -66,6 +66,7 @@ class Client:
     def run(self):
         self._middleware.create_socket(zmq.DEALER)
         self._middleware.connect_to(ip=self._server_ip, port=self._server_port)
+        self._middleware.register_for_pollin()
 
         try:
             self.__send_start_of_new_session()
@@ -81,20 +82,86 @@ class Client:
 
         except zmq.error.ZMQError as e:
             logging.info(f"ZMQ Error: {e}")
+        except ConnectionError:
+            logging.error("Haven't been able to stablish a session")
         except SystemExit:
             logging.info("Graceful shutdown")
 
-    def __send_start_of_new_session(self):
-        self._middleware.send_message(["N"])
-        self._middleware.register_for_pollin()
-        while True:
-            logging.info("Pollin")
-            if self._middleware.has_message():
-                res = self._middleware.recv_batch()
-                self._session_id = res[0][0]
-                logging.info(f"Received id: {self._session_id}")
+    def __send_start_of_new_session(self, timeout: float = 2.0, retry_number: int = 0):
+        # Req session_id
+        # Get session_id from the message sent (wait)
+        # Send an "A" (ACK) of that session id
+        # Wait for the server to "A" (ACK) the previous ACK (wait)
+        # Successfully connected
 
+        new_session_req_timeout = threading.Event()
+        t = threading.Timer(timeout, self.set_event, args=(new_session_req_timeout,))
+
+        self._middleware.send_message(["N"])
+        t.start()
+
+        while not new_session_req_timeout.is_set():
+            logging.debug("Pollin")
+            if not self._middleware.has_message():
+                continue
+
+            res = self._middleware.recv_batch()
+
+            if res[0][0] != "N":
+                continue
+
+            t.cancel()
+            self.__ack_session(res[0][1])
+            if self._session_id:
                 return
+
+        retry_number += 1
+        if retry_number == MAX_NEW_SESSION_RETRIES:
+            logging.info(
+                f"Max number of retries reached while trying to get a session: {MAX_NEW_SESSION_RETRIES}. Aborting."
+            )
+            raise ConnectionError()
+
+        logging.error(
+            f"New session timeout, retrying with timeout: {timeout * 2} | Retry number: {retry_number}"
+        )
+        self.__send_start_of_new_session(timeout=timeout * 2, retry_number=retry_number)
+
+    def __ack_session(
+        self, session_id_candidate: str, timeout: float = 2.0, retry_number: int = 0
+    ):
+        ack_session_req_timeout = threading.Event()
+        t = threading.Timer(timeout, self.set_event, args=(ack_session_req_timeout,))
+
+        self._middleware.send_message(["A", session_id_candidate])
+        t.start()
+
+        while not ack_session_req_timeout.is_set():
+            logging.debug("Pollin")
+            if not self._middleware.has_message():
+                continue
+
+            res = self._middleware.recv_batch()
+            if res[0][0] == "A" and res[0][1] == session_id_candidate:
+                # logging.info(f"Received id: {self._session_id}")
+                t.cancel()
+                self._session_id = res[0][1]
+                logging.info(f"Session established: {self._session_id}")
+                return
+
+        retry_number += 1
+        if retry_number == MAX_SESSION_ACKS_RETRIES:
+            logging.info(
+                f"Max number of retries reached while trying to get ack: {MAX_SESSION_ACKS_RETRIES}. Aborting."
+            )
+            raise ConnectionError()
+
+        logging.error(
+            f"Session ack timeout, retrying with timeout: {timeout * 2} | Retry number: {retry_number}"
+        )
+        self.__ack_session(
+            session_id_candidate, timeout=timeout * 2, retry_number=retry_number
+        )
 
     def __try_send_file(
         self,
@@ -235,6 +302,9 @@ class Client:
 
     def _set_restart_session_timeout(self):
         self._restart_session_timeout.set()
+
+    def set_event(self, event):
+        event.set()
 
     def _restart_session(self, timeout: float = 0.5, retry_number: int = 0):
         """_summary_
