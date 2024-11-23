@@ -1,3 +1,5 @@
+import csv
+import os
 import signal
 import logging
 from typing import *
@@ -104,7 +106,32 @@ class CounterByAppId:
         self._middleware.ack(delivery_tag)
 
     def __recover_state(self):
-        pass 
+        full_file_path, file_state = self._activity_log.recover()
+        if not full_file_path or not file_state: 
+            logging.debug('General log was corrupted, not recovering any state.')
+            return 
+        
+        logging.debug(f'Recovering state, overriding {full_file_path} with: ')
+        for line in file_state:
+            logging.debug(line)
+
+        dir, file_name = full_file_path.rsplit('/', maxsplit=1)
+        if not os.path.exists(dir):
+            logging.debug((
+                f'Ended up aborting state recovery, as {dir} '
+                f'was cleaned up after receiving END'
+            ))
+            return 
+
+        # TODO: Encapsular en el storage esto para que no haga falta
+        # saber de aca que s eusa csv
+        temp_file = os.path.join(dir, f"temp_{file_name}")
+        with open(temp_file, mode='w', newline='') as temp:
+            writer = csv.writer(temp)
+            for line in file_state:
+                writer.writerow(line.split(','))
+
+        os.replace(temp_file, full_file_path)
 
     def __purge_duplicates(self, msg_ids_per_record_by_client_id: Dict[str, Dict[str, List[str]]]):
         # Para entender, ver sum_batch_to_records_per_client de common/storage.py

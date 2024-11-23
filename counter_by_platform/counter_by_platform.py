@@ -73,6 +73,8 @@ class CounterByPlatform:
             ))
             return 
 
+        # TODO: Encapsular en el storage esto para que no haga falta
+        # saber de aca que s eusa csv
         temp_file = os.path.join(dir, f"temp_{file_name}")
         with open(temp_file, mode='w', newline='') as temp:
             writer = csv.writer(temp)
