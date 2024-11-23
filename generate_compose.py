@@ -87,6 +87,7 @@ def add_watchdog(output, port, debug=False, num=1):
             f"WAIT_BETWEEN_HEARTBEAT={WAIT_BETWEEN_HEARTBEAT}",
             f"ELECTION_PORT= {WATCHDOG_ELECTION_PORT}",
             f"LEADER_COMUNICATION_PORT={WATCHDOG_LEADER_COMUNICATION_PORT}",
+            f"AMOUNT_OF_MONITORS={AMOUNT_OF_WATCHDOGS}"
         ],
         "networks": ["net"],
     }
@@ -1063,21 +1064,21 @@ def generate_output(node_names: list, monitor_names: list):
     #     reviews_file_path="data/filtered_reviews.csv",
     #     debug=False,
     # )
-    add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT, node_names=node_names)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False, node_names=node_names)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False, node_names=node_names)
+    # add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT, node_names=node_names)
+    # generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False, node_names=node_names)
+    # generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False, node_names=node_names)
 
-    # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=False, node_names=node_names)
-    # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=False, node_names=node_names)
-    # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=False, node_names=node_names)
-    # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=False, node_names=node_names)
-    # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=False, node_names=node_names)
-    # -------------------------------------------- END OF QUERIES -----------------------------------------
+    # # -------------------------------------------- Q1 -----------------------------------------
+    # generate_q1(output=output, debug=False, node_names=node_names)
+    # # -------------------------------------------- Q2 -----------------------------------------
+    # generate_q2(output=output, debug=False, node_names=node_names)
+    # # -------------------------------------------- Q3 -----------------------------------------
+    # generate_q3(output=output, debug=False, node_names=node_names)
+    # # -------------------------------------------- Q4 -----------------------------------------
+    # generate_q4(output=output, debug=False, node_names=node_names)
+    # # -------------------------------------------- Q5 -----------------------------------------
+    # generate_q5(output=output, debug=False, node_names=node_names)
+    # # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
 

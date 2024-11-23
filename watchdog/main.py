@@ -29,7 +29,7 @@ def get_config():
             )
         )
 
-        #TODO: add env var for lider election nodes
+        config_params["AMOUNT_OF_MONITORS"] = int(os.getenv("AMOUNT_OF_MONITORS", config["DEFAULT"]["AMOUNT_OF_MONITORS"]))
 
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
@@ -53,7 +53,6 @@ def main():
     logging.debug("Logging configuration:")
     [logging.debug(f"{key}: {value}") for key, value in config.items()]
 
-    #middleware = Middleware(config["RABBIT_IP"])
     config.pop("LOGGING_LEVEL", None)
 
     socket = ServerSocket(config["PORT"])

@@ -15,7 +15,7 @@ NACK_MSG = "N"
 REGISTRATION_CONFIRM = "K"
 MIN_MEMORY_SPACE = 1024 # 1KB
 WAIT_BETWEEN_TRIES = 5
-MAX_RETRIES = 3
+MAX_RETRIES = 5
 
 class WatchdogClient:
 
@@ -80,6 +80,9 @@ class WatchdogClient:
         
         
     def _conect_to_monitor(self):
+        # TODO: CONNECT TO SPECIFIC PORT OF ANY MONITOR AND ASK FOR LEADER ID / DIR
+        # THATS SO I DO NOT WASTE A LONG TIME TRYING CONNECTING TO ALL MONITORS TO SEE
+        # IF ITS THE LEADER OR NOT
 
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
