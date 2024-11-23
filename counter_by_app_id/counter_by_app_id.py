@@ -2,10 +2,11 @@ import signal
 import logging
 from typing import *
 
+from common.activity_log.activity_log import ActivityLog
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.protocol.protocol import Protocol
 from common.storage import storage
-from utils.utils import node_id_to_send_to
+from utils.utils import node_id_to_send_to, group_msg_ids_per_client_by_field
 
 END_TRANSMISSION_MESSAGE = "END"
 
@@ -13,12 +14,13 @@ END_MESSAGE_CLIENT_ID = 0
 END_MESSAGE_END = 1
 
 REGULAR_MESSAGE_CLIENT_ID = 0
-REGULAR_MESSAGE_APP_ID = 1
+REGULAR_MESSAGE_MSG_ID = 1
+REGULAR_MESSAGE_APP_ID = 2
 
 
 class CounterByAppId:
 
-    def __init__(self, config, middleware: Middleware, protocol: Protocol):
+    def __init__(self, config, middleware: Middleware, activity_log: ActivityLog):
         self._config = config
         self._middleware = middleware
         self._got_sigterm = False
@@ -32,6 +34,7 @@ class CounterByAppId:
         self._storage_dir = config["STORAGE_DIR"]
         self._range_for_partition = config["RANGE_FOR_PARTITION"]
         self._needed_ends = config["NEEDED_ENDS"]
+        self._activity_log = activity_log
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -81,25 +84,21 @@ class CounterByAppId:
             self._middleware.ack(delivery_tag)
             return
 
-        count_per_record_by_client_id = {}
-        for record in body:
-            client_id = record[REGULAR_MESSAGE_CLIENT_ID]
-            record_id = record[REGULAR_MESSAGE_APP_ID]
-
-            if client_id not in count_per_record_by_client_id:
-                count_per_record_by_client_id[client_id] = {}
-
-            count_per_record_by_client_id[client_id][record_id] = (
-                count_per_record_by_client_id[client_id].get(record_id, 0) + 1
-            )
-
+        count_per_client_by_app_id = group_msg_ids_per_client_by_field(
+            body, 
+            REGULAR_MESSAGE_CLIENT_ID, 
+            REGULAR_MESSAGE_MSG_ID,
+            REGULAR_MESSAGE_APP_ID,
+        )
         storage.sum_batch_to_records_per_client(
             self._storage_dir,
             self._range_for_partition,
-            count_per_record_by_client_id,
+            count_per_client_by_app_id,
+            self._activity_log
         )
 
         self._middleware.ack(delivery_tag)
+
 
     def __send_results(self, client_id: str):
         queue_name = self._publish_queue

@@ -1,9 +1,12 @@
 import signal
 import logging
+from typing import *
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage import storage
 from common.protocol.protocol import Protocol
 import math
+
+from utils.utils import get_batch_per_client
 
 END_TRANSMISSION_MESSAGE = "END"
 FILE_NAME = "percentile_data.csv"
@@ -28,7 +31,8 @@ class Percentile:
         self._middleware.create_queue(self._consume_queue)
         self._middleware.create_queue(self._publish_queue)
 
-        self._middleware.attach_callback(self._consume_queue, self._handle_message)
+        callback = self._middleware.generate_callback(self._handle_message)
+        self._middleware.attach_callback(self._consume_queue, callback)
 
         try:
             logging.debug("Starting to consume...")
@@ -39,10 +43,10 @@ class Percentile:
         finally:
             self._middleware.shutdown()
 
-    def _handle_message(self, ch, method, properties, body):
+    def _handle_message(self, delivery_tag, body):
 
         body = self._middleware.get_rows_from_message(body)
-        logging.debug(f"body: {body}")
+        logging.debug(f"BODY: {body}")
 
         if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
             client_id = body[0][0]
@@ -57,12 +61,18 @@ class Percentile:
                 # )
                 self._handle_end_message(client_id)
 
-            self._middleware.ack(method.delivery_tag)
+            self._middleware.ack(delivery_tag)
             return
+        
+        records_per_client = get_batch_per_client(body)
+        self.__purge_duplicates(records_per_client)
 
         storage.add_batch_to_sorted_file_per_client(self._storage_dir, body)
 
-        self._middleware.ack(method.delivery_tag)
+        self._middleware.ack(delivery_tag)
+
+    def __purge_duplicates(records_per_client: List[List[str]]):
+        pass  
 
     def _handle_end_message(self, client_id):
 

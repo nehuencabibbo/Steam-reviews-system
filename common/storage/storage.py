@@ -409,24 +409,27 @@ def sum_platform_batch_to_records_per_client(
         # final_path = client_dir/platform_count.csv
         _sum_batch_to_records(client_dir, range_not_used, records_for_file, logger, partition=False)
 
+# TODO: Sacar codigo repetido de aca con sum_platform_batch_to_records_per_client
 def sum_batch_to_records_per_client(
-    dir: str, range: int, new_records_per_client: dict[str, dict[str, int]],
+    dir: str, range: int, new_records_per_client: dict[str, dict[str, int]], logger, 
 ):
-
+    
     for client_id, new_records in new_records_per_client.items():
 
         client_dir = os.path.join(dir, client_id)
         file_prefix = "partition"
 
+        logging.debug(f'NEW RECORDS: {new_records}')
         # get the file for each record in the batch -> {"file": [record1, record2], ....}
         records_per_file = _group_by_file_dict(file_prefix, range, new_records)
+        logging.debug(f'RECORDS PER FILE: {records_per_file}')
         # loggeo la ultima linea procesada, mensajes procesados -> 
         # loggeo que procese los mensajes -> en el archivo del cliente
 
         # Si se cae entre logs, al hacer la recuperacion, tiene que checkear si los mensajes
         # procesados del ultimo log estan guardados en el otro log, si ese es el caso, no
         # hay problema, pero si no estan, los tiene que agregar el
-        _sum_batch_to_records(client_dir, range, records_per_file)
+        _sum_batch_to_records(client_dir, range, records_per_file, logger, partition=True)
 
 
 def _group_by_file_dict(
@@ -579,7 +582,11 @@ def _add_batch_to_sorted_file(
     new_record_msg_ids_to_log = list(map(lambda x: x[0], new_records)) # Me quedo solo con los ids
     new_records_to_log = list(map(lambda x: ','.join(x), new_records)) # Para recuperarlo hacer un rsplit(maxsplit=2)
     logging.debug(f'NEW RECORDS THAT IM LOGGING: {new_records_to_log}')
+
+
     logger.log(client_id, [file_path] + new_records_to_log, new_record_msg_ids_to_log)
+
+    
 
     # Records are ordered as needed
     new_records = [[record[1], record[2], record[0]] for record in new_records]
@@ -647,6 +654,8 @@ def _add_batch_to_sorted_file(
                 writer.writerow(new_record)
                 amount_of_records_in_top += 1
 
+    # 1 - Esto no se completo
+    # 2 - Esto se completo
     os.replace(temp_file, file_path)
 
 

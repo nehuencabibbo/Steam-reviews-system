@@ -7,14 +7,15 @@ from common.storage import storage
 from common.protocol.protocol import Protocol
 from common.activity_log.activity_log import ActivityLog
 from typing import *
+from utils.utils import group_msg_ids_per_client_by_field
 
 END_TRANSMISSION_MESSAGE = "END"
 
 END_TRANSMISSION_MESSAGE_INDEX = 1
-END_TRANSMISSION_SESSION_ID = 0
+END_TRANSMISSION_CLIENT_ID = 0
 
-REGULAR_MESSAGE_SESSION_ID = 0
-REGULAR_MESSAGE_ID = 1
+REGULAR_MESSAGE_CLIENT_ID = 0
+REGULAR_MESSAGE_MSG_ID= 1
 REGULAR_MESSAGE_FIELD_TO_COUNT_BY = 2
 
 
@@ -87,7 +88,7 @@ class CounterByPlatform:
 
         if body[0][END_TRANSMISSION_MESSAGE_INDEX] == END_TRANSMISSION_MESSAGE:
             logging.debug("Recived END transmssion")
-            session_id = body[0][END_TRANSMISSION_SESSION_ID]
+            session_id = body[0][END_TRANSMISSION_CLIENT_ID]
 
             self.__send_results(session_id)
             self._middleware.ack(delivery_tag)
@@ -99,7 +100,14 @@ class CounterByPlatform:
         #   Linux: [MSG_ID1, MSG_ID2, ...], 
         #   Mac: [MSG_ID1, MSG_ID2, ...]}, 
         # ...}
-        msg_ids_per_record_by_client_id = self.__group_msg_ids_per_client_by_platform(body)
+        msg_ids_per_record_by_client_id = group_msg_ids_per_client_by_field(
+            body,
+            REGULAR_MESSAGE_CLIENT_ID,
+            REGULAR_MESSAGE_MSG_ID,
+            REGULAR_MESSAGE_FIELD_TO_COUNT_BY,
+            use_field_to_group_by_in_key=True
+        )
+        logging.debug(f'change: {msg_ids_per_record_by_client_id}')
         self.__purge_duplicates(msg_ids_per_record_by_client_id)
 
         storage.sum_platform_batch_to_records_per_client(
@@ -126,40 +134,6 @@ class CounterByPlatform:
         for client_id in client_ids_to_remove: 
             del msg_ids_per_record_by_client_id[client_id]
         
-
-
-    def __group_msg_ids_per_client_by_platform(
-        self, body: list[list]
-    ) -> Dict[str, Dict[str, List[str]]]:
-        '''
-        Retorna una lista con los msg ids involucrados para cada mensaje, sacar la cantidad a sumar
-        es hacer len(lista) por eso no se guarda el count tambien.
-
-        Se devuelve algo del estilo: 
-        {client_id: {Windows: ['1,W', '3,W', '4,W', '5,W'], Linux: ['2,L', '10,L'], Mac: ['9,M']}, ...}
-
-        Explicacion message id: 
-        Como un mismo mensaje obtiene si el juego esta soportado para una plataforma o no, pero el drop nulls
-        manda todos los mensajes con un mismo msg_id, que esta bien, porque para el es todo un mismo mensaje,
-        yo tengo que agregar un identificador unico para cada uno (porque para el count by platform son distintos 
-        mensajes), para evitar guardar estado, se guarda msg_id,inicial_platform, asi se diferencian
-        '''
-        msg_ids_per_record_by_client_id = {}
-        for record in body:
-            msg_id = record[REGULAR_MESSAGE_ID]
-            client_id = record[REGULAR_MESSAGE_SESSION_ID]
-            record_id = record[REGULAR_MESSAGE_FIELD_TO_COUNT_BY]
-
-            if not client_id in msg_ids_per_record_by_client_id:
-                msg_ids_per_record_by_client_id[client_id] = {}
-
-            if not record_id in msg_ids_per_record_by_client_id[client_id]:
-                msg_ids_per_record_by_client_id[client_id][record_id] = []
-
-            actual_message_id = ','.join([msg_id, record_id[0]]) # Ver explicacion del inicio
-            msg_ids_per_record_by_client_id[client_id][record_id].append(actual_message_id)
-
-        return msg_ids_per_record_by_client_id
 
     def __send_results(self, session_id: str):
         self._middleware.create_queue(self.publish_queue)

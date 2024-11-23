@@ -74,12 +74,12 @@ class Client:
             for row in reader:
                 if self._got_sigterm:
                     return
-                logging.debug(f"Sending appID {row[0]}")
+                # logging.debug(f"Sending appID {row[0]}")
                 
                 self._middleware.send([str(self._msg_id)] + row)
                 self._msg_id += 1
                 time.sleep(self._sending_wait_time)
-                time.sleep(0.025) 
+                # time.sleep(0.025) 
 
         logging.debug("Sending file end")
         self._middleware.send_end()

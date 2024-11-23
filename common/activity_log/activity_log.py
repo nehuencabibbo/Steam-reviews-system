@@ -173,6 +173,7 @@ class ActivityLog:
             log.flush()
             os.fsync(log.fileno())
 
+    
     def log(self, client_id: str, data: List[str], msg_ids: List[str]): 
         # Si se rompe mientras se hace el log general 
         #       -> Si no se llego a loggear completo salta el checksum y no se re-hace nada
@@ -307,7 +308,7 @@ class ActivityLog:
                     for msg_id in msg_ids: 
                         self._log_to_processed_lines(client_id, msg_id)
 
-        except ProtocolError as _:
+        except ActivityLogError as _:
             return None, None 
         
         if read_lines != 2: 
