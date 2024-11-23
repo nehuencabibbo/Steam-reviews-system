@@ -47,23 +47,6 @@ def delete_file(file_path: str):
     return True
 
 
-def write_by_range(dir: str, range: int, record: list[str]):
-    key = None
-    try:
-        # key = int(record.split(",", maxsplit=1)[0])
-        key = int(record[0])
-        file_path = os.path.join(dir, f"partition_{key//range}.csv")
-        os.makedirs(dir, exist_ok=True)
-
-        with open(file_path, "a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(record)
-
-    except ValueError as e:
-        print(f"Received {key}, Expected a numerical type in its place")
-        raise e
-
-
 def read_by_range(dir: str, range: int, key: int):
     file_name = f"partition_{key//range}.csv"
 
@@ -76,155 +59,6 @@ def read_by_range(dir: str, range: int, key: int):
         reader = csv.reader(f)
         for line in reader:
             yield line
-
-
-# TODO: this could receive a batch of records
-def sum_to_record(dir: str, range: int, record: list[str]):
-
-    # key = int(record.split(",", maxsplit=1)[0])
-    key = int(record[0])
-    value = int(record[1])
-
-    file_path = os.path.join(dir, f"partition_{key//range}.csv")
-    os.makedirs(dir, exist_ok=True)
-
-    if not os.path.exists(file_path):
-        # No existe el archivo
-        # -> Crearlo y apppendear
-        write_by_range(dir, range, record)
-        return
-
-    # Existe el archivo
-    # -> fijarse si esta dicha key
-    #   -> Si no esta: append
-    #   -> si esta: update
-
-    temp_file = f"temp_{key//range}.csv"
-    key_was_found = False
-
-    with open(file_path, mode="r") as infile, open(
-        temp_file, mode="w", newline=""
-    ) as outfile:
-        reader = csv.reader(infile)
-        writer = csv.writer(outfile)
-
-        for row in reader:
-            read_record = row  # [0].split(",", maxsplit=1)
-            read_record_key = read_record[0]
-            # TODO: validate
-            read_record_value = int(read_record[1])
-
-            if read_record_key == str(key):
-                key_was_found = True
-                writer.writerow([read_record_key, read_record_value + value])
-                continue
-
-            writer.writerow(row)
-        if not key_was_found:
-            writer.writerow(record)
-
-    os.replace(temp_file, file_path)
-
-
-def add_to_top(dir: str, record: list[str], k: int):
-    if k <= 0:
-        logging.error("Error, K must be > 0. Got: {k}")
-        return
-    # TODO: modify if necessary (some records may not be a key,value pair)
-    key, value = record
-
-    file_path = os.path.join(dir, f"top_{k}.csv")
-
-    os.makedirs(dir, exist_ok=True)
-
-    if not os.path.exists(file_path):
-        # No existe el archivo
-        # -> Crearlo y apppendear
-        with open(file_path, "w") as f:
-            writer = csv.writer(f)
-            writer.writerow(record)
-        return
-
-    temp_file = f"temp_{k}.csv"
-    top_cantidate_val = int(value)
-    top_cantidate_record = record
-    top_replaced = False
-    top_length = 0
-
-    with open(file_path, mode="r") as infile, open(
-        temp_file, mode="w", newline=""
-    ) as outfile:
-        reader = csv.reader(infile)
-        writer = csv.writer(outfile)
-
-        # Itearte over elements of the actual top
-        # The first value of the top_candidate_val is the value received as parameter
-        # If it's greater than a record from the top, then replace it, set the top_replaced flag to True
-        # and continue. The new top_candidate_record will be the value that was replaced.
-        # The top_replaced flag is to optimize the number of operations made
-        for line in reader:
-            if top_length == k:
-                break
-
-            # TODO: modify if necessary (some records may not be a key,value pair)
-            if top_replaced:
-                logging.debug(f"Shifting {line} with {top_cantidate_record}")
-                writer.writerow(top_cantidate_record)
-                top_cantidate_record = line
-                top_length += 1
-                continue
-
-            read_name, read_value = line
-            read_value = int(read_value)
-
-            if read_value == top_cantidate_val:
-                logging.debug(
-                    f"Record: {top_cantidate_record} has the same value than: {line}"
-                )
-                logging.debug(f"{key} > {read_name}?")
-                if key > read_name:
-                    logging.debug(
-                        f"Record: {top_cantidate_record} replaced the value: {line}"
-                    )
-                    writer.writerow(top_cantidate_record)
-                    top_cantidate_val = read_value
-                    top_cantidate_record = line
-                    top_replaced = True
-                    top_length += 1
-                else:
-                    writer.writerow(line)
-                    top_length += 1
-
-                # continue anyways as it has to check if the name is greater than other names
-                continue
-
-            if read_value < top_cantidate_val:
-                logging.debug(
-                    f"Record: {top_cantidate_record} replaced the value: {line}"
-                )
-                writer.writerow(top_cantidate_record)
-                top_cantidate_val = read_value
-                top_cantidate_record = line
-                top_replaced = True
-                top_length += 1
-                continue
-
-            writer.writerow(line)
-            top_length += 1
-
-        if top_length < k:
-            logging.debug(f"Record {top_cantidate_record} was appended")
-            writer.writerow(top_cantidate_record)
-
-    file_path = os.path.join(dir, f"top_{k}.csv")
-
-    os.makedirs(dir, exist_ok=True)
-
-    # No minor element found, and top is not complete, append
-
-    os.replace(temp_file, file_path)
-
-    # [logging.debug(val) for val in read_top(dir, k)]
 
 
 # en batches se usa el read_sorted_file
@@ -454,10 +288,25 @@ def create_file_if_unexistent(full_path: str):
         open(full_path, 'w').close()
 
 
-def _sum_batch_to_records(dir: str, range: int, records_per_file: dict[str, list[(str,int)]], logger, partition: bool = True):
+def _sum_batch_to_records(
+    dir: str, 
+    range: int, 
+    records_per_file: dict[str, list[(str,int)]], 
+    logger, 
+    partition: bool = True
+    ):
 
     os.makedirs(dir, exist_ok=True)
-    # file_prefix = "partition"
+
+    # for file_name, records in records_per_file.items():
+    #     file_path = os.path.join(dir, file_name)
+    #     if not os.path.exists(file_path):
+    #         if partition:
+    #             _write_batch_by_range(dir, range, records)
+    #         else:
+    #             # todos los records del cliente, van en un mismo archivo
+    #             _write_batch_on_file(dir, file_name, records)
+    #         continue
 
     for file_name, records in records_per_file.items():
         # file_name = partition.csv
