@@ -38,6 +38,8 @@ class CounterByAppId:
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
+        self.__recover_state()
+
     def run(self):
         # Creating receiving queue
         consume_queue_name = f"{self._node_id}_{self._consume_queue_suffix}"
@@ -90,7 +92,8 @@ class CounterByAppId:
             REGULAR_MESSAGE_MSG_ID,
             REGULAR_MESSAGE_APP_ID,
         )
-        
+        self.__purge_duplicates(count_per_client_by_app_id)
+
         storage.sum_batch_to_records_per_client(
             self._storage_dir,  
             count_per_client_by_app_id,
@@ -99,6 +102,36 @@ class CounterByAppId:
         )
 
         self._middleware.ack(delivery_tag)
+
+    def __recover_state(self):
+        pass 
+
+    def __purge_duplicates(self, msg_ids_per_record_by_client_id: Dict[str, Dict[str, List[str]]]):
+        # Para entender, ver sum_batch_to_records_per_client de common/storage.py
+        #
+        # Para cada cliente, se guarda pone en un determinado rango de archivos particionados
+        # una cierto count de un determinado app_id, eso quiere decir que la operacion
+        # que es atomica es guardar para cada archivo de particion que se haga, como esto depende
+        # mas del guardado que otra cosa, no puedo directamente aca hacer un group_by_file_dict()
+        # y si para un archivo veo un duplicado, volarlo, porque quedaria acoplado raro al storage
+        # el counter.
+        #  
+        # Aun asi es una optimizacion, porque si hay mucho de un mismo count_by_app_id (logico, los juegos
+        # top le ganan por mucho a los mas chicos), entonces si en un batch vienen varios de un mismo app_id,
+        # los estoy descartando a la vez
+        #
+        # Tambien dado que las particiones son chicas, no se cuanto optimize borrar por archivo de particion
+        app_ids_to_remove_from_clients: List[Tuple[str, str]] = []
+        for client_id, count_per_app_id in msg_ids_per_record_by_client_id.items():
+            for app_id, msg_ids in count_per_app_id.items(): # TODO: Por ahi hay alguna forma mejor de hacer esto
+                an_arbitrary_message_id = msg_ids[0]
+                if self._activity_log.is_msg_id_already_processed(client_id, an_arbitrary_message_id):
+                    app_ids_to_remove_from_clients.append((client_id, app_id))
+                
+                break
+
+        for client_id, app_id in app_ids_to_remove_from_clients: 
+            del msg_ids_per_record_by_client_id[client_id][app_id]
 
 
     def __send_results(self, client_id: str):
