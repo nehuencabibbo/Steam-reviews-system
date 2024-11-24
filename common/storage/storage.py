@@ -47,6 +47,7 @@ def delete_file(file_path: str):
 
 
 def read_by_range(dir: str, range: int, key: int):
+    logging.debug(f'READING KEY: {key}, RANGE: {range}')
     file_name = f"partition_{key//range}.csv"
 
     file_path = os.path.join(dir, file_name)
@@ -181,7 +182,7 @@ def atomically_append_to_file(dir: str, file_name: str, records: List[str]):
         for record in records:
             writer.writerow(record)
 
-    os.replace(file_path, temp_file_path)
+    os.replace(temp_file_path, file_path)
 
 
 def _write_batch_by_range(dir: str, range: int, records: list[list[str]]):
@@ -204,10 +205,10 @@ def group_by_file(
     records: list[list[str]]
 ) -> dict[str, list[str]]:
     records_per_file = {}
-    MSG_ID_INDEX = 1
+    APP_ID_INDEX = 1
     for record in records:
         try:
-            key = int(record[MSG_ID_INDEX])
+            key = int(record[APP_ID_INDEX])
             logging.debug(f"quack {key}")
             file_name = f"{file_prefix}_{key//range}.csv"
             records_per_file[file_name] = records_per_file.get(file_name, [])

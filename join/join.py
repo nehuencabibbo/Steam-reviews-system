@@ -120,7 +120,9 @@ class Join:
         records_per_client = group_batch_by_field(body)
         try:
             write_batch_by_range_per_client(
-                "tmp/", int(self._partition_range), records_per_client
+                "tmp/", 
+                int(self._partition_range), 
+                records_per_client
             )
 
         except ValueError as e:
