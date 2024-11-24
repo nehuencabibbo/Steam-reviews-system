@@ -912,6 +912,7 @@ def generate_q5(output: Dict, debug=False):
         "needed_games_ends": 1,
         "needed_reviews_ends": Q5_AMOUNT_OF_COUNTERS,
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_PERCENTILES,
+        # TODO: esto se tiene que cambiar para que coincida con los demas nodos
         "games_columns_to_keep": "2",  # client_id, msg_id, app_id, name -> NO TENER EN CUENTA EL CLIENT ID PARA EL NUM
         "reviews_columns_to_keep": "2",  # client_id, msg_id, count -> IDEM ARRIBA
     }
@@ -952,8 +953,8 @@ def generate_output():
         num=1,
         # games_file_path="data/games.csv",
         # reviews_file_path="data/reviews_sample.csv",
-        games_file_path="data/games_sample.csv",
-        reviews_file_path="data/reviews_sample.csv",
+        games_file_path="data/games.csv",
+        reviews_file_path="data/filtered_reviews.csv",
         debug=True,
     )
     # add_client(

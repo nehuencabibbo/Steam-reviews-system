@@ -1,3 +1,4 @@
+import os
 import signal
 import logging
 from typing import *
@@ -28,6 +29,8 @@ class Percentile:
         self._activity_log = activity_log
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
+        self.__recover_state()
+
     def run(self):
 
         self._middleware.create_queue(self._consume_queue)
@@ -44,6 +47,53 @@ class Percentile:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
+
+    def __recover_state(self):
+        full_file_path, lines = self._activity_log.recover()
+
+        if not full_file_path or not lines:
+            logging.debug("General log was corrupted, not recovering any state.")
+            return
+
+        logging.debug(
+            f"Recovering state, {full_file_path} is being processed with batch: "
+        )
+        for line in lines:
+            logging.debug(line)
+        dir = full_file_path.rsplit("/", maxsplit=1)[0]
+
+        if not os.path.exists(dir):
+            logging.debug(
+                (
+                    f"Ended up aborting state recovery, as {dir} "
+                    f"was cleaned up after receiving END"
+                )
+            )
+            return
+
+        lines = list(map(lambda x: x.rsplit(",", maxsplit=2), lines))
+        logging.debug(f"LINEAS: {lines}")
+        storage._add_batch_to_sorted_file(
+            dir, 
+            lines, 
+            self._activity_log, 
+        )
+
+    def __purge_duplicates(self, records_per_client: Dict[str, List[List[str]]]):
+        # Para cada batch, para cada cliente, se actualiza por completo o no un determinado archivo (firma de
+        # la func del storage), si al menos UN msg_id para un cliente ya fue procesado, eso quiere decir que
+        # todos los fueron, por lo tanto no hace falta checkear todos
+
+        client_ids_to_remove = []
+        for client_id, records in records_per_client.items():
+            for msg_id, name, count in records:  # TODO: Por ahi hay alguna forma mejor de hacer esto
+                if self._activity_log.is_msg_id_already_processed(client_id, msg_id):
+                    client_ids_to_remove.append(client_id)
+
+                break
+
+        for client_id in client_ids_to_remove:
+            del records_per_client[client_id]
 
     def _handle_message(self, delivery_tag, body):
 
@@ -73,9 +123,7 @@ class Percentile:
         storage.add_batch_to_sorted_file_per_client(self._storage_dir, records_per_client, self._activity_log)
 
         self._middleware.ack(delivery_tag)
-
-    def __purge_duplicates(self, records_per_client: List[List[str]]):
-        pass
+        
 
     def _handle_end_message(self, client_id):
 
