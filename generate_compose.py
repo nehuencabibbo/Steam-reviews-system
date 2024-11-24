@@ -14,6 +14,7 @@ WATCHDOG_ELECTION_PORT=9000
 WATCHDOG_LEADER_COMUNICATION_PORT=9500
 WAIT_BETWEEN_HEARTBEAT = 5.0
 AMOUNT_OF_WATCHDOGS = 3
+LEADER_DISCOVERY_PORT = 10015
 
 #ALL QUERIES
 AMOUNT_OF_DROP_FILTER_COLUMNS = 5
@@ -87,7 +88,8 @@ def add_watchdog(output, port, debug=False, num=1):
             f"WAIT_BETWEEN_HEARTBEAT={WAIT_BETWEEN_HEARTBEAT}",
             f"ELECTION_PORT= {WATCHDOG_ELECTION_PORT}",
             f"LEADER_COMUNICATION_PORT={WATCHDOG_LEADER_COMUNICATION_PORT}",
-            f"AMOUNT_OF_MONITORS={AMOUNT_OF_WATCHDOGS}"
+            f"AMOUNT_OF_MONITORS={AMOUNT_OF_WATCHDOGS}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "networks": ["net"],
     }
@@ -103,6 +105,7 @@ def add_filter_columns(output: Dict, num: int, debug: bool):
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'filter_columns{num}'}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -122,6 +125,7 @@ def add_drop_nulls(output: Dict, num: int, debug: bool):
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'drop_nulls{num}'}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -151,6 +155,7 @@ def add_counter_by_platform(
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_counter{num}'}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -184,6 +189,7 @@ def add_counter_by_app_id(
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_counter{num}'}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -216,6 +222,7 @@ def add_top_k(
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_top_k{num}'}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -248,6 +255,7 @@ def add_top_k_aggregator(
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_top_k{num}'}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -290,6 +298,7 @@ def add_filter_by_language(
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_filter_{filter_name}{num}'}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -335,6 +344,7 @@ def add_filter_by_value(
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_filter_{filter_name}{num}'}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -377,6 +387,7 @@ def add_join(
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_join{num}'}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -408,6 +419,7 @@ def add_percentile(
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'{query}_percentile_{num}'}",
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
         "networks": ["net"],
@@ -490,6 +502,7 @@ def add_client_handler(output: Dict, num: int, debug: bool, port: int, node_name
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
             f"NODE_NAME={f'client_handler{num}'}", #name of the service not container
+            f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "volumes": ["./data/:/data"],
         "networks": ["net"],
@@ -1064,21 +1077,21 @@ def generate_output(node_names: list, monitor_names: list):
     #     reviews_file_path="data/filtered_reviews.csv",
     #     debug=False,
     # )
-    # add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT, node_names=node_names)
-    # generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False, node_names=node_names)
-    # generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False, node_names=node_names)
+    add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT, node_names=node_names)
+    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False, node_names=node_names)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False, node_names=node_names)
 
-    # # -------------------------------------------- Q1 -----------------------------------------
-    # generate_q1(output=output, debug=False, node_names=node_names)
-    # # -------------------------------------------- Q2 -----------------------------------------
-    # generate_q2(output=output, debug=False, node_names=node_names)
-    # # -------------------------------------------- Q3 -----------------------------------------
-    # generate_q3(output=output, debug=False, node_names=node_names)
-    # # -------------------------------------------- Q4 -----------------------------------------
-    # generate_q4(output=output, debug=False, node_names=node_names)
-    # # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output, debug=False, node_names=node_names)
-    # # -------------------------------------------- END OF QUERIES -----------------------------------------
+    # -------------------------------------------- Q1 -----------------------------------------
+    generate_q1(output=output, debug=False, node_names=node_names)
+    # -------------------------------------------- Q2 -----------------------------------------
+    generate_q2(output=output, debug=False, node_names=node_names)
+    # -------------------------------------------- Q3 -----------------------------------------
+    generate_q3(output=output, debug=False, node_names=node_names)
+    # -------------------------------------------- Q4 -----------------------------------------
+    generate_q4(output=output, debug=False, node_names=node_names)
+    # -------------------------------------------- Q5 -----------------------------------------
+    generate_q5(output=output, debug=False, node_names=node_names)
+    # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
 

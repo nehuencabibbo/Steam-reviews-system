@@ -28,6 +28,7 @@ def get_config():
             config["DEFAULT"]["WAIT_BETWEEN_HEARTBEAT"],
             )
         )
+        config_params["LEADER_DISCOVERY_PORT"] = int(os.getenv("LEADER_DISCOVERY_PORT", config["DEFAULT"]["LEADER_DISCOVERY_PORT"]))
 
         config_params["AMOUNT_OF_MONITORS"] = int(os.getenv("AMOUNT_OF_MONITORS", config["DEFAULT"]["AMOUNT_OF_MONITORS"]))
 

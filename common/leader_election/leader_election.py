@@ -22,17 +22,18 @@ class LeaderElection:
         self._id = node_id
         self._amount_of_nodes = amount_of_nodes
         
+        self._leader_lock = threading.Lock()
         self._leader = None
         
         self._got_ok = threading.Event()
+        self._leader_found = threading.Event()
         self._not_running_election = threading.Event()
         self._not_running_election.set()
-        self._leader_found = threading.Event()
-
+        
         self._stop = False
 
         self._sender_lock = threading.Lock() 
-        self._sender_socket = UDPSocket(timeout=0.5)
+        self._sender_socket = UDPSocket(timeout=0.5, amount_of_retries=2)
         self._receiver_socket = UDPSocket()
         self._receiver_socket.bind(("", election_port + node_id))
 
@@ -47,7 +48,7 @@ class LeaderElection:
             logging.info(f"NODE {self._id} | election was running")
             return
         
-        self._leader = None
+
         logging.info(f"NODE {self._id} | running election")
         self._not_running_election.clear()
 
@@ -59,7 +60,8 @@ class LeaderElection:
             return    
         
         logging.info(f"NODE {self._id} | I won the election")
-        self._leader = self._id
+        with self._leader_lock:
+            self._leader = self._id
         self._send_leader_message()
         self._not_running_election.set()
 
@@ -85,7 +87,7 @@ class LeaderElection:
             command, node_id = msg.split(",")
             node_id = int(node_id)
 
-            logging.info(f"NODE {self._id} | Got message: {command} from {node_id}")
+            logging.debug(f"NODE {self._id} | Got message: {command} from {node_id}")
             if command == ELECTION_COMMAND:
                 if self._id > node_id:
                     self._send_ok_message(node_id)
@@ -98,17 +100,20 @@ class LeaderElection:
                 self._receiver_socket.settimeout(15)
 
             elif command == LEADER_COMMAND:
-                self._leader = node_id
+                with self._leader_lock:
+                    self._leader = node_id
                 self._got_ok.clear()
                 self._not_running_election.set()
                 self._receiver_socket.settimeout(None) 
             
             elif command == LEADER_QUERY_COMMAND:
-                if self._leader:
-                    self._send_leader_id_message(node_id)
+                with self._leader_lock:
+                    if not self._leader is None:
+                        self._send_leader_id_message(node_id)
                 
             elif command == LEADER_QUERY_RESPONSE:
-                self._leader = node_id
+                with self._leader_lock:
+                    self._leader = node_id
                 self._leader_found.set()
 
 
@@ -118,11 +123,17 @@ class LeaderElection:
 
 
     def get_leader_id(self):
-        return self._leader
+        with self._leader_lock:
+            return self._leader
     
     
+    def is_running(self):
+        return not self._not_running_election.is_set()
+
+
     def set_leader_death(self):
-        self._leader = None
+        with self._leader_lock:
+            self._leader = None
     
 
     def look_for_leader(self):
@@ -184,6 +195,7 @@ class LeaderElection:
                 self._sender_socket.send_message(message, self._node_id_to_addr(node_id))
             except ConnectionError:
                 return
+
 
     def _send_leader_id_message(self, node_id):
         if self._stop:

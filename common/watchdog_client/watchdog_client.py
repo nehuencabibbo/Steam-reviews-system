@@ -19,25 +19,27 @@ MAX_RETRIES = 5
 
 class WatchdogClient:
 
-    def __init__(self, monitors_ip, monitor_port, client_name:str, client_middleware: Middleware):
+    def __init__(self, monitors_ip, monitor_port, client_name:str, discovery_port, client_middleware: Middleware):
         self._stop = False
         self._monitors_ip = monitors_ip
         self._monitor_port = monitor_port
         self._client_name = client_name
         self._client_middleware = client_middleware
         self._connection = None
+        self._leader_discovery_port = discovery_port
 
     def start(self):
 
         while not self._stop:
             try:
+                logging.debug("[MONITOR] Looking for leader")
                 self._connection = self._conect_to_monitor()
 
                 if not self._connection:
-                    logging.error("Could not connect to any monitor")
-                    return
+                    logging.debug("[MONITOR] Could not connect to any monitor. Retrying...")
+                    continue
                 
-                logging.info(f"[MONITOR] Connected to monitor. Checking in...")
+                logging.debug(f"[MONITOR] Connected to monitor. Checking in...")
                 self._register()
 
                 self._answer_heartbeats()
@@ -51,16 +53,73 @@ class WatchdogClient:
                     self._connection.close()
 
 
+    def _conect_to_monitor(self):
+        leader_id = self._look_for_leader()
+        logging.debug(f"[MONITOR] The leader is: {leader_id}")
+
+        if leader_id == None:
+            return
+        
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        monitor_ip = f"watchdog_{leader_id}"
+        try:
+            client_socket.connect((monitor_ip,  self._monitor_port))
+            return ClientConnection(client_socket)
+        
+        except OSError as _:
+            if not self._stop:
+                logging.debug("[MONITOR] Couldnt connect to leader. The leader is down or is preparing")
+
+
+    def _look_for_leader(self):
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        connection = None
+        for _ in range(MAX_RETRIES):
+            sleep(WAIT_BETWEEN_TRIES)
+            if self._stop:
+                return
+
+            for monitor_ip in self._monitors_ip:
+                logging.debug(f"[MONITOR] Trying with monitor {monitor_ip}")
+                try:
+                    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    client_socket.connect((monitor_ip, self._leader_discovery_port))
+                    connection = ClientConnection(client_socket)
+
+                    connection.send("Hola")
+
+                    while not self._stop:
+                        msg = connection.recv()
+                        logging.debug(f"Got message: {msg}")
+
+                        if msg == "F":
+                            logging.debug("Leader election in progress, waiting...")
+                            sleep(5)  # Wait before polling again
+                        else:
+                            client_socket.close()
+                            return msg  # Return the leader ID
+
+                except OSError as e:
+                    logging.debug(f"Error connecting to monitor {monitor_ip}")
+                    continue
+                finally:
+                    if connection:
+                        connection.close()
+        
+        logging.warning("Reached max retries and couldnt connect to the monitor")
+
+        return None
+
+
     def _register(self):
-        self._connection.send(self._client_name)#envio el nombre
+        self._connection.send(self._client_name)
         msg = self._connection.recv()
         if msg == REGISTRATION_CONFIRM:
-            logging.info("[MONITOR] Registration confirmed")
+            logging.debug("[MONITOR] Registration confirmed")
 
 
     def stop(self):
         self._stop = True
-        #self._connection.close()
 
 
     def _answer_heartbeats(self):
@@ -78,28 +137,7 @@ class WatchdogClient:
             logging.debug("System status is OK, sending ACK")
             self._connection.send(msg)
         
-        
-    def _conect_to_monitor(self):
-        # TODO: CONNECT TO SPECIFIC PORT OF ANY MONITOR AND ASK FOR LEADER ID / DIR
-        # THATS SO I DO NOT WASTE A LONG TIME TRYING CONNECTING TO ALL MONITORS TO SEE
-        # IF ITS THE LEADER OR NOT
 
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        for monitor_ip in reversed(self._monitors_ip):
-            
-            for j in range(1, MAX_RETRIES + 1):
-                if self._stop: return 
-                try:
-                    client_socket.connect((monitor_ip,  self._monitor_port))
-                    return ClientConnection(client_socket)
-                
-                except OSError as _:
-                    if j == MAX_RETRIES:
-                        logging.info(f"Couldn't connect to monitor {monitor_ip}")
-                    sleep(WAIT_BETWEEN_TRIES)
-
-    
     # TODO: ver que hacer con el chequeo de espacio o de escritura
     def _check_node_general_functionality(self):
 

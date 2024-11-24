@@ -89,6 +89,8 @@ def get_config():
 
         config_params["NODE_NAME"] = os.getenv("NODE_NAME")
 
+        config_params["LEADER_DISCOVERY_PORT"] = int(os.getenv("LEADER_DISCOVERY_PORT"))
+
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
     except ValueError as e:
@@ -120,7 +122,8 @@ def main():
     monitor_ip = config.pop("WATCHDOGS_IP")
     monitor_port = config.pop("WATCHDOG_PORT")
     node_name = config.pop("NODE_NAME")
-    monitor = WatchdogClient(monitor_ip, monitor_port, node_name, middleware)
+    discovery_port = config.pop("LEADER_DISCOVERY_PORT")
+    monitor = WatchdogClient(monitor_ip, monitor_port, node_name, discovery_port, middleware)
     
     join = Join(protocol, middleware, monitor, config)
     join.start()

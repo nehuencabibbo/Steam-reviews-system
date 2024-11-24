@@ -3,6 +3,7 @@ from common.server_socket.client_connection import ClientConnection
 from node_handler import NodeHandler
 from common.leader_election.leader_election import LeaderElection
 from common.udpsocket.udp_socket import UDPSocket
+from leader_discovery_service import LeaderDiscoveryService
 
 import signal
 import logging
@@ -26,12 +27,19 @@ class Watchdog:
         self._election_port = config["ELECTION_PORT"]
         self._leader_comunicaton_port = config["LEADER_COMUNICATION_PORT"]
 
+        self._leader_discovery_port = config["LEADER_DISCOVERY_PORT"]#10015
+
         self._server_socket = server_socket
         self._amount_of_monitors = config["AMOUNT_OF_MONITORS"]
 
         self._got_sigterm = threading.Event()
 
         self._leader_election = LeaderElection(self._node_id, self._election_port, self._amount_of_monitors)
+        
+        self._leader_discovery = LeaderDiscoveryService(self._leader_discovery_port, self._leader_election)
+        self._discovery_thread = threading.Thread(target=self._leader_discovery.run, daemon=True)
+        self._discovery_thread.start()
+
         signal.signal(signal.SIGTERM, self._sigterm_handler)
 
         self._watchdog_setup()
@@ -62,8 +70,8 @@ class Watchdog:
 
             try:
                 if self._leader_election.get_leader_id() is None:
-                    #need to make leader None when i find its dead  
                     self._leader_election.start_leader_election()
+
             except OSError as e:
                 if not self._got_sigterm.is_set():
                     logging.error(f"GOT ERROR WHILE STARTING ELECTION: {e}")
@@ -96,11 +104,8 @@ class Watchdog:
                 time.sleep(3) #wait for leader to settle #TODO: search for another way (more retries in udp socket?)
                 self._listen_to_leader()
 
-            self._leader_election.set_leader_death()
-
-
+            
     def _monitor_nodes(self):
-
         self._server_socket.settimeout(TIMEOUT_BEFORE_FALLEN_CHECK)
         while not self._got_sigterm.is_set():
             try:
@@ -109,14 +114,14 @@ class Watchdog:
             
                 node_name = conn.recv()
                 
-                #TODO:remove registration? now it is not needed?
-                conn.send(REGISTRATION_CONFIRM)
-
                 logging.info(f"Node {node_name} connected.")
 
                 handler = NodeHandler(conn, node_name, self._got_sigterm, self._wait_between_heartbeats)
                 thread = threading.Thread(target=handler.start, daemon=True)
                 thread.start()
+
+                #TODO:remove registration? now it is not needed?
+                conn.send(REGISTRATION_CONFIRM)
                 
                 if node_name in self._nodes and self._nodes[node_name] is not None:
                     self._nodes[node_name].join()
@@ -139,7 +144,7 @@ class Watchdog:
         leader_id = self._leader_election.get_leader_id()
         leader_addr = (f"watchdog_{leader_id}", self._leader_comunicaton_port)
 
-        leader_socket = UDPSocket() #change timeout and retries?
+        leader_socket = UDPSocket(timeout=1, amount_of_retries=5) 
 
         while not self._got_sigterm.is_set():
             try:
@@ -147,7 +152,8 @@ class Watchdog:
                 self._got_sigterm.wait(3)
             except (OSError, ConnectionError, socket.timeout) as e:
                 if not self._got_sigterm.is_set():
-                    logging.info("The leader is down")
+                    logging.info("The monitor is down")
+                    self._leader_election.set_leader_death()
                 break
         
         leader_socket.close()
@@ -167,11 +173,10 @@ class Watchdog:
         while not self._got_sigterm.is_set():
             try:
 
-                #TODO: modify socket so it uses the Protocol.encode and decode?
                 msg: str = leader_socket.recv_message(10)
                 _, node_name = msg.split(",")
 
-                logging.info(f"NODE {node_name} SENT HEARTBEAT")
+                logging.debug(f"NODE {node_name} SENT HEARTBEAT")
 
                 self._peers[node_name] = time.time()
             except socket.timeout as e:
@@ -209,4 +214,5 @@ class Watchdog:
         self._got_sigterm.set()
         self._server_socket.close()
         self._leader_election.stop()
+        self._leader_discovery.close()
 
