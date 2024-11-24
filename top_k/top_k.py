@@ -7,16 +7,18 @@ from common.storage.storage import (
     read_sorted_file,
     add_batch_to_sorted_file_per_client,
     delete_directory,
-    _add_batch_to_sorted_file
+    _add_batch_to_sorted_file,
 )
-from utils.utils import get_batch_per_client
-from typing import * 
+from utils.utils import group_batch_by_field
+from typing import *
 
 END_TRANSMISSION_MESSAGE = "END"
 
 
 class TopK:
-    def __init__(self, middleware: Middleware, config: dict[str, str], activity_log: ActivityLog):
+    def __init__(
+        self, middleware: Middleware, config: dict[str, str], activity_log: ActivityLog
+    ):
         self.__middleware = middleware
         self.__total_ends_received_per_client = {}
         self._got_sigterm = False
@@ -64,32 +66,31 @@ class TopK:
     def __recover_state(self):
         full_file_path, lines = self._activity_log.recover()
 
-        if not full_file_path or not lines: 
-            logging.debug('General log was corrupted, not recovering any state.')
+        if not full_file_path or not lines:
+            logging.debug("General log was corrupted, not recovering any state.")
             return
-        
-        logging.debug(f'Recovering state, {full_file_path} is being processed with batch: ')
+
+        logging.debug(
+            f"Recovering state, {full_file_path} is being processed with batch: "
+        )
         for line in lines:
             logging.debug(line)
-        dir = full_file_path.rsplit('/', maxsplit=1)[0]
+        dir = full_file_path.rsplit("/", maxsplit=1)[0]
 
         if not os.path.exists(dir):
-            logging.debug((
-                f'Ended up aborting state recovery, as {dir} '
-                f'was cleaned up after receiving END'
-            ))
-            return 
+            logging.debug(
+                (
+                    f"Ended up aborting state recovery, as {dir} "
+                    f"was cleaned up after receiving END"
+                )
+            )
+            return
 
-        lines = list(map(lambda x: x.rsplit(',', maxsplit=2), lines))
-        logging.debug(f'LINEAS: {lines}')
+        lines = list(map(lambda x: x.rsplit(",", maxsplit=2), lines))
+        logging.debug(f"LINEAS: {lines}")
         _add_batch_to_sorted_file(
-            dir, 
-            lines, 
-            self._activity_log, 
-            ascending=False, 
-            limit=self._k
+            dir, lines, self._activity_log, ascending=False, limit=self._k
         )
-
 
     def __callback(self, delivery_tag, body, message_type):
         body = self.__middleware.get_rows_from_message(body)
@@ -128,13 +129,17 @@ class TopK:
             self.__middleware.ack(delivery_tag)
 
             return
-        
-        records_per_client = get_batch_per_client(body)
+
+        records_per_client = group_batch_by_field(body)
         self.__purge_duplicates(records_per_client)
 
         try:
             add_batch_to_sorted_file_per_client(
-                "tmp", records_per_client, self._activity_log, ascending=False, limit=self._k
+                "tmp",
+                records_per_client,
+                self._activity_log,
+                ascending=False,
+                limit=self._k,
             )
 
         except ValueError as e:
@@ -144,16 +149,19 @@ class TopK:
 
         self.__middleware.ack(delivery_tag)
 
-
-    def __purge_duplicates(self, records_per_client: Dict[str,List[List[str]]]):
-        # Para cada batch, para cada cliente, se actualiza por completo o no un determinado archivo (firma de 
-        # la func del storage), si al menos UN msg_id para un cliente ya fue procesado, eso quiere decir que 
-        # todos los fueron, por lo tanto no hace falta checkear todos 
+    def __purge_duplicates(self, records_per_client: Dict[str, List[List[str]]]):
+        # Para cada batch, para cada cliente, se actualiza por completo o no un determinado archivo (firma de
+        # la func del storage), si al menos UN msg_id para un cliente ya fue procesado, eso quiere decir que
+        # todos los fueron, por lo tanto no hace falta checkear todos
 
         client_ids_to_remove = []
         for client_id, records in records_per_client.items():
-            for msg_id, name, count in records: # TODO: Por ahi hay alguna forma mejor de hacer esto
-                if self._activity_log.is_msg_id_already_processed(client_id, msg_id): 
+            for (
+                msg_id,
+                name,
+                count,
+            ) in records:  # TODO: Por ahi hay alguna forma mejor de hacer esto
+                if self._activity_log.is_msg_id_already_processed(client_id, msg_id):
                     client_ids_to_remove.append(client_id)
 
                 break
@@ -165,7 +173,7 @@ class TopK:
         NAME = 0
         COUNT = 1
         MSG_ID = 2
-        logging.debug('Sending the following top:')
+        logging.debug("Sending the following top:")
         for record in read_sorted_file(f"tmp/{client_id}"):
             # Si no se lo paso a un agregador, sino que se lo estoy mandando al cliente,
             # le tengo que mandar solo lo que le interesa
@@ -173,7 +181,7 @@ class TopK:
                 record = [client_id, record[NAME], record[COUNT]]
             # Si se lo paso a un agregador, se lo tengo que pasar en el orden
             # en el que yo mismo lo espero
-            else: 
+            else:
                 record = [client_id, record[MSG_ID], record[NAME], record[COUNT]]
 
             logging.debug(record)

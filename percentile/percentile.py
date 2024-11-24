@@ -6,7 +6,7 @@ from common.storage import storage
 from common.protocol.protocol import Protocol
 import math
 
-from utils.utils import get_batch_per_client
+from utils.utils import group_batch_by_field
 
 END_TRANSMISSION_MESSAGE = "END"
 FILE_NAME = "percentile_data.csv"
@@ -63,16 +63,16 @@ class Percentile:
 
             self._middleware.ack(delivery_tag)
             return
-        
-        records_per_client = get_batch_per_client(body)
+
+        records_per_client = group_batch_by_field(body)
         self.__purge_duplicates(records_per_client)
 
         storage.add_batch_to_sorted_file_per_client(self._storage_dir, body)
 
         self._middleware.ack(delivery_tag)
 
-    def __purge_duplicates(records_per_client: List[List[str]]):
-        pass  
+    def __purge_duplicates(self, records_per_client: List[List[str]]):
+        pass
 
     def _handle_end_message(self, client_id):
 

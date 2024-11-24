@@ -11,7 +11,7 @@ from common.storage.storage import (
     delete_file,
 )
 from common.protocol.protocol import Protocol
-from utils.utils import node_id_to_send_to
+from utils.utils import group_batch_by_field, node_id_to_send_to
 
 END_TRANSMISSION_MESSAGE = "END"
 
@@ -42,7 +42,7 @@ class Join:
         logging.debug(f"Gracefully shutting down...")
         self._got_sigterm = True
         self.__middleware.shutdown()
-        #self.__middleware.stop_consuming_gracefully()
+        # self.__middleware.stop_consuming_gracefully()
 
     def start(self):
         # gotta check this as it could be the last node, then a prefix shouldn't be used
@@ -117,8 +117,11 @@ class Join:
             return
 
         logging.debug(f"Recived game: {body}")
+        records_per_client = group_batch_by_field(body)
         try:
-            write_batch_by_range_per_client("tmp/", int(self._partition_range), body)
+            write_batch_by_range_per_client(
+                "tmp/", int(self._partition_range), records_per_client
+            )
 
         except ValueError as e:
             logging.error(
@@ -174,10 +177,10 @@ class Join:
                 self._amount_of_games_ends_recived[client_id] == self._needed_games_ends
             ):
                 # Havent received all ends, save in disk
-                logging.debug(f'Saving {review}')
+                logging.debug(f"Saving {review}")
                 save(f"tmp/reviews_{client_id}.csv", review)
             else:
-                logging.debug(f'Joining and sending! {review}')
+                logging.debug(f"Joining and sending! {review}")
                 self.__join_and_send(review, client_id, forwarding_queue_name)
 
         self.__middleware.ack(delivery_tag)
@@ -218,14 +221,14 @@ class Join:
 
     def __join_and_send(self, review, client_id, forwarding_queue_name):
         # TODO: handle conversion error
-        logging.debug(f'inside join: {review}')
+        logging.debug(f"inside join: {review}")
         app_id = int(review[0])
-        logging.debug(f'app id: {app_id}')
-        logging.debug(f'partition_{app_id//int(self._partition_range)}')
+        logging.debug(f"app id: {app_id}")
+        logging.debug(f"partition_{app_id//int(self._partition_range)}")
         for record in read_by_range(
             f"tmp/{client_id}", int(self._partition_range), app_id
         ):
-            logging.debug(f'Read record: {record}')
+            logging.debug(f"Read record: {record}")
             # record_splitted = record.split(",", maxsplit=1)
             record_msg_id = record[0]
             record_app_id = record[1]
@@ -234,7 +237,7 @@ class Join:
                 # Get rid of the app_id from the review and append it to the original game record
                 # TODO: QUE NO HAGA UNA LISTA!!
                 # joined_message = [record_app_id, record_info] + review[1:]
-                logging.debug(f'HERE RECORD: {record}, HERE REVIEW: {review}')
+                logging.debug(f"HERE RECORD: {record}, HERE REVIEW: {review}")
                 joined_message = self.__games_columns_to_keep(
                     record
                 ) + self.__reviews_columns_to_keep(review)

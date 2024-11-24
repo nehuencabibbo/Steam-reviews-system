@@ -14,7 +14,7 @@ def node_id_to_send_to(client_id: str, app_id: str, nodes: int) -> int:
     return hash_value % nodes
 
 
-def get_batch_per_client(records: List[List[str]]) -> Dict[str,List[List[str]]]:
+def group_batch_by_field(records: List[List[str]], field_index_to_group_by: int = 0) -> Dict[str,List[List[str]]]:
     '''
     Given a list of records, it groups based on the first element of it
     and returns the groups.
@@ -27,17 +27,18 @@ def get_batch_per_client(records: List[List[str]]) -> Dict[str,List[List[str]]]:
 
     {'a': [['1', '2'], ['3', '4']], 'b': [['1', '2']]}
     '''
-    batch_per_client = {}
+    batch_per_field = {}
 
     # Get the batch for every client
     for record in records:
-        client_id = record[0]
-        record = record[1:]
-        if not client_id in batch_per_client:
-            batch_per_client[client_id] = []
+        field_to_group_by = record[field_index_to_group_by]
+        # Get record but without field_to_group_by
+        record = record[:field_index_to_group_by] + record[field_index_to_group_by + 1:]
+        if not field_to_group_by in batch_per_field:
+            batch_per_field[field_to_group_by] = []
 
-        batch_per_client[client_id].append(record)
-    return batch_per_client
+        batch_per_field[field_to_group_by].append(record)
+    return batch_per_field
 
 
 def group_msg_ids_per_client_by_field(

@@ -2,9 +2,8 @@ import os
 import csv
 import logging
 import shutil
-from typing import * 
-
-from utils.utils import get_batch_per_client
+from typing import *
+    
 
 # TODO: use threads for all functions or some parallelization tool (maybe)
 
@@ -144,7 +143,7 @@ def add_to_sorted_file(dir: str, record: str):
 def read_sorted_file(dir: str):
 
     file_path = os.path.join(dir, "sorted_file.csv")
-    os.makedirs(dir, exist_ok=True) # ???
+    os.makedirs(dir, exist_ok=True)  # ???
 
     if not os.path.exists(file_path):
         return []  # No records
@@ -158,15 +157,31 @@ def read_sorted_file(dir: str):
 # ------------------------ BATCHES -------------------------------------------
 
 
-# TODO: Sacar el get_batch_per_client_de_aca
-def write_batch_by_range_per_client(dir: str, range: int, records: list[list[str]]):
-
-    batch_per_client = get_batch_per_client(records)
-    logging.debug(f'Batch per client: {batch_per_client}')
-    for client_id, batch in batch_per_client.items():
+# TODO: Sacar el group_batch_by_field_de_aca
+def write_batch_by_range_per_client(dir: str, range: int, records_per_client: Dict[str, List[str]]):
+    logging.debug(f"Batch per client: {records_per_client}")
+    for client_id, batch in records_per_client.items():
         client_dir = os.path.join(dir, client_id)
 
         _write_batch_by_range(client_dir, range, batch)
+
+def atomically_append_to_file(dir: str, file_name: str, records: List[str]):
+    # If file is large this is really ineficient
+    temp_file_path = os.path.join(dir, 'temp_append.csv')
+    file_path = os.path.join(dir, file_name)
+
+    create_file_if_unexistent(file_path)
+    with open(file_path, 'r', newline='') as original, open(temp_file_path, 'w', newline='') as temp: 
+        reader = csv.reader(original)
+        writer = csv.writer(temp)
+
+        for line in reader: 
+            writer.writerow(line)
+
+        for record in records:
+            writer.writerow(record)
+
+    os.replace(file_path, temp_file_path)
 
 
 def _write_batch_by_range(dir: str, range: int, records: list[list[str]]):
@@ -174,24 +189,26 @@ def _write_batch_by_range(dir: str, range: int, records: list[list[str]]):
     os.makedirs(dir, exist_ok=True)
     file_prefix = "partition"
     # get the file for each record in the batch -> {"file_name": [record1, record2], ....}
+    logging.debug(f'batch: {records}')
     records_per_file = group_by_file(file_prefix, range, records)
-    logging.debug(f'Batch per file {records_per_file}')
+    logging.debug(f"Batch per file {records_per_file}")
     for file_name, records in records_per_file.items():
-        file_path = os.path.join(dir, file_name)
-        with open(file_path, "a", newline="") as f:
-            writer = csv.writer(f)
-            for record in records:
-                writer.writerow(record)
+        # Files are reduced, this operation is not that costly, but
+        # guarantees file integrity
+        atomically_append_to_file(dir, file_name, records)
 
 
 def group_by_file(
-    file_prefix: str, range: int, records: list[list[str]]
+    file_prefix: str, 
+    range: int, 
+    records: list[list[str]]
 ) -> dict[str, list[str]]:
     records_per_file = {}
+    MSG_ID_INDEX = 1
     for record in records:
         try:
-            key = int(record[1])
-            logging.debug(f'quack {key}')
+            key = int(record[MSG_ID_INDEX])
+            logging.debug(f"quack {key}")
             file_name = f"{file_prefix}_{key//range}.csv"
             records_per_file[file_name] = records_per_file.get(file_name, [])
             records_per_file[file_name].append(record)
@@ -200,6 +217,7 @@ def group_by_file(
             raise e
 
     return records_per_file
+
 
 # TODO: Armarse primero el diccionario de adentro y dsps hacer dict[file_name] = dict
 def _group_records(records: dict[str, List[str]]) -> Dict[str, List[str]]:
@@ -215,39 +233,35 @@ def _group_records(records: dict[str, List[str]]) -> Dict[str, List[str]]:
 
 # TODO: Sacar codigo repetido de aca con sum_platform_batch_to_records_per_client
 def sum_batch_to_records_per_client(
-    dir: str, 
-    new_records_per_client: dict[str, dict[str, int]], 
+    dir: str,
+    new_records_per_client: dict[str, dict[str, int]],
     logger,
-    range_for_partition: int = -1 ,
+    range_for_partition: int = -1,
     save_first_msg_id: bool = False,
 ):
-    
+
     need_to_partition_by_range = range_for_partition != -1
     for client_id, new_records in new_records_per_client.items():
-        logging.debug(f'NEW RECORDS: {new_records}')
+        logging.debug(f"NEW RECORDS: {new_records}")
 
         client_dir = os.path.join(dir, client_id)
 
         if need_to_partition_by_range:
             records_per_file = _group_by_file_dict(range_for_partition, new_records)
-            logging.debug(f'RECORDS PER FILE (partition): {records_per_file}')
-        else: 
+            logging.debug(f"RECORDS PER FILE (partition): {records_per_file}")
+        else:
             records_per_file = _group_records(new_records)
-            logging.debug(f'RECORDS PER FILE (not partitioned): {records_per_file}')
+            logging.debug(f"RECORDS PER FILE (not partitioned): {records_per_file}")
 
         sum_batch_to_records(
-            client_dir, 
-            records_per_file, 
-            logger, 
-            save_first_msg_id=save_first_msg_id
+            client_dir, records_per_file, logger, save_first_msg_id=save_first_msg_id
         )
 
 
 def _group_by_file_dict(
-    range_for_partition: int, 
-    records: dict[str, int]
+    range_for_partition: int, records: dict[str, int]
 ) -> dict[str, list[str]]:
-    FILE_PREFIX = 'partition'
+    FILE_PREFIX = "partition"
 
     records_per_file = {}
     for record_id, value in records.items():
@@ -265,15 +279,15 @@ def _group_by_file_dict(
 
 def create_file_if_unexistent(full_path: str):
     if not os.path.exists(full_path):
-        open(full_path, 'w').close()
+        open(full_path, "w").close()
 
 
 def sum_batch_to_records(
-    dir: str, 
-    records_per_file: dict[str, list[(str,int)]], 
-    logger, 
-    save_first_msg_id: bool = False, 
-    ):
+    dir: str,
+    records_per_file: dict[str, list[(str, int)]],
+    logger,
+    save_first_msg_id: bool = False,
+):
 
     os.makedirs(dir, exist_ok=True)
     for file_name, records in records_per_file.items():
@@ -310,62 +324,78 @@ def sum_batch_to_records(
                     msg_ids_used_in_file.extend(msg_ids)
                     if read_record_key == key:
                         if save_first_msg_id:
-                            new_state = [read_record_key, read_msg_id, str(read_record_value + len(msg_ids))]
-                        else: 
-                            new_state = [read_record_key, str(read_record_value + len(msg_ids))]
-                        writer.writerow(
-                            new_state   
-                        )
-                        new_file_lines.append(','.join(new_state))
+                            new_state = [
+                                read_record_key,
+                                read_msg_id,
+                                str(read_record_value + len(msg_ids)),
+                            ]
+                        else:
+                            new_state = [
+                                read_record_key,
+                                str(read_record_value + len(msg_ids)),
+                            ]
+                        writer.writerow(new_state)
+                        new_file_lines.append(",".join(new_state))
                         record_was_updated = True
                         records.pop(i)
                         break
 
                 if not record_was_updated:
                     writer.writerow(row)
-                    new_file_lines.append(','.join(row))
+                    new_file_lines.append(",".join(row))
 
             for record in records:
                 key = record[0]
                 msg_ids = record[1]
                 if save_first_msg_id:
                     line = [key, msg_ids[0], str(len(msg_ids))]
-                else: 
+                else:
                     line = [key, str(len(msg_ids))]
 
                 msg_ids_used_in_file.extend(msg_ids)
                 writer.writerow(line)
-                new_file_lines.append(','.join(line))
+                new_file_lines.append(",".join(line))
 
         # TODO: esto lo deberia recibir por parametro y el path se deberia armar aca...
-        logging.debug(f'MSG IDS USED IN FILE: {msg_ids_used_in_file}')
-        client_id = dir.rsplit('/', maxsplit=1)[-1]
+        logging.debug(f"MSG IDS USED IN FILE: {msg_ids_used_in_file}")
+        client_id = dir.rsplit("/", maxsplit=1)[-1]
         logger.log(client_id, [file_path] + new_file_lines, msg_ids_used_in_file)
 
         os.replace(temp_file, file_path)
 
+
 # Esta la usa el TOP K
 def add_batch_to_sorted_file_per_client(
-    dir: str, new_records_per_client: Dict[str,List[List[str]]], logger, ascending: bool = True, limit: int = float("inf")
+    dir: str,
+    new_records_per_client: Dict[str, List[List[str]]],
+    logger,
+    ascending: bool = True,
+    limit: int = float("inf"),
 ):
-    logging.debug(f'NEW RECORDS PER CLIENT: {new_records_per_client}')
+    logging.debug(f"NEW RECORDS PER CLIENT: {new_records_per_client}")
     # NEW_RECORDS = {
     # client_id: [
-    #       [msg_id, name, avg_playtime_forever], 
+    #       [msg_id, name, avg_playtime_forever],
     #       [...], ...,
     # ...}
 
     for client_id, batch in new_records_per_client.items():
         client_dir = os.path.join(dir, client_id)
 
-        _add_batch_to_sorted_file(client_dir, batch, logger, ascending=ascending, limit=limit)
+        _add_batch_to_sorted_file(
+            client_dir, batch, logger, ascending=ascending, limit=limit
+        )
 
-# JUST FOR _add_batch_to_sorted_file use 
-def _remove_duplicate_msg_ids_from_records(sorted_records:list[list[str]], read_msg_id: str):
+
+# JUST FOR _add_batch_to_sorted_file use
+def _remove_duplicate_msg_ids_from_records(
+    sorted_records: list[list[str]], read_msg_id: str
+):
     for record in sorted_records:
 
         if read_msg_id in record[2]:
             sorted_records.remove(record)
+
 
 def _add_batch_to_sorted_file(
     dir: str,
@@ -373,9 +403,9 @@ def _add_batch_to_sorted_file(
     logger,
     ascending: bool = True,
     limit: int = float("inf"),
-):  
-    '''
-    Given a series of new_records that has the following format: 
+):
+    """
+    Given a series of new_records that has the following format:
 
         [
             [UNIQUE_IDENTIFIER, NAME, FIELD_TO_SORT_BY]
@@ -385,9 +415,9 @@ def _add_batch_to_sorted_file(
     it processed the batch and adds it onto a sorted file.
 
     Duplicates of UNIQUE_IDENTIFIER are not allowed and will be discarded.
-    '''
-    # Por que hay un msg id para la recuperacion?: 
-    # si tengo varios juegos con el mismo nombre, y justo me coinciden en el count, y justo entran en el top, 
+    """
+    # Por que hay un msg id para la recuperacion?:
+    # si tengo varios juegos con el mismo nombre, y justo me coinciden en el count, y justo entran en el top,
     # entonces un top con repetidos seria valido, por lo tanto no puedo filtrar por igualdad de name,count
 
     if limit <= 0:
@@ -407,19 +437,20 @@ def _add_batch_to_sorted_file(
     # LOGGING
     # se hace aca y no antes del replace porque es indistinto, pero al hacerse operaciones
     # sobre lo que se va a loggear y necesitarse loggear la data original, es mejor hacerlo aca
-    client_id = dir.rsplit('/', maxsplit=1)[-1]
-    new_record_msg_ids_to_log = list(map(lambda x: x[0], new_records)) # Me quedo solo con los ids
-    new_records_to_log = list(map(lambda x: ','.join(x), new_records)) # Para recuperarlo hacer un rsplit(maxsplit=2)
-    logging.debug(f'NEW RECORDS THAT IM LOGGING: {new_records_to_log}')
-
+    client_id = dir.rsplit("/", maxsplit=1)[-1]
+    new_record_msg_ids_to_log = list(
+        map(lambda x: x[0], new_records)
+    )  # Me quedo solo con los ids
+    new_records_to_log = list(
+        map(lambda x: ",".join(x), new_records)
+    )  # Para recuperarlo hacer un rsplit(maxsplit=2)
+    logging.debug(f"NEW RECORDS THAT IM LOGGING: {new_records_to_log}")
 
     logger.log(client_id, [file_path] + new_records_to_log, new_record_msg_ids_to_log)
 
-    
-
     # Records are ordered as needed
     new_records = [[record[1], record[2], record[0]] for record in new_records]
-    logging.debug(f'Mapped new records: {new_records}')
+    logging.debug(f"Mapped new records: {new_records}")
     sorted_records = sorted(new_records, key=sorting_key)
 
     temp_file = f"temp_sorted.csv"
@@ -441,7 +472,6 @@ def _add_batch_to_sorted_file(
             if not ascending:
                 read_value = -read_value
 
-
             _remove_duplicate_msg_ids_from_records(sorted_records, read_msg_id)
 
             for i, new_record in enumerate(sorted_records):
@@ -456,7 +486,7 @@ def _add_batch_to_sorted_file(
 
                 amount_of_records_in_top += 1
 
-                # Extra parameter 
+                # Extra parameter
                 if new_record_value < read_value:
                     writer.writerow(new_record)
                 elif new_record_value == read_value and new_record_name < read_name:
