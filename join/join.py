@@ -9,6 +9,7 @@ from common.storage.storage import (
     write_batch_by_range_per_client,
     delete_directory,
     delete_file,
+    atomically_append_to_file,
 )
 from common.protocol.protocol import Protocol
 from utils.utils import group_batch_by_field, node_id_to_send_to
@@ -180,7 +181,7 @@ class Join:
             ):
                 # Havent received all ends, save in disk
                 logging.debug(f"Saving {review}")
-                save(f"tmp/reviews_{client_id}.csv", review)
+                atomically_append_to_file('tmp', f'reviews_{client_id}.csv', review)
             else:
                 logging.debug(f"Joining and sending! {review}")
                 self.__join_and_send(review, client_id, forwarding_queue_name)
