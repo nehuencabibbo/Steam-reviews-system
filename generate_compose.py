@@ -912,8 +912,8 @@ def generate_q5(output: Dict, debug=False):
         "needed_games_ends": 1,
         "needed_reviews_ends": Q5_AMOUNT_OF_COUNTERS,
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_PERCENTILES,
-        "games_columns_to_keep": "1",  # client_id, msg_id, app_id, name
-        "reviews_columns_to_keep": "1",  # client_id, msg_id, count
+        "games_columns_to_keep": "2",  # client_id, msg_id, app_id, name -> NO TENER EN CUENTA EL CLIENT ID PARA EL NUM
+        "reviews_columns_to_keep": "2",  # client_id, msg_id, count -> IDEM ARRIBA
     }
 
     generate_joins(

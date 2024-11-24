@@ -450,6 +450,7 @@ def _add_batch_to_sorted_file(
     logger.log(client_id, [file_path] + new_records_to_log, new_record_msg_ids_to_log)
 
     # Records are ordered as needed
+    # NAME, VALUE, MSG_ID
     new_records = [[record[1], record[2], record[0]] for record in new_records]
     logging.debug(f"Mapped new records: {new_records}")
     sorted_records = sorted(new_records, key=sorting_key)

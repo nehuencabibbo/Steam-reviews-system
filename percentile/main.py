@@ -3,7 +3,7 @@ from percentile import Percentile
 from configparser import ConfigParser
 import logging
 from common.middleware.middleware import Middleware
-from common.protocol.protocol import Protocol
+from common.activity_log.activity_log import ActivityLog
 
 def get_config():
     config_params = {}
@@ -59,9 +59,9 @@ def main():
     
     broker_ip = config.pop("RABBIT_IP")
     middleware = Middleware(broker_ip)
-    protocol = Protocol()
+    activity_log = ActivityLog()
 
-    percentile = Percentile(config, middleware, protocol)
+    percentile = Percentile(config, middleware, activity_log)
     percentile.run()
 
 

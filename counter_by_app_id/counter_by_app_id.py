@@ -168,9 +168,13 @@ class CounterByAppId:
         storage_dir = f"{self._storage_dir}/{client_id}"
         reader = storage.read_all_files(storage_dir)
 
-        for record in reader:
-            logging.debug(f"RECORD READ: {record}")
-            record.insert(0, client_id)
+        for app_id, msg_id, value in reader:
+            record = [
+                client_id,
+                msg_id,
+                app_id,
+                value
+            ]
             self.__send_record_to_forwarding_queues(record)
 
         self.__send_last_batch_to_forwarding_queues()
@@ -178,7 +182,7 @@ class CounterByAppId:
             prefix_queue_name=queue_name, client_id=client_id
         )
 
-        self._clear_client_data(client_id, storage_dir)
+        # self._clear_client_data(client_id, storage_dir)
 
     def __send_record_to_forwarding_queues(self, record: List[str]):
         for queue_number in range(self._amount_of_forwarding_queues):

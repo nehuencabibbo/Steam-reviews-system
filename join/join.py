@@ -119,6 +119,7 @@ class Join:
 
         logging.debug(f"Recived game: {body}")
         records_per_client = group_batch_by_field(body)
+        logging.debug(records_per_client)
         try:
             write_batch_by_range_per_client(
                 "tmp/", 
@@ -224,32 +225,38 @@ class Join:
 
     def __join_and_send(self, review, client_id, forwarding_queue_name):
         # TODO: handle conversion error
+        # game: ['006b8b4567', '1759', '2513040', 'Run For Exodus']
+        # review: ['006b8b4567', '257690', '2432', '1']
         logging.debug(f"inside join: {review}")
-        app_id = int(review[0])
-        logging.debug(f"app id: {app_id}")
-        logging.debug(f"partition_{app_id//int(self._partition_range)}")
+        # review: ['218620', '2134', '10']
+        review_msg_id = review[0]
+        review_app_id = int(review[1])
+        logging.debug(f"app id: {review_app_id}")
+        logging.debug(f"partition_{review_app_id//int(self._partition_range)}")
         for record in read_by_range(
-            f"tmp/{client_id}", int(self._partition_range), app_id
+            f"tmp/{client_id}", int(self._partition_range), review_app_id
         ):
             logging.debug(f"Read record: {record}")
             # record_splitted = record.split(",", maxsplit=1)
             record_msg_id = record[0]
             record_app_id = record[1]
-            logging.debug(f"app_id: {app_id} | record_app_id: {record_app_id}")
-            if app_id == int(record_app_id):
-                # Get rid of the app_id from the review and append it to the original game record
-                # TODO: QUE NO HAGA UNA LISTA!!
-                # joined_message = [record_app_id, record_info] + review[1:]
-                logging.debug(f"HERE RECORD: {record}, HERE REVIEW: {review}")
-                joined_message = self.__games_columns_to_keep(
-                    record
-                ) + self.__reviews_columns_to_keep(review)
+            logging.debug(f"review app id: {review_app_id} | record app id: {record_app_id}")
+            logging.debug(f'review msg id: {review_msg_id} | read msg id: {record_msg_id}')
+            if review_app_id == int(record_app_id):
+                joined_message = [
+                    client_id, 
+                    # New id that's generated is just the concatenation of 
+                    # both previous ids
+                    record_msg_id + str(review_msg_id),
+                ] 
 
-                joined_message.insert(0, client_id)
+                logging.debug(f'A VER RECORD: {record}')
+                logging.debug(f'A VER REVIEW: {review}')
+                joined_message += self.__games_columns_to_keep(record) 
+                joined_message += self.__reviews_columns_to_keep(review)
 
-                if (
-                    "Q" in forwarding_queue_name
-                ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
+                if "Q" in forwarding_queue_name: 
+                    # gotta check this as it could be the last node, then a prefix shouldn't be used
                     logging.debug(
                         f"Q - Sending {joined_message} to queue {forwarding_queue_name}"
                     )

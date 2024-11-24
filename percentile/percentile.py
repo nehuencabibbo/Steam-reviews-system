@@ -3,7 +3,7 @@ import logging
 from typing import *
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage import storage
-from common.protocol.protocol import Protocol
+from common.activity_log.activity_log import ActivityLog
 import math
 
 from utils.utils import group_batch_by_field
@@ -15,7 +15,7 @@ NO_RECORDS = 0
 
 class Percentile:
 
-    def __init__(self, config: dict, middleware: Middleware, protocol: Protocol):
+    def __init__(self, config: dict, middleware: Middleware, activity_log: ActivityLog):
         self._middleware = middleware
         self._got_sigterm = False
         self._recived_ends = {}
@@ -24,6 +24,8 @@ class Percentile:
         self._needed_ends_to_finish = config["NEEDED_ENDS_TO_FINISH"]
         self._storage_dir = config["STORAGE_DIR"]
         self._percentile = config["PERCENTILE"]
+
+        self._activity_log = activity_log
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def run(self):
@@ -50,6 +52,7 @@ class Percentile:
 
         if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
             client_id = body[0][0]
+            logging.debug(f'END FROM CLIENT: {client_id}')
             self._recived_ends[client_id] = self._recived_ends.get(client_id, 0) + 1
 
             logging.debug(f"GOT END NUMBER: {self._recived_ends[client_id]}")
@@ -67,7 +70,7 @@ class Percentile:
         records_per_client = group_batch_by_field(body)
         self.__purge_duplicates(records_per_client)
 
-        storage.add_batch_to_sorted_file_per_client(self._storage_dir, body)
+        storage.add_batch_to_sorted_file_per_client(self._storage_dir, records_per_client, self._activity_log)
 
         self._middleware.ack(delivery_tag)
 
@@ -108,7 +111,7 @@ class Percentile:
         reader = storage.read_sorted_file(storage_dir)
         for i, row in enumerate(reader):
             if (i + 1) == rank:
-                _, value = row
+                name, value, msg_id = row
                 logging.debug(f"VALUE: {value}")
                 return int(value)
 
