@@ -3,6 +3,8 @@ import csv
 import logging
 import shutil
 from typing import *
+
+from utils.utils import group_batch_by_field
     
 
 # TODO: use threads for all functions or some parallelization tool (maybe)
@@ -159,40 +161,71 @@ def read_sorted_file(dir: str):
 
 
 # TODO: Sacar el group_batch_by_field_de_aca
-def write_batch_by_range_per_client(dir: str, range: int, records_per_client: Dict[str, List[str]]):
-    logging.debug(f"Batch per client: {records_per_client}")
+def write_batch_by_range_per_client(dir: str, range: int, records: List[List[str]]):
+    records_per_client = group_batch_by_field(records)
+    # logging.debug(f'Records per client: {records_per_client}')
     for client_id, batch in records_per_client.items():
         client_dir = os.path.join(dir, client_id)
 
         _write_batch_by_range(client_dir, range, batch)
 
 def atomically_append_to_file(dir: str, file_name: str, records: List[str]):
+    '''
+    Records need to have the following format: 
+
+        [
+            [UNIQUE_IDENTIFIER, ...],
+            ...
+        ]
+    
+    If a unique identifier (for ANY record) is present in the corresponding file, 
+    then the whole append operation will be aborted, as that indicates that this 
+    list of record has already been processed completly 
+    '''
+    UNIQUE_IDENTIFIER_INDEX = 0
     # If file is large this is really ineficient
     temp_file_path = os.path.join(dir, 'temp_append.csv')
     file_path = os.path.join(dir, file_name)
 
     create_file_if_unexistent(file_path)
+    found_duplicate = False
     with open(file_path, 'r', newline='') as original, open(temp_file_path, 'w', newline='') as temp: 
         reader = csv.reader(original)
         writer = csv.writer(temp)
-
+        
+        # Aunque esto sea O(n^2), al ser tan acotados los archivos, no es tan costoso.
         for line in reader: 
+            for record in records:
+                if line[UNIQUE_IDENTIFIER_INDEX] == record[UNIQUE_IDENTIFIER_INDEX]:
+                    found_duplicate = True
+                    logging.debug(f'[Atomic append] Found duplicate, discarding: {records}')
+                    break
+            if found_duplicate: break
             writer.writerow(line)
 
         for record in records:
             writer.writerow(record)
 
-    os.replace(temp_file_path, file_path)
+    if found_duplicate:
+        os.remove(temp_file_path)
+    else:
+        os.replace(temp_file_path, file_path)
 
 
-def _write_batch_by_range(dir: str, range: int, records: list[list[str]]):
+def _write_batch_by_range(
+        dir: str, 
+        range_for_partition: int, 
+        records: list[list[str]],
+    ):
 
     os.makedirs(dir, exist_ok=True)
-    file_prefix = "partition"
     # get the file for each record in the batch -> {"file_name": [record1, record2], ....}
-    logging.debug(f'batch: {records}')
-    records_per_file = group_by_file(file_prefix, range, records)
-    logging.debug(f"Batch per file {records_per_file}")
+    records_per_file = group_by_file(range_for_partition, records)
+    # {
+    #   'partition_75290.csv': [['35199', '752900', 'Prehistoric Hunt'], ...], 
+    #   'partition_118045.csv': [['35232', '1180450', 'Exitium'], ...],
+    # }
+    # logging.debug(f"Records per file: {records_per_file}")
     for file_name, records in records_per_file.items():
         # Files are reduced, this operation is not that costly, but
         # guarantees file integrity
@@ -200,17 +233,16 @@ def _write_batch_by_range(dir: str, range: int, records: list[list[str]]):
 
 
 def group_by_file(
-    file_prefix: str, 
     range: int, 
     records: list[list[str]]
 ) -> dict[str, list[str]]:
     records_per_file = {}
     APP_ID_INDEX = 1
+    FILE_PREFIX = 'partition'
     for record in records:
         try:
             key = int(record[APP_ID_INDEX])
-            logging.debug(f"quack {key}")
-            file_name = f"{file_prefix}_{key//range}.csv"
+            file_name = f"{FILE_PREFIX}_{key//range}.csv"
             records_per_file[file_name] = records_per_file.get(file_name, [])
             records_per_file[file_name].append(record)
         except ValueError as e:

@@ -83,7 +83,6 @@ def add_drop_nulls(output: Dict, num: int, debug: bool):
         "restart": "on-failure",
     }
 
-
 def add_counter_by_platform(
     output: Dict,
     query: str,
@@ -951,10 +950,8 @@ def generate_output():
     add_client(
         output,
         num=1,
-        # games_file_path="data/games.csv",
-        # reviews_file_path="data/reviews_sample.csv",
         games_file_path="data/games.csv",
-        reviews_file_path="data/filtered_reviews.csv",
+        reviews_file_path="data/reviews_sample.csv",
         debug=True,
     )
     # add_client(

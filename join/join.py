@@ -1,6 +1,6 @@
 import logging
 import signal
-from time import sleep
+from typing import * 
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
     read,
@@ -11,7 +11,7 @@ from common.storage.storage import (
     delete_file,
     atomically_append_to_file,
 )
-from common.protocol.protocol import Protocol
+from common.activity_log.activity_log import ActivityLog
 from utils.utils import group_batch_by_field, node_id_to_send_to
 
 END_TRANSMISSION_MESSAGE = "END"
@@ -19,7 +19,10 @@ END_TRANSMISSION_MESSAGE = "END"
 
 class Join:
     def __init__(
-        self, protocol: Protocol, middleware: Middleware, config: dict[str, str]
+        self, 
+        middleware: Middleware, 
+        config: dict[str, str],
+        activity_log: ActivityLog,
     ):
         self.__middleware = middleware
         self._amount_of_games_ends_recived = {}
@@ -35,6 +38,8 @@ class Join:
         self._instances_of_myself = config["INSTANCES_OF_MYSELF"]
         self._games_columns_to_keep = config["GAMES_COLUMNS_TO_KEEP"]
         self._reviews_columns_to_keep = config["REVIEWS_COLUMNS_TO_KEEP"]
+
+        self._activity_log = activity_log
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -117,14 +122,15 @@ class Join:
 
             return
 
-        logging.debug(f"Recived game: {body}")
-        records_per_client = group_batch_by_field(body)
-        logging.debug(records_per_client)
         try:
+            # Si en el group by de un cliente hay al menos un mensaje
+            # que ya fue procesado, eso quiere decir que todos los mensajes
+            # de ese cliente ya fueron procesados, por lo tanto los descarto
+            # y proceso los que me quedan
             write_batch_by_range_per_client(
                 "tmp/", 
                 int(self._partition_range), 
-                records_per_client
+                body
             )
 
         except ValueError as e:
@@ -150,14 +156,6 @@ class Join:
                 self._amount_of_reviews_ends_recived[client_id] = (
                     self._amount_of_reviews_ends_recived.get(client_id, 0) + 1
                 )
-                # send rest of batch if there is any
-                # self.__middleware.publish_batch(forwarding_queue_name)
-
-                # if not delete_directory('/tmp'):
-                #     logging.debug(f"Couldn't delete directory: {'/tmp'}")
-                # else:
-                #     logging.debug(f"Deleted directory: {'/tmp'}")
-
                 logging.debug("END of reviews received")
                 logging.debug(
                     f"Amount of reviews ends received up to now: {self._amount_of_reviews_ends_recived[client_id]} | Expecting: {self._needed_reviews_ends}"
@@ -180,13 +178,12 @@ class Join:
             if not (
                 self._amount_of_games_ends_recived[client_id] == self._needed_games_ends
             ):
-                # Havent received all ends, save in disk
-                logging.debug(f"Saving {review}")
-                atomically_append_to_file('tmp', f'reviews_{client_id}.csv', review)
+                # Havent received all ends, save in disk    
+                atomically_append_to_file('tmp', f'reviews_{client_id}.csv', [review])
             else:
-                logging.debug(f"Joining and sending! {review}")
                 self.__join_and_send(review, client_id, forwarding_queue_name)
 
+        # Cayo aca
         self.__middleware.ack(delivery_tag)
 
     def __send_end_to_forward_queues(self, client_id: str):
@@ -223,35 +220,33 @@ class Join:
                 forwarding_queue_name=forwarding_queue_name,
             )
 
+    @staticmethod
+    def __generate_unique_msg_id(game_msg_id: str, review_msg_id: str) -> str:
+        '''
+        games_msg_id > reviews_msg_id 
+        '''
+        return  str(len(game_msg_id)) + game_msg_id + str(len(review_msg_id)) + review_msg_id
+
     def __join_and_send(self, review, client_id, forwarding_queue_name):
         # TODO: handle conversion error
-        # game: ['006b8b4567', '1759', '2513040', 'Run For Exodus']
-        # review: ['006b8b4567', '257690', '2432', '1']
-        logging.debug(f"inside join: {review}")
-        # review: ['218620', '2134', '10']
         review_msg_id = review[0]
         review_app_id = int(review[1])
-        logging.debug(f"app id: {review_app_id}")
-        logging.debug(f"partition_{review_app_id//int(self._partition_range)}")
         for record in read_by_range(
             f"tmp/{client_id}", int(self._partition_range), review_app_id
         ):
-            logging.debug(f"Read record: {record}")
             # record_splitted = record.split(",", maxsplit=1)
             record_msg_id = record[0]
             record_app_id = record[1]
-            logging.debug(f"review app id: {review_app_id} | record app id: {record_app_id}")
-            logging.debug(f'review msg id: {review_msg_id} | read msg id: {record_msg_id}')
+            logging.debug(f'record_msg_id: {record_msg_id} | review_msg_id: {review_msg_id}')
+            logging.debug(f'record_app_id: {record_app_id} | review_app_id: {record_app_id}')
             if review_app_id == int(record_app_id):
                 joined_message = [
                     client_id, 
                     # New id that's generated is just the concatenation of 
                     # both previous ids
-                    record_msg_id + str(review_msg_id),
+                    Join.__generate_unique_msg_id(record_msg_id, str(review_msg_id)),
                 ] 
 
-                logging.debug(f'A VER RECORD: {record}')
-                logging.debug(f'A VER REVIEW: {review}')
                 joined_message += self.__games_columns_to_keep(record) 
                 joined_message += self.__reviews_columns_to_keep(review)
 

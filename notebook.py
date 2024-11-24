@@ -19,7 +19,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_colwidth', 100)
 
 games_df = pd.read_csv('./data/games.csv', header=None, skiprows=1)
-reviews_df = pd.read_csv('./data/reviews.csv')
+reviews_df = pd.read_csv('./data/reviews_sample.csv')
 
 # Agrego columna "Unknown" ya que no viene nomenclada y genera un desfasaje en los indices de columnas
 games_df_column_names = ['AppID', 'Name', 'Release date', 'Estimated owners', 'Peak CCU',

@@ -79,8 +79,7 @@ class Client:
                 self._middleware.send([str(self._msg_id)] + row)
                 self._msg_id += 1
                 time.sleep(self._sending_wait_time)
-                # time.sleep(0.025)     
-
+                
         logging.debug("Sending file end")
         self._middleware.send_end()
 

@@ -5,6 +5,7 @@ from time import sleep
 from join.join import Join
 from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
+from common.activity_log.activity_log import ActivityLog
 
 from configparser import ConfigParser
 import logging
@@ -107,9 +108,9 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    protocol = Protocol()
+    activity_log = ActivityLog()
 
-    join = Join(protocol, middleware, config)
+    join = Join(middleware, config, activity_log)
     join.start()
 
 

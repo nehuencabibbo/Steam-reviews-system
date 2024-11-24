@@ -65,7 +65,7 @@ class TopK:
 
     def __recover_state(self):
         full_file_path, lines = self._activity_log.recover()
-
+        
         if not full_file_path or not lines:
             logging.debug("General log was corrupted, not recovering any state.")
             return
