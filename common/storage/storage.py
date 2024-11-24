@@ -217,7 +217,8 @@ def sum_batch_to_records_per_client(
     dir: str, 
     new_records_per_client: dict[str, dict[str, int]], 
     logger,
-    range_for_partition: int = -1 
+    range_for_partition: int = -1 ,
+    save_first_msg_id: bool = False,
 ):
     
     need_to_partition_by_range = range_for_partition != -1
@@ -233,7 +234,12 @@ def sum_batch_to_records_per_client(
             records_per_file = _group_records(new_records)
             logging.debug(f'RECORDS PER FILE (not partitioned): {records_per_file}')
 
-        sum_batch_to_records(client_dir, records_per_file, logger)
+        sum_batch_to_records(
+            client_dir, 
+            records_per_file, 
+            logger, 
+            save_first_msg_id=save_first_msg_id
+        )
 
 
 def _group_by_file_dict(
@@ -265,6 +271,7 @@ def sum_batch_to_records(
     dir: str, 
     records_per_file: dict[str, list[(str,int)]], 
     logger, 
+    save_first_msg_id: bool = False, 
     ):
 
     os.makedirs(dir, exist_ok=True)
@@ -288,7 +295,11 @@ def sum_batch_to_records(
             for row in reader:
                 record_was_updated = False
                 read_record_key = row[0]
-                read_record_value = int(row[1])
+                if save_first_msg_id:
+                    read_msg_id = row[1]
+                    read_record_value = int(row[2])
+                else:
+                    read_record_value = int(row[1])
 
                 for i, record in enumerate(records):
                     # cada record es: [WINDOWS, MSG_ID_LIST]
@@ -297,7 +308,10 @@ def sum_batch_to_records(
                     msg_ids = record[1]
                     msg_ids_used_in_file.extend(msg_ids)
                     if read_record_key == key:
-                        new_state = [read_record_key, str(read_record_value + len(msg_ids))]
+                        if save_first_msg_id:
+                            new_state = [read_record_key, read_msg_id, str(read_record_value + len(msg_ids))]
+                        else: 
+                            new_state = [read_record_key, str(read_record_value + len(msg_ids))]
                         writer.writerow(
                             new_state   
                         )
@@ -313,12 +327,17 @@ def sum_batch_to_records(
             for record in records:
                 key = record[0]
                 msg_ids = record[1]
-                line = [key, str(len(msg_ids))]
+                if save_first_msg_id:
+                    line = [key, msg_ids[0], str(len(msg_ids))]
+                else: 
+                    line = [key, str(len(msg_ids))]
 
+                msg_ids_used_in_file.extend(msg_ids)
                 writer.writerow(line)
                 new_file_lines.append(','.join(line))
 
         # TODO: esto lo deberia recibir por parametro y el path se deberia armar aca...
+        logging.debug(f'MSG IDS USED IN FILE: {msg_ids_used_in_file}')
         client_id = dir.rsplit('/', maxsplit=1)[-1]
         logger.log(client_id, [file_path] + new_file_lines, msg_ids_used_in_file)
 

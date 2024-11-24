@@ -101,6 +101,7 @@ class CounterByAppId:
             count_per_client_by_app_id,
             self._activity_log,
             range_for_partition=self._range_for_partition,
+            save_first_msg_id=True
         )
 
         self._middleware.ack(delivery_tag)

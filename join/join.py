@@ -174,8 +174,10 @@ class Join:
                 self._amount_of_games_ends_recived[client_id] == self._needed_games_ends
             ):
                 # Havent received all ends, save in disk
+                logging.debug(f'Saving {review}')
                 save(f"tmp/reviews_{client_id}.csv", review)
             else:
+                logging.debug(f'Joining and sending! {review}')
                 self.__join_and_send(review, client_id, forwarding_queue_name)
 
         self.__middleware.ack(delivery_tag)
@@ -216,13 +218,16 @@ class Join:
 
     def __join_and_send(self, review, client_id, forwarding_queue_name):
         # TODO: handle conversion error
+        logging.debug(f'inside join: {review}')
         app_id = int(review[0])
 
         for record in read_by_range(
             f"tmp/{client_id}", int(self._partition_range), app_id
         ):
+            logging.debug(f'Read record: {record}')
             # record_splitted = record.split(",", maxsplit=1)
-            record_app_id = record[0]
+            record_msg_id = record[0]
+            record_app_id = record[1]
             logging.debug(f"app_id: {app_id} | record_app_id: {record_app_id}")
             if app_id == int(record_app_id):
                 # Get rid of the app_id from the review and append it to the original game record
@@ -263,7 +268,7 @@ class Join:
                     )
 
     def __clear_client_data(self, client_id: str):
-        delete_directory(f"/tmp/{client_id}")
-        delete_file(f"/tmp/reviews_{client_id}.csv")
+        # delete_directory(f"/tmp/{client_id}")
+        # delete_file(f"/tmp/reviews_{client_id}.csv")
         self._amount_of_games_ends_recived.pop(client_id)
         self._amount_of_reviews_ends_recived.pop(client_id)
