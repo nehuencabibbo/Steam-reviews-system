@@ -220,7 +220,8 @@ class Join:
         # TODO: handle conversion error
         logging.debug(f'inside join: {review}')
         app_id = int(review[0])
-
+        logging.debug(f'app id: {app_id}')
+        logging.debug(f'partition_{app_id//int(self._partition_range)}')
         for record in read_by_range(
             f"tmp/{client_id}", int(self._partition_range), app_id
         ):
@@ -233,6 +234,7 @@ class Join:
                 # Get rid of the app_id from the review and append it to the original game record
                 # TODO: QUE NO HAGA UNA LISTA!!
                 # joined_message = [record_app_id, record_info] + review[1:]
+                logging.debug(f'HERE RECORD: {record}, HERE REVIEW: {review}')
                 joined_message = self.__games_columns_to_keep(
                     record
                 ) + self.__reviews_columns_to_keep(review)

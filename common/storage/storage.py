@@ -162,7 +162,7 @@ def read_sorted_file(dir: str):
 def write_batch_by_range_per_client(dir: str, range: int, records: list[list[str]]):
 
     batch_per_client = get_batch_per_client(records)
-
+    logging.debug(f'Batch per client: {batch_per_client}')
     for client_id, batch in batch_per_client.items():
         client_dir = os.path.join(dir, client_id)
 
@@ -175,7 +175,7 @@ def _write_batch_by_range(dir: str, range: int, records: list[list[str]]):
     file_prefix = "partition"
     # get the file for each record in the batch -> {"file_name": [record1, record2], ....}
     records_per_file = group_by_file(file_prefix, range, records)
-
+    logging.debug(f'Batch per file {records_per_file}')
     for file_name, records in records_per_file.items():
         file_path = os.path.join(dir, file_name)
         with open(file_path, "a", newline="") as f:
@@ -190,7 +190,8 @@ def group_by_file(
     records_per_file = {}
     for record in records:
         try:
-            key = int(record[0])
+            key = int(record[1])
+            logging.debug(f'quack {key}')
             file_name = f"{file_prefix}_{key//range}.csv"
             records_per_file[file_name] = records_per_file.get(file_name, [])
             records_per_file[file_name].append(record)
