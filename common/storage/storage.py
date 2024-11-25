@@ -400,23 +400,25 @@ def sum_batch_to_records(
 # Esta la usa el TOP K
 def add_batch_to_sorted_file_per_client(
     dir: str,
-    new_records_per_client: Dict[str, List[List[str]]],
-    logger,
+    records: List[List[str]],
     ascending: bool = True,
     limit: int = float("inf"),
 ):
-    logging.debug(f"NEW RECORDS PER CLIENT: {new_records_per_client}")
     # NEW_RECORDS = {
     # client_id: [
     #       [msg_id, name, avg_playtime_forever],
     #       [...], ...,
     # ...}
-
-    for client_id, batch in new_records_per_client.items():
+    records_per_client = group_batch_by_field(records)
+    logging.debug(f"NEW RECORDS PER CLIENT: {records_per_client}")
+    for client_id, batch in records_per_client.items():
         client_dir = os.path.join(dir, client_id)
 
         _add_batch_to_sorted_file(
-            client_dir, batch, logger, ascending=ascending, limit=limit
+            client_dir, 
+            batch, 
+            ascending=ascending, 
+            limit=limit
         )
 
 
@@ -433,7 +435,6 @@ def _remove_duplicate_msg_ids_from_records(
 def _add_batch_to_sorted_file(
     dir: str,
     new_records: List[List[str]],
-    logger,
     ascending: bool = True,
     limit: int = float("inf"),
 ):
@@ -470,16 +471,14 @@ def _add_batch_to_sorted_file(
     # LOGGING
     # se hace aca y no antes del replace porque es indistinto, pero al hacerse operaciones
     # sobre lo que se va a loggear y necesitarse loggear la data original, es mejor hacerlo aca
-    client_id = dir.rsplit("/", maxsplit=1)[-1]
-    new_record_msg_ids_to_log = list(
-        map(lambda x: x[0], new_records)
-    )  # Me quedo solo con los ids
-    new_records_to_log = list(
-        map(lambda x: ",".join(x), new_records)
-    )  # Para recuperarlo hacer un rsplit(maxsplit=2)
-    logging.debug(f"NEW RECORDS THAT IM LOGGING: {new_records_to_log}")
-
-    logger.log(client_id, [file_path] + new_records_to_log, new_record_msg_ids_to_log)
+    # client_id = dir.rsplit("/", maxsplit=1)[-1]
+    # new_record_msg_ids_to_log = list(
+    #     map(lambda x: x[0], new_records)
+    # )  # Me quedo solo con los ids
+    # new_records_to_log = list(
+    #     map(lambda x: ",".join(x), new_records)
+    # )  # Para recuperarlo hacer un rsplit(maxsplit=2)
+    # logging.debug(f"NEW RECORDS: {new_records_to_log}")
 
     # Records are ordered as needed
     # NAME, VALUE, MSG_ID
