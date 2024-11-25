@@ -468,18 +468,6 @@ def _add_batch_to_sorted_file(
 
     create_file_if_unexistent(file_path)
 
-    # LOGGING
-    # se hace aca y no antes del replace porque es indistinto, pero al hacerse operaciones
-    # sobre lo que se va a loggear y necesitarse loggear la data original, es mejor hacerlo aca
-    # client_id = dir.rsplit("/", maxsplit=1)[-1]
-    # new_record_msg_ids_to_log = list(
-    #     map(lambda x: x[0], new_records)
-    # )  # Me quedo solo con los ids
-    # new_records_to_log = list(
-    #     map(lambda x: ",".join(x), new_records)
-    # )  # Para recuperarlo hacer un rsplit(maxsplit=2)
-    # logging.debug(f"NEW RECORDS: {new_records_to_log}")
-
     # Records are ordered as needed
     # NAME, VALUE, MSG_ID
     new_records = [[record[1], record[2], record[0]] for record in new_records]
