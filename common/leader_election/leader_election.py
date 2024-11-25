@@ -12,10 +12,11 @@ LEADER_COMMAND = "C"
 LEADER_QUERY_COMMAND = "L"
 LEADER_QUERY_RESPONSE = "R"
 
-LIDER_ELECTION_TIMEOUT = 7
+LEADER_ELECTION_TIMEOUT = 7
 LEADER_QUERY_TIMEOUT = 3
+LEADER_ELECTED_TIMEOUT = 15
+MESSAGE_LENGTH = 3
 
-#TODO: How one node detects the failure of the leader? -> when sync the other nodes
 class LeaderElection:
 
     def __init__(self, node_id, election_port, amount_of_nodes):
@@ -48,13 +49,12 @@ class LeaderElection:
             logging.info(f"NODE {self._id} | election was running")
             return
         
-
         logging.info(f"NODE {self._id} | running election")
         self._not_running_election.clear()
 
         self._send_election_message()
 
-        self._got_ok.wait(LIDER_ELECTION_TIMEOUT)
+        self._got_ok.wait(LEADER_ELECTION_TIMEOUT)
         if self._got_ok.is_set():
             logging.info(f"NODE {self._id} | Got OK, waiting for leader")
             return    
@@ -69,15 +69,16 @@ class LeaderElection:
     def receive(self):
 
         while not self._stop:
-
             try:
-                msg = self._receiver_socket.recv_message(3)
+                msg = self._receiver_socket.recv_message(MESSAGE_LENGTH)
+
+                if self._stop:
+                    return
+                
             except socket.timeout:
                 logging.info("No response from leader candidate.")
                 #leader will be none, and it will be handled form the outside
-                self._got_ok.clear()
-                self._not_running_election.set()
-                self._receiver_socket.settimeout(None)
+                self._handle_no_candidate_response()
 
             except OSError as e:
                 if not self._stop:
@@ -86,35 +87,8 @@ class LeaderElection:
 
             command, node_id = msg.split(",")
             node_id = int(node_id)
-
             logging.debug(f"NODE {self._id} | Got message: {command} from {node_id}")
-            if command == ELECTION_COMMAND:
-                if self._id > node_id:
-                    self._send_ok_message(node_id)
-
-            elif command == OK_COMMAND:
-                self._got_ok.set()
-                # so i can detect if the one that will be the leader crashed or not
-                # if that happens it nevers send the coordinator message
-                # and i cant know if it disconnected or not
-                self._receiver_socket.settimeout(15)
-
-            elif command == LEADER_COMMAND:
-                with self._leader_lock:
-                    self._leader = node_id
-                self._got_ok.clear()
-                self._not_running_election.set()
-                self._receiver_socket.settimeout(None) 
-            
-            elif command == LEADER_QUERY_COMMAND:
-                with self._leader_lock:
-                    if not self._leader is None:
-                        self._send_leader_id_message(node_id)
-                
-            elif command == LEADER_QUERY_RESPONSE:
-                with self._leader_lock:
-                    self._leader = node_id
-                self._leader_found.set()
+            self._handle_message(command, node_id)
 
 
     def i_am_leader(self):
@@ -138,15 +112,7 @@ class LeaderElection:
 
     def look_for_leader(self):
         message = f'{LEADER_QUERY_COMMAND},{self._id}'
-        for node_id in range(0, self._amount_of_nodes):
-            if self._stop:
-                return
-            if node_id == self._id:
-                continue
-
-            with self._sender_lock:
-                self._sender_socket.send_message(message, self._node_id_to_addr(node_id))
-
+        self._broadcast(message)
         self._leader_found.wait(LEADER_QUERY_TIMEOUT)
 
 
@@ -154,8 +120,64 @@ class LeaderElection:
         self._stop = True
         self._receiver_socket.close()
         self._sender_socket.close()
-        #nodes waiting for election can have a greceful exit during the election
         self._not_running_election.set() 
+
+
+    def _handle_no_candidate_response(self):
+        self._got_ok.clear()
+        self._not_running_election.set()
+        self._receiver_socket.settimeout(None)
+
+
+    def _handle_message(self, message, node_id):
+
+        if message == ELECTION_COMMAND:
+            if self._id > node_id:
+                self._send_ok_message(node_id)
+
+        elif message == OK_COMMAND:
+            self._got_ok.set()
+            # so i can detect if the one that will be the leader crashed or not
+            # if that happens it nevers send the coordinator message
+            # and i cant know if it disconnected or not
+            self._receiver_socket.settimeout(LEADER_ELECTED_TIMEOUT)
+
+        elif message == LEADER_COMMAND:
+            with self._leader_lock:
+                self._leader = node_id
+            self._got_ok.clear()
+            self._not_running_election.set()
+            self._receiver_socket.settimeout(None) 
+        
+        elif message == LEADER_QUERY_COMMAND:
+            with self._leader_lock:
+                if not self._leader is None:
+                    self._send_leader_id_message(node_id)
+            
+        elif message == LEADER_QUERY_RESPONSE:
+            with self._leader_lock:
+                self._leader = node_id
+            self._leader_found.set()
+
+
+    def _send_message(self, message, addr):
+        with self._sender_lock:
+            try:
+                self._sender_socket.send_message(message, addr)
+            except (OSError, ConnectionError):
+                return
+            
+
+    def _broadcast(self, message):
+         for node_id in range(0, self._amount_of_nodes):
+            if self._stop:
+                return
+            if node_id == self._id:
+                continue
+            
+            node_addr = self._node_id_to_addr(node_id)
+            self._send_message(message, node_addr)
+
 
 
     def _send_election_message(self):
@@ -163,26 +185,14 @@ class LeaderElection:
         for node_id in range(self._id + 1, self._amount_of_nodes):
             if self._stop:
                 return
-            with self._sender_lock:
-                try:
-                    self._sender_socket.send_message(message, self._node_id_to_addr(node_id))
-                except ConnectionError:
-                    continue
+            node_addr = self._node_id_to_addr(node_id)
+            self._send_message(message, node_addr)
 
 
     def _send_leader_message(self):
         message = f'{LEADER_COMMAND},{self._id}'
-        for node_id in range(0, self._amount_of_nodes):
-            if self._stop:
-                return
-            if node_id == self._id:
-                continue
+        self._broadcast(message)
 
-            with self._sender_lock:
-                try:
-                    self._sender_socket.send_message(message, self._node_id_to_addr(node_id))
-                except ConnectionError:
-                    continue
 
 
     def _send_ok_message(self, node_id):   
@@ -190,11 +200,8 @@ class LeaderElection:
             return
         
         message = f'{OK_COMMAND},{self._id}'
-        with self._sender_lock:
-            try:
-                self._sender_socket.send_message(message, self._node_id_to_addr(node_id))
-            except ConnectionError:
-                return
+        node_addr = self._node_id_to_addr(node_id)
+        self._send_message(message, node_addr)
 
 
     def _send_leader_id_message(self, node_id):
@@ -202,11 +209,8 @@ class LeaderElection:
             return
         
         message = f'{LEADER_QUERY_RESPONSE},{self._leader}'
-        with self._sender_lock:
-            try:
-                self._sender_socket.send_message(message, self._node_id_to_addr(node_id))
-            except ConnectionError:
-                return
+        node_addr = self._node_id_to_addr(node_id)
+        self._send_message(message, node_addr)
 
 
     def _node_id_to_addr(self, node_id):

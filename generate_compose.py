@@ -1059,24 +1059,24 @@ def generate_output(node_names: list, monitor_names: list):
     # ; GAME_FILE_PATH=data/filtered_games.csv
     # ; REVIEWS_FILE_PATH=data/filtered_reviews.csv
 
-    # add_client(
-    #     output,
-    #     num=1,
-    #     # games_file_path="data/games.csv",
-    #     # reviews_file_path="data/reviews_sample.csv",
-    #     games_file_path="data/games_sample.csv",
-    #     reviews_file_path="data/reviews_sample.csv",
-    #     debug=False,
-    # )
-    # add_client(
-    #     output,
-    #     num=2,
-    #     # games_file_path="data/games.csv",
-    #     # reviews_file_path="data/reviews_sample.csv",
-    #     games_file_path="data/games.csv",
-    #     reviews_file_path="data/filtered_reviews.csv",
-    #     debug=False,
-    # )
+    add_client(
+        output,
+        num=1,
+        # games_file_path="data/games.csv",
+        # reviews_file_path="data/reviews_sample.csv",
+        games_file_path="data/games_sample.csv",
+        reviews_file_path="data/reviews_sample.csv",
+        debug=False,
+    )
+    add_client(
+        output,
+        num=2,
+        # games_file_path="data/games.csv",
+        # reviews_file_path="data/reviews_sample.csv",
+        games_file_path="data/games.csv",
+        reviews_file_path="data/filtered_reviews.csv",
+        debug=False,
+    )
     add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT, node_names=node_names)
     generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False, node_names=node_names)
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False, node_names=node_names)

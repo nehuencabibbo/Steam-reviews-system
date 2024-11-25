@@ -6,6 +6,8 @@ import threading
 from shutil import disk_usage
 from time import sleep
 
+from .leader_finder import LeaderFinder
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from middleware.middleware import Middleware
 from server_socket.client_connection import ClientConnection
@@ -14,19 +16,16 @@ from server_socket.client_connection import ClientConnection
 NACK_MSG = "N"
 REGISTRATION_CONFIRM = "K"
 MIN_MEMORY_SPACE = 1024 # 1KB
-WAIT_BETWEEN_TRIES = 5
-MAX_RETRIES = 5
 
 class WatchdogClient:
 
-    def __init__(self, monitors_ip, monitor_port, client_name:str, discovery_port, client_middleware: Middleware):
+    def __init__(self, monitors_ip: list[str], monitor_port: int, client_name: str, discovery_port: int, client_middleware: Middleware):
         self._stop = False
-        self._monitors_ip = monitors_ip
         self._monitor_port = monitor_port
         self._client_name = client_name
         self._client_middleware = client_middleware
         self._connection = None
-        self._leader_discovery_port = discovery_port
+        self._leader_finder = LeaderFinder(monitors_ip, discovery_port)
 
     def start(self):
 
@@ -44,7 +43,7 @@ class WatchdogClient:
 
                 self._answer_heartbeats()
 
-            except (OSError, TimeoutError)as e:
+            except (OSError, TimeoutError) as e:
                 sleep(0.5) # so it does not mistake sigterm with closed socket
                 if not self._stop:
                     logging.debug("[MONITOR]: monitor is down. waiting for reconnection")
@@ -54,11 +53,11 @@ class WatchdogClient:
 
 
     def _conect_to_monitor(self):
-        leader_id = self._look_for_leader()
+        leader_id = self._leader_finder.look_for_leader()
         logging.debug(f"[MONITOR] The leader is: {leader_id}")
 
-        if leader_id == None:
-            return
+        if leader_id is None:
+            return None
         
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         monitor_ip = f"watchdog_{leader_id}"
@@ -71,46 +70,6 @@ class WatchdogClient:
                 logging.debug("[MONITOR] Couldnt connect to leader. The leader is down or is preparing")
 
 
-    def _look_for_leader(self):
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        connection = None
-        for _ in range(MAX_RETRIES):
-            sleep(WAIT_BETWEEN_TRIES)
-            if self._stop:
-                return
-
-            for monitor_ip in self._monitors_ip:
-                logging.debug(f"[MONITOR] Trying with monitor {monitor_ip}")
-                try:
-                    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    client_socket.connect((monitor_ip, self._leader_discovery_port))
-                    connection = ClientConnection(client_socket)
-
-                    connection.send("Hola")
-
-                    while not self._stop:
-                        msg = connection.recv()
-                        logging.debug(f"Got message: {msg}")
-
-                        if msg == "F":
-                            logging.debug("Leader election in progress, waiting...")
-                            sleep(5)  # Wait before polling again
-                        else:
-                            client_socket.close()
-                            return msg  # Return the leader ID
-
-                except OSError as e:
-                    logging.debug(f"Error connecting to monitor {monitor_ip}")
-                    continue
-                finally:
-                    if connection:
-                        connection.close()
-        
-        logging.warning("Reached max retries and couldnt connect to the monitor")
-
-        return None
-
-
     def _register(self):
         self._connection.send(self._client_name)
         msg = self._connection.recv()
@@ -120,6 +79,7 @@ class WatchdogClient:
 
     def stop(self):
         self._stop = True
+        self._leader_finder.stop()
 
 
     def _answer_heartbeats(self):
@@ -138,27 +98,25 @@ class WatchdogClient:
             self._connection.send(msg)
         
 
-    # TODO: ver que hacer con el chequeo de espacio o de escritura
     def _check_node_general_functionality(self):
 
-        # Check free space. If the free space is lower than 10MB? return false?
+        # Check free space.
         _, _, free_space = disk_usage(__file__)
         if free_space < MIN_MEMORY_SPACE:
             return False
 
-        # chequear que puedo escribir/leer archivos -> chequear memoria disponible?
-        # esto o mejor chequeo si quedan mas de x bytes libres?
+        # Check if i can write files
         try:
-            with open("/tmp/test.txt", 'w') as file:
+            with open("/tmp/test_write.txt", 'w') as file:
                 file.write("hola")
+            os.remove("/tmp/test_write.txt")
         except OSError:
             return False
-
-        # chequear si anda rabbit
+        
+        # Check rabbit connection
         if not self._client_middleware.check_connection():
             return False 
         
-        # chequear si el hilo principal esta vivo -> can change for mp.parent_process().is_alive()
+        # Check if main thread is alive
         return threading.main_thread().is_alive()
 
-        # caso aparte, como chequeo si zmq anda? creo que no puedo

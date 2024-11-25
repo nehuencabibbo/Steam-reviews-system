@@ -6,6 +6,7 @@ import logging
 
 LEADER_ELECTION_RUNNING = "F"
 BACKLOG = 30
+
 class LeaderDiscoveryService:
 
     def __init__(self, port, leader_election: LeaderElection):
@@ -23,9 +24,7 @@ class LeaderDiscoveryService:
             
             try:
                 conn = self._socket.accept_connection()
-
-                conn.recv() 
-                        
+   
                 leader_id = self._leader_election.get_leader_id()
                 if self._leader_election.is_running() or leader_id == None:
                     conn.send(LEADER_ELECTION_RUNNING)
@@ -39,7 +38,7 @@ class LeaderDiscoveryService:
                 if not self._stop:
                     logging.error("Unexpected socket close")
                 break
-
+        
         self._socket.close()
 
     def close(self):
