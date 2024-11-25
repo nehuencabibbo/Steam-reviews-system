@@ -1,7 +1,7 @@
 from common.server_socket.server_socket import ServerSocket
 from node_handler import NodeHandler
 from common.leader_election.leader_election import LeaderElection
-from common.udpsocket.udp_socket import UDPSocket
+from common.udpsocket.udp_middleware import UDPMiddleware, UDPMiddlewareTimeoutError
 from leader_discovery_service import LeaderDiscoveryService
 
 import signal
@@ -64,7 +64,6 @@ class Watchdog:
         self._leader_election.look_for_leader()
   
         while not self._got_sigterm.is_set():
-
             if self._leader_election.get_leader_id() is None:
                 self._leader_election.start_leader_election()
 
@@ -130,43 +129,40 @@ class Watchdog:
         leader_id = self._leader_election.get_leader_id()
         leader_addr = (f"{WATCHDOG_NAME_PREFIX}{leader_id}", self._leader_comunicaton_port)
 
-        leader_socket = UDPSocket(amount_of_retries=NUMBER_OF_RETRIES)
+        middleware = UDPMiddleware(send_retries=NUMBER_OF_RETRIES)
         
         time.sleep(WAIT_FOR_LEADER_TO_SETTLE)
 
         while not self._got_sigterm.is_set():
-            try:
-                message = f"{HEARTBEAT_MESSAGE},{WATCHDOG_NAME_PREFIX}{self._node_id}"
-                leader_socket.send_message(message, leader_addr)
-                self._got_sigterm.wait(TIME_BETWEEN_HEARTBETS)
-
-            except (OSError, ConnectionError, socket.timeout) as _:
-                if not self._got_sigterm.is_set():
-                    logging.info("The monitor is down")
-                    self._leader_election.set_leader_death()
+            message = f"{HEARTBEAT_MESSAGE},{WATCHDOG_NAME_PREFIX}{self._node_id}"
+            if not middleware.send_message(message, leader_addr):
+                logging.info("The monitor is down")
+                self._leader_election.set_leader_death()
                 break
-        
-        leader_socket.close()
+
+            self._got_sigterm.wait(TIME_BETWEEN_HEARTBETS)
+
+        middleware.close()
 
 
     def _listen_for_peers(self):
 
-        leader_socket = UDPSocket() 
-        leader_socket.bind(("", self._leader_comunicaton_port))
-        leader_socket.settimeout(timeout=2)
-
+        middleware = UDPMiddleware()
+        middleware.bind(("", self._leader_comunicaton_port))
+        middleware.set_receiver_timeout(timeout=2)
+        
         #set start_time to check if a node never connected
         for peer_name in self._peers.keys():
             self._peers[peer_name] = time.time()
 
         while not self._got_sigterm.is_set():
             try:
-                msg: str = leader_socket.recv_message(amount_of_bytes=10)
+                msg: str = middleware.receive_message(length=10)
                 _, node_name = msg.split(",")
                 logging.debug(f"NODE {node_name} SENT HEARTBEAT")
                 self._peers[node_name] = time.time()
 
-            except socket.timeout:
+            except UDPMiddlewareTimeoutError:
                 self._check_peer_status() 
             except (OSError, ConnectionError) as e:
                 if not self._got_sigterm.is_set():

@@ -2,6 +2,11 @@ import socket
 
 ACK_MESSAGE = "ACK"
 
+class UDPTimeoutError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+
 class UDPSocket:
     """
     UDP SOCKET Implementation using stop & and wait.
@@ -27,7 +32,7 @@ class UDPSocket:
 
                 if msg != ACK_MESSAGE: raise ConnectionError
                 
-                return
+                return True
 
             except socket.timeout as _:
                 if i == self._amount_of_retries: 

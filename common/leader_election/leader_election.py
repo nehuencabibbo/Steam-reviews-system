@@ -2,9 +2,9 @@ import threading
 import logging
 import sys
 import os
-import socket
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from udpsocket.udp_socket import UDPSocket
+from common.udpsocket.udp_middleware import UDPMiddleware, UDPMiddlewareTimeoutError
 
 ELECTION_COMMAND = "E"
 OK_COMMAND = "O"
@@ -30,15 +30,13 @@ class LeaderElection:
         self._leader_found = threading.Event()
         self._not_running_election = threading.Event()
         self._not_running_election.set()
-        
+        self._election_port = election_port
         self._stop = False
 
-        self._sender_lock = threading.Lock() 
-        self._sender_socket = UDPSocket(timeout=0.5, amount_of_retries=2)
-        self._receiver_socket = UDPSocket()
-        self._receiver_socket.bind(("", election_port + node_id))
+        self._middleware = UDPMiddleware()
+        self._middleware.bind(("", election_port + node_id))
 
-        self._election_port = election_port
+        self._monitors_adresses = [self._node_id_to_addr(i) for i in range(self._amount_of_nodes) if i != self._id]
 
         threading.Thread(target=self.receive, daemon=True).start()
     
@@ -70,19 +68,18 @@ class LeaderElection:
 
         while not self._stop:
             try:
-                msg = self._receiver_socket.recv_message(MESSAGE_LENGTH)
-
-                if self._stop:
+                msg: str  = self._middleware.receive_message(MESSAGE_LENGTH)
+                if self._stop or not threading.main_thread().is_alive():
                     return
                 
-            except socket.timeout:
+            except UDPMiddlewareTimeoutError:
                 logging.info("No response from leader candidate.")
                 #leader will be none, and it will be handled form the outside
                 self._handle_no_candidate_response()
 
             except OSError as e:
                 if not self._stop:
-                    logging.error(f"Got error while listening peers {e}")
+                    logging.error(f"Got error while listening peers: {e}")
                 return
 
             command, node_id = msg.split(",")
@@ -112,21 +109,20 @@ class LeaderElection:
 
     def look_for_leader(self):
         message = f'{LEADER_QUERY_COMMAND},{self._id}'
-        self._broadcast(message)
+        self._middleware.broadcast(message, self._monitors_adresses)
         self._leader_found.wait(LEADER_QUERY_TIMEOUT)
 
 
     def stop(self):
         self._stop = True
-        self._receiver_socket.close()
-        self._sender_socket.close()
+        self._middleware.close()
         self._not_running_election.set() 
 
 
     def _handle_no_candidate_response(self):
         self._got_ok.clear()
         self._not_running_election.set()
-        self._receiver_socket.settimeout(None)
+        self._middleware.set_receiver_timeout(None)
 
 
     def _handle_message(self, message, node_id):
@@ -140,14 +136,14 @@ class LeaderElection:
             # so i can detect if the one that will be the leader crashed or not
             # if that happens it nevers send the coordinator message
             # and i cant know if it disconnected or not
-            self._receiver_socket.settimeout(LEADER_ELECTED_TIMEOUT)
+            self._middleware.set_receiver_timeout(LEADER_ELECTED_TIMEOUT)
 
         elif message == LEADER_COMMAND:
             with self._leader_lock:
                 self._leader = node_id
             self._got_ok.clear()
             self._not_running_election.set()
-            self._receiver_socket.settimeout(None) 
+            self._middleware.set_receiver_timeout(None)
         
         elif message == LEADER_QUERY_COMMAND:
             with self._leader_lock:
@@ -160,39 +156,16 @@ class LeaderElection:
             self._leader_found.set()
 
 
-    def _send_message(self, message, addr):
-        with self._sender_lock:
-            try:
-                self._sender_socket.send_message(message, addr)
-            except (OSError, ConnectionError):
-                return
-            
-
-    def _broadcast(self, message):
-         for node_id in range(0, self._amount_of_nodes):
-            if self._stop:
-                return
-            if node_id == self._id:
-                continue
-            
-            node_addr = self._node_id_to_addr(node_id)
-            self._send_message(message, node_addr)
-
-
-
     def _send_election_message(self):
         message = f'{ELECTION_COMMAND},{self._id}'
-        for node_id in range(self._id + 1, self._amount_of_nodes):
-            if self._stop:
-                return
+        for node_id in range (self._id + 1, self._amount_of_nodes):
             node_addr = self._node_id_to_addr(node_id)
-            self._send_message(message, node_addr)
+            self._middleware.send_message(message, node_addr)
 
 
     def _send_leader_message(self):
         message = f'{LEADER_COMMAND},{self._id}'
-        self._broadcast(message)
-
+        self._middleware.broadcast(message, self._monitors_adresses)
 
 
     def _send_ok_message(self, node_id):   
@@ -201,7 +174,7 @@ class LeaderElection:
         
         message = f'{OK_COMMAND},{self._id}'
         node_addr = self._node_id_to_addr(node_id)
-        self._send_message(message, node_addr)
+        self._middleware.send_message(message, node_addr)
 
 
     def _send_leader_id_message(self, node_id):
@@ -210,12 +183,8 @@ class LeaderElection:
         
         message = f'{LEADER_QUERY_RESPONSE},{self._leader}'
         node_addr = self._node_id_to_addr(node_id)
-        self._send_message(message, node_addr)
+        self._middleware.send_message(message, node_addr)
 
 
     def _node_id_to_addr(self, node_id):
         return (f"watchdog_{node_id}", self._election_port + node_id)
-
-    
-
-
