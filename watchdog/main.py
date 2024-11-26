@@ -1,11 +1,9 @@
-# Parent directory is included in the search path for modules
 import os
-
 from configparser import ConfigParser
 import logging
 
 from watchdog import Watchdog
-from common.server_socket.server_socket import ServerSocket
+from common.server_socket.tcp_middleware import TCPMiddleware
 
 
 def get_config():
@@ -56,10 +54,8 @@ def main():
 
     config.pop("LOGGING_LEVEL", None)
 
-    socket = ServerSocket(config["PORT"])
-    config.pop("PORT", None)
-
-    watchdog = Watchdog(socket, config)
+    middleware = TCPMiddleware()
+    watchdog = Watchdog(middleware, config)
 
     watchdog.start()
 

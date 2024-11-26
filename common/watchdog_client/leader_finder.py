@@ -1,10 +1,9 @@
-import socket
 import logging
 import os, sys
 from time import sleep
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from server_socket.client_connection import ClientConnection
+from server_socket.tcp_middleware import TCPMiddleware
 
 WAIT_BETWEEN_TRIES = 7
 MAX_RETRIES = 5
@@ -16,6 +15,7 @@ class LeaderFinder:
         self._monitors_ip = monitors_ip
         self._leader_discovery_port = leader_discovery_port
         self._stop = False
+        self._middleware = TCPMiddleware()
 
     def look_for_leader(self):
         logging.debug("Looking for leader")
@@ -26,26 +26,24 @@ class LeaderFinder:
 
             for monitor_ip in self._monitors_ip:
                 logging.debug(f"[MONITOR] Trying with monitor {monitor_ip}")
-                try:
-                    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    client_socket.connect((monitor_ip, self._leader_discovery_port))
-                    connection = ClientConnection(client_socket)
-                    logging.debug(f"Connected to {monitor_ip}")
-                    return self._get_leader_id(connection)
+                try:    
+                    return self._get_leader_id(monitor_ip)
 
-                except OSError as _:
+                except (OSError, ConnectionError):
                     logging.debug(f"Error connecting to monitor {monitor_ip}")
                     continue
         
-        logging.warning("Reached max retries and couldnt connect to the monitor")
-
+        logging.debug("Reached max retries and couldnt connect to the monitor")
         return None
     
 
-    def _get_leader_id(self, connection: ClientConnection):
-        
+    def _get_leader_id(self, monitor_ip: str):
+
+        self._middleware.connect((monitor_ip, self._leader_discovery_port))
+        logging.debug(f"Connected to {monitor_ip}")
+
         while not self._stop:
-            msg = connection.recv()
+            msg = self._middleware.receive_message()
             logging.debug(f"Got message: {msg}")
 
             if msg == LEADER_ELECTION_RUNNING_MESSAGE:
@@ -53,7 +51,10 @@ class LeaderFinder:
                 sleep(WAIT_LEADER_ELECTION_RUNNING) 
             else:
                 return msg
-
+            
+        self._middleware.close_connection()
+        
     
     def stop(self):
         self._stop = True
+        self._middleware.close()

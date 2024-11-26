@@ -1,19 +1,17 @@
-from common.server_socket.server_socket import ServerSocket
-from node_handler import NodeHandler
-from common.leader_election.leader_election import LeaderElection
-from common.udpsocket.udp_middleware import UDPMiddleware, UDPMiddlewareTimeoutError
-from leader_discovery_service import LeaderDiscoveryService
-
 import signal
 import logging
 import threading
-import socket #for error handling.
 import subprocess
 import json
 import time
 
+from common.server_socket.tcp_middleware import TCPMiddleware, TCPMiddlewareTimeoutError
+from common.udpsocket.udp_middleware import UDPMiddleware, UDPMiddlewareTimeoutError
+from node_handler import NodeHandler
+from common.leader_election.leader_election import LeaderElection
+from leader_discovery_service import LeaderDiscoveryService
+
 NUMBER_OF_RETRIES = 5
-WAIT_FOR_LEADER_TO_SETTLE = 3
 TIMEOUT_BEFORE_FALLEN_CHECK = 60
 REGISTRATION_CONFIRM = "K"
 MAX_TIMEOUT = 10
@@ -22,16 +20,15 @@ HEARTBEAT_MESSAGE = "A"
 WATCHDOG_NAME_PREFIX = "watchdog_"
 
 class Watchdog:
-    def __init__(self, server_socket: ServerSocket, config: dict):
+    def __init__(self, middleware: TCPMiddleware , config: dict):
 
         self._node_id = config["NODE_ID"]
         self._wait_between_heartbeats = config["WAIT_BETWEEN_HEARTBEAT"]
         self._election_port = config["ELECTION_PORT"]
         self._leader_comunicaton_port = config["LEADER_COMUNICATION_PORT"]
-
         self._leader_discovery_port = config["LEADER_DISCOVERY_PORT"]
-
-        self._server_socket = server_socket
+        self._middleware = middleware
+        self._monitor_access_port = config["PORT"]
         self._amount_of_monitors = config["AMOUNT_OF_MONITORS"]
 
         self._got_sigterm = threading.Event()
@@ -88,31 +85,32 @@ class Watchdog:
         thread.start()
 
         try:
-            self._server_socket.bind()
+            self._middleware.bind(("", self._monitor_access_port))
         except OSError as e:
             if not self._got_sigterm.is_set():
                 logging.error(f"[LEADER] GOT ERROR WHILE BINDING PORT: {e}")
             return
 
-        self._server_socket.settimeout(TIMEOUT_BEFORE_FALLEN_CHECK)
+        self._middleware.set_timeout(TIMEOUT_BEFORE_FALLEN_CHECK)
         while not self._got_sigterm.is_set():
             try:
             
-                conn = self._server_socket.accept_connection()
+                conn, _ = self._middleware.accept_connection()
                 node_name = conn.recv()
                 logging.info(f"[LEADER] Node {node_name} connected.")
+
+                conn.send(REGISTRATION_CONFIRM)
 
                 handler = NodeHandler(conn, node_name, self._got_sigterm, self._wait_between_heartbeats)
                 node_thread = threading.Thread(target=handler.start, daemon=True)
                 node_thread.start()
 
-                conn.send(REGISTRATION_CONFIRM)
-                
                 if node_name in self._nodes and self._nodes[node_name] is not None:
                     self._nodes[node_name].join()
 
                 self._nodes[node_name] = node_thread
-            except socket.timeout:
+            except TCPMiddlewareTimeoutError:
+                logging.debug("Checking for nodes that never connected")
                 self._reconnect_fallen_nodes()
                 continue
             except (OSError, ConnectionError) as e:
@@ -131,16 +129,15 @@ class Watchdog:
 
         middleware = UDPMiddleware(send_retries=NUMBER_OF_RETRIES)
         
-        time.sleep(WAIT_FOR_LEADER_TO_SETTLE)
 
         while not self._got_sigterm.is_set():
+            self._got_sigterm.wait(TIME_BETWEEN_HEARTBETS)
+
             message = f"{HEARTBEAT_MESSAGE},{WATCHDOG_NAME_PREFIX}{self._node_id}"
             if not middleware.send_message(message, leader_addr):
                 logging.info("The monitor is down")
                 self._leader_election.set_leader_death()
                 break
-
-            self._got_sigterm.wait(TIME_BETWEEN_HEARTBETS)
 
         middleware.close()
 
@@ -197,7 +194,7 @@ class Watchdog:
 
     def _sigterm_handler(self, signal, frame):
         self._got_sigterm.set()
-        self._server_socket.close()
+        self._middleware.close()
         self._leader_election.stop()
         self._leader_discovery.close()
 

@@ -1,7 +1,6 @@
-from common.server_socket.server_socket import ServerSocket
+from common.server_socket.tcp_middleware import TCPMiddleware, TCPMiddlewareTimeoutError
 from common.leader_election.leader_election import LeaderElection
 
-import socket
 import logging
 
 LEADER_ELECTION_RUNNING = "F"
@@ -10,20 +9,19 @@ BACKLOG = 30
 class LeaderDiscoveryService:
 
     def __init__(self, port, leader_election: LeaderElection):
-        self._socket = ServerSocket(port)
+        self._middleware = TCPMiddleware()
+        self._port = port
         self._leader_election = leader_election
-
         self._stop = False
 
     def run(self):
 
-        self._socket.bind(BACKLOG)
-        self._socket.settimeout(5)
-
+        self._middleware.bind(("", self._port), BACKLOG)
+        conn = None
         while not self._stop:
             
             try:
-                conn = self._socket.accept_connection()
+                conn, _ = self._middleware.accept_connection()
    
                 leader_id = self._leader_election.get_leader_id()
                 if self._leader_election.is_running() or leader_id == None:
@@ -31,19 +29,22 @@ class LeaderDiscoveryService:
                 else:
                     conn.send(f"{leader_id}")
 
-                conn.close()
-            except socket.timeout as _:
+            except TCPMiddlewareTimeoutError:
+                # So it can close on sigterm
                 continue
-            except (OSError, ConnectionError) as _:
+            except (OSError, ConnectionError) as e:
                 if not self._stop:
-                    logging.error("Unexpected socket close")
+                    logging.error(f"Unexpected socket close: {e}")
                 break
+            finally:
+                if conn:
+                    conn.close()
         
-        self._socket.close()
+        self._middleware.close()
 
     def close(self):
         self._stop = True
-        self._socket.close()
+        self._middleware.close()
             
 
             
