@@ -15,6 +15,7 @@ import signal
 import logging
 import threading
 
+
 class FilterColumnByValue:
     def __init__(
         self,
@@ -104,14 +105,26 @@ class FilterColumnByValue:
         #     Si es asi => No agrego nada y reencolo
         #     Si no es asi => Agrego mi id a la lista y reencolo
 
-        peers_that_recived_end = body[2:]
+        peers_that_recived_end = (
+            body[2:] if consensus_message == SESSION_TIMEOUT_MESSAGE else body[3:]
+        )  # [session_id, msg_id, END, node_1, ..., node_n]
         client_id = body[0]
 
         if len(peers_that_recived_end) == int(self._instances_of_myself):
-            self.__send_to_all_forwarding_queues(client_id, consensus_message)
+            if consensus_message == SESSION_TIMEOUT_MESSAGE:
+                self.__send_to_all_forwarding_queues(client_id, [consensus_message])
+            else:
+                self.__send_to_all_forwarding_queues(
+                    client_id, [body[1], consensus_message]
+                )  # body[1] = msg_id
         else:
 
-            message = [client_id, consensus_message]
+            message = (
+                [client_id, consensus_message]
+                if consensus_message == SESSION_TIMEOUT_MESSAGE
+                else [client_id, body[1], consensus_message]
+            )  # body[1] = msg_id
+
             if not self._node_id in peers_that_recived_end:
                 peers_that_recived_end.append(self._node_id)
 
@@ -132,7 +145,7 @@ class FilterColumnByValue:
 
                 self._middleware.publish_batch(full_queue_name)
 
-    def __send_to_all_forwarding_queues(self, client_id: str, message):
+    def __send_to_all_forwarding_queues(self, client_id: str, message: list[str]):
         # TODO: Repeated code between this and send last batch, remove
         for i in range(len(self._amount_of_forwarding_queues)):
             amount_of_current_queue = self._amount_of_forwarding_queues[i]
@@ -144,7 +157,7 @@ class FilterColumnByValue:
 
                 self._middleware.send_end(
                     queue=full_queue_name,
-                    end_message=[client_id, message],
+                    end_message=[client_id] + message,
                 )
 
     def __handle_message(self, delivery_tag: int, body: bytes):
@@ -161,7 +174,7 @@ class FilterColumnByValue:
 
                 return
 
-            if message[1] == END_TRANSMISSION_MESSAGE:
+            if len(message) > 1 and message[2] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"GOT END: {body}")
                 self.__send_last_batch_to_fowarding_queues()
                 self.__handle_consensus_tranmission(message, END_TRANSMISSION_MESSAGE)

@@ -16,7 +16,9 @@ SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
 
 class TopK:
-    def __init__(self, middleware: Middleware, monitor: WatchdogClient, config: dict[str, str]):
+    def __init__(
+        self, middleware: Middleware, monitor: WatchdogClient, config: dict[str, str]
+    ):
         self.__middleware = middleware
         self._client_monitor = monitor
 
@@ -40,7 +42,7 @@ class TopK:
         self._client_monitor.stop()
 
     def start(self):
-        
+
         monitor_thread = threading.Thread(target=self._client_monitor.start)
         monitor_thread.start()
 
@@ -97,7 +99,8 @@ class TopK:
             self.__middleware.ack(delivery_tag)
             return
 
-        if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
+        if len(body) == 1 and body[0][2] == END_TRANSMISSION_MESSAGE:
+            # msg_id = body[0][1]
             client_id = body[0][0]
             self.__total_ends_received_per_client[client_id] = (
                 self.__total_ends_received_per_client.get(client_id, 0) + 1
@@ -115,7 +118,7 @@ class TopK:
                 self.__middleware.create_queue(forwarding_queue_name)
                 self.__send_top(forwarding_queue_name, client_id=client_id)
 
-                end_message = [client_id, END_TRANSMISSION_MESSAGE]
+                end_message = [client_id, body[0][1], END_TRANSMISSION_MESSAGE]
                 self.__middleware.send_end(
                     queue=forwarding_queue_name,
                     end_message=end_message,
@@ -141,13 +144,15 @@ class TopK:
         self.__middleware.ack(delivery_tag)
 
     def __send_top(self, forwarding_queue_name, client_id):
+        top = []
         for record in read_sorted_file(f"tmp/{client_id}"):
             # if not "Q" in forwarding_queue_name:
             record.insert(0, client_id)
             self.__middleware.publish(record, forwarding_queue_name, "")
+            top.append(record)
 
         self.__middleware.publish_batch(forwarding_queue_name)
-        logging.debug(f"Top sent to queue: {forwarding_queue_name}")
+        logging.debug(f"Top {top} sent to queue: {forwarding_queue_name}")
 
     def _clear_client_data(self, client_id: str, storage_dir: str):
 

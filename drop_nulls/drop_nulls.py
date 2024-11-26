@@ -94,18 +94,19 @@ class DropNulls:
     def __handle_end_transmission(
         self, body: List[str], reciving_queue_name: str, message_type: str
     ):
-        peers_that_received_end = body[2:]
+        peers_that_received_end = body[3:]  # client_id, msg_id, END, node1, ..., node_k
         client_id = body[0]
 
         if len(peers_that_received_end) == self.instances_of_myself:
             logging.debug(f"Sending real END. {message_type}")
             if message_type == GAMES_MESSAGE_TYPE:
-                self.__forward_to_all_games_queues(client_id, END_TRANSMISSION_MESSAGE)
+                self.__forward_to_all_games_queues(
+                    client_id, body[1:3]
+                )  # [msg_id, END_TRANSMISSION_MESSAGE]
             elif message_type == REVIEWS_MESSAGE_TYPE:
                 self.__forward_to_all_reviews_queues(
-                    client_id, END_TRANSMISSION_MESSAGE
+                    client_id, body[1:3]  # [msg_id, END_TRANSMISSION_MESSAGE]
                 )
-                # self.__handle_reviews_end_transmission_by_query(client_id)
             else:
                 raise Exception(f"Unknown message type: {message_type}")
 
@@ -117,7 +118,8 @@ class DropNulls:
             else:
                 raise Exception(f"Unknown message type: {message_type}")
 
-            message = [client_id, END_TRANSMISSION_MESSAGE]
+            # message = [client_id, END_TRANSMISSION_MESSAGE]
+            message = body[0:3]  # [client_id, msg_id, END_TRANSMISSION_MESSAGE]
             if self.node_id not in peers_that_received_end:
                 peers_that_received_end.append(self.node_id)
 
@@ -166,23 +168,22 @@ class DropNulls:
         for queue in [self.q2_games, self.q3_games, self.q4_games, self.q5_games]:
             self._middleware.publish_batch(queue)
 
-    def __forward_to_all_games_queues(self, client_id: str, message):
+    def __forward_to_all_games_queues(self, client_id: str, message: list[str]):
         for i in range(self.count_by_platform_nodes):
             logging.debug(f"SENDING_TO: {i}_{self.q1_platform}")
             self._middleware.send_end(
                 queue=f"{i}_{self.q1_platform}",
-                end_message=[client_id, message],
+                end_message=[client_id] + message,
             )
 
         for queue in [self.q2_games, self.q3_games, self.q4_games, self.q5_games]:
             self._middleware.send_end(
                 queue=queue,
-                end_message=[client_id, message],
+                end_message=[client_id] + message,
             )
 
     def __handle_games(self, delivery_tag: int, body: bytes):
         body = self._middleware.get_rows_from_message(message=body)
-
         for message in body:
             logging.debug(f"Received message: {message}")
 
@@ -194,7 +195,7 @@ class DropNulls:
                 self._middleware.ack(delivery_tag)
                 return
 
-            if message[1] == END_TRANSMISSION_MESSAGE:
+            if END_TRANSMISSION_MESSAGE in message:
                 logging.debug(f"Received games END: {message}")
                 self.__handle_end_transmission(
                     message,
@@ -210,6 +211,7 @@ class DropNulls:
                 continue
 
             client_id = message[0]
+            msg_id = message[1]
             for platform, platform_index in PLATFORMS.items():
                 platform_supported = message[platform_index]
                 if platform_supported.lower() == "true":
@@ -217,16 +219,17 @@ class DropNulls:
                         client_id, platform, self.count_by_platform_nodes
                     )
                     self._middleware.publish(
-                        [client_id, platform],
+                        [client_id, msg_id, platform],
                         f"{node_id}_{self.q1_platform}",
                     )
                     logging.debug(
-                        f"Q1: Sent {[client_id, platform]} to {node_id}_{self.q1_platform}"
+                        f"Q1: Sent {[client_id, msg_id,platform]} to {node_id}_{self.q1_platform}"
                     )
 
             self._middleware.publish(
                 [
                     client_id,
+                    msg_id,
                     message[GAMES_APP_ID],
                     message[GAMES_NAME],
                     message[GAMES_RELEASE_DATE],
@@ -240,6 +243,7 @@ class DropNulls:
                 self._middleware.publish(
                     [
                         client_id,
+                        msg_id,
                         message[GAMES_APP_ID],
                         message[GAMES_NAME],
                         message[GAMES_GENRE],
@@ -249,11 +253,11 @@ class DropNulls:
 
         self._middleware.ack(delivery_tag)
 
-    def __forward_to_all_reviews_queues(self, client_id: str, message):
+    def __forward_to_all_reviews_queues(self, client_id: str, message: list[str]):
         for queue in [self.q3_reviews, self.q5_reviews, self.q4_reviews]:
             self._middleware.send_end(
                 queue=queue,
-                end_message=[client_id, message],
+                end_message=[client_id] + message,
             )
 
     def __handle_reviews_last_batch(self):
@@ -262,6 +266,7 @@ class DropNulls:
 
     def __handle_reviews(self, delivery_tag: int, body: bytes):
         body = self._middleware.get_rows_from_message(message=body)
+        logging.info(f"Received review: {body}")
         for message in body:
             if message[1] == SESSION_TIMEOUT_TRANSMISSION_MESSAGE:
                 logging.info(f"Received timeout while processing reviews")
@@ -271,7 +276,7 @@ class DropNulls:
                 self._middleware.ack(delivery_tag)
                 return
 
-            if message[1] == END_TRANSMISSION_MESSAGE:
+            if len(message) > 1 and message[2] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Received reviews END: {message}")
                 self.__handle_end_transmission(
                     message,

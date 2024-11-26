@@ -50,8 +50,6 @@ class ClientHandler:
         self._got_sigterm = threading.Event()
         self._client_monitor = client_monitor
 
-        logging.info(f"_reviews_queue_name: {self._reviews_queue_name}")
-
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
     def start_results_middleware(self):
@@ -118,7 +116,7 @@ class ClientHandler:
 
         elif msg_type == "Q":
             rows = self._middleware.get_rows_from_message(message)
-            logging.info(f"Req: {rows}")
+            logging.debug(f"Req: {rows}")
 
             self._send_query_results_if_there_are(
                 session_id=rows[0][0], query=rows[1][0]
@@ -199,7 +197,7 @@ class ClientHandler:
 
             t.start()
         else:
-            logging.info(f"Message type: {msg_type} not recognized")
+            logging.error(f"Message type: {msg_type} not recognized")
 
     def handle_clients(self):
         self._client_middleware.create_socket(zmq.ROUTER)
@@ -266,12 +264,12 @@ class ClientHandler:
 
     def on_message(self, channel, method_frame, header_frame, body):
         rows = self.results_middleware.get_rows_from_message(body)
-        logging.info(f"Rows: {rows}")
+        logging.info(f"Response rows: {rows}")
 
         client_id = rows[0][0]
         query = method_frame.routing_key
 
-        logging.info(f"received results from queue: {query} from client: {client_id}")
+        logging.debug(f"received results from queue: {query} from client: {client_id}")
 
         connection_id = self._clients_info[client_id][CLIENT_INFO_CONNECTION_ID_INDEX]
         batch_per_client, client_ends = self._get_batch_per_client_and_ends(rows)
@@ -309,7 +307,7 @@ class ClientHandler:
         for record in records:
             client_id = record[0]
             record = record[1:]
-            if record[0] == "END":
+            if record[1] == "END":
                 clients_ends.add(client_id)
             if not client_id in batch_per_client:
                 batch_per_client[client_id] = []
@@ -323,7 +321,7 @@ class ClientHandler:
 
             with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
                 client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX].add(query)
-                logging.info(
+                logging.debug(
                     f"Client: {client_id} | {self._clients_info[client_id][CLIENT_INFO_FINISHED_QUERIES_INDEX]}"
                 )
 

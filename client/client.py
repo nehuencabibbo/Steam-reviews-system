@@ -271,7 +271,7 @@ class Client:
             self._query_results[query] = []
 
         for result in results:
-            if result[0] == "END":
+            if len(result) > 1 and result[1] == "END":
                 logging.info(f"Results for query: {query}: ")
                 self.__print_results_for_query(query)
                 self._queries_results_left.remove(query)

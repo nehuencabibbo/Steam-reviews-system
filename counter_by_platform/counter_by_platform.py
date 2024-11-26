@@ -1,5 +1,6 @@
 import signal
 import logging
+import uuid
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage import storage
 from typing import *
@@ -9,14 +10,14 @@ import threading
 END_TRANSMISSION_MESSAGE = "END"
 SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
-END_TRANSMISSION_MESSAGE_INDEX = 1
+END_TRANSMISSION_MESSAGE_INDEX = 2
 END_TRANSMISSION_SESSION_ID = 0
 
 SESSION_TIMEOUT_MESSAGE_INDEX = 1
 TIMEOUT_TRANSMISSION_SESSION_ID = 0
 
 REGULAR_MESSAGE_SESSION_ID = 0
-REGULAR_MESSAGE_FIELD_TO_COUNT_BY = 1
+REGULAR_MESSAGE_FIELD_TO_COUNT_BY = 2
 
 
 class CounterByPlatform:
@@ -72,7 +73,10 @@ class CounterByPlatform:
 
             return
 
-        if body[0][END_TRANSMISSION_MESSAGE_INDEX] == END_TRANSMISSION_MESSAGE:
+        if (
+            len(body[0]) > 1
+            and body[0][END_TRANSMISSION_MESSAGE_INDEX] == END_TRANSMISSION_MESSAGE
+        ):
             logging.debug("Recived END transmssion")
             session_id = body[0][END_TRANSMISSION_SESSION_ID]
 
@@ -123,8 +127,10 @@ class CounterByPlatform:
             )
 
         self._middleware.publish_batch(self.publish_queue)
+
         self._middleware.send_end(
-            queue=self.publish_queue, end_message=[session_id, END_TRANSMISSION_MESSAGE]
+            queue=self.publish_queue,
+            end_message=[session_id, str(uuid.uuid4()), END_TRANSMISSION_MESSAGE],
         )
         logging.debug(f"Sent results to queue {self.publish_queue}")
 

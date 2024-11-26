@@ -1,4 +1,5 @@
 import sys, os
+import uuid
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -15,6 +16,7 @@ GAMES_MESSAGE_TYPE = "games"
 REVIEWS_MESSAGE_TYPE = "reviews"
 END_TRANSMISSION_MESSAGE = "END"
 SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
+MSG_ID_INDEX = 0
 
 
 class FilterColumns:
@@ -109,21 +111,19 @@ class FilterColumns:
         # Have to check if it's a client end, in which case only "END" is received, otherwise, the client ID comes
         # first
         # peers_that_recived_end = body[1:] if len(body) == 1 else body[2:]
-        peers_that_recived_end = (
-            body[1:] if body[0] == END_TRANSMISSION_MESSAGE else body[2:]
-        )
+        peers_that_recived_end = body[2:]
+        logging.info(f"peers_that_recived_end: {peers_that_recived_end}")
 
         if len(peers_that_recived_end) == int(self._instances_of_myself):
-            logging.debug("Sending real END")
+            msg = [client_id, str(uuid.uuid4()), END_TRANSMISSION_MESSAGE]
+            logging.debug(f"Sending real END: {msg} to {forwarding_queue_name}")
             self._middleware.send_end(
                 queue=forwarding_queue_name,
-                end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                end_message=msg,
             )
         else:
             self._middleware.publish_batch(forwarding_queue_name)
-            # TODO: cambiar esto, por que se crea otra lista??? reusar la de body y fulbo
-            # Si lo dejamos asi, un set para mejor eficiencia en vez de una lista
-            message = [client_id, END_TRANSMISSION_MESSAGE]
+            message = [client_id, body[MSG_ID_INDEX], END_TRANSMISSION_MESSAGE]
             if not self._node_id in peers_that_recived_end:
                 peers_that_recived_end.append(self._node_id)
 
@@ -202,12 +202,7 @@ class FilterColumns:
 
                 return
 
-            # TODO: handle message ids
-            if (
-                message[0] == END_TRANSMISSION_MESSAGE
-                or len(message) > 1
-                and message[1] == END_TRANSMISSION_MESSAGE
-            ):
+            if len(message) > 1 and message[1] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived END of games: {message}")
                 self.__handle_end_transmission(
                     message,
@@ -229,7 +224,9 @@ class FilterColumns:
                 columns_to_keep, message, client_id=client_id
             )
 
-            logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending games: {message}")
+            logging.debug(
+                f"[FILTER COLUMNS {self._node_id}] Sending games: {filtered_body}"
+            )
 
             self._middleware.publish(filtered_body, forwarding_queue_name, "")
 
@@ -270,11 +267,7 @@ class FilterColumns:
             # TODO: handle message ids
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
-            if (
-                message[0] == END_TRANSMISSION_MESSAGE
-                or len(message) > 1
-                and message[1] == END_TRANSMISSION_MESSAGE
-            ):
+            if len(message) > 1 and message[1] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived END of reviews: {message}")
 
                 self.__handle_end_transmission(

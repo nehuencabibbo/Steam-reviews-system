@@ -350,6 +350,7 @@ def _get_batch_per_client(records):
     # Get the batch for every client
     for record in records:
         client_id = record[0]
+        # record = record[2:]
         record = record[1:]
         if not client_id in batch_per_client:
             batch_per_client[client_id] = []
@@ -543,9 +544,9 @@ def _add_batch_to_sorted_file(
         logging.error(f"Error, K must be > 0. Got: {limit}")
         return
     if ascending:
-        sorting_key = lambda x: (int(x[1]), x[0])
+        sorting_key = lambda x: (int(x[2]), x[0])
     else:
-        sorting_key = lambda x: (-int(x[1]), x[0])
+        sorting_key = lambda x: (-int(x[2]), x[0])
 
     sorted_records = sorted(new_records, key=sorting_key)
 
@@ -576,8 +577,8 @@ def _add_batch_to_sorted_file(
                 break
             old_line_saved = False
 
-            read_name = line[0]
-            read_value = int(line[1])
+            read_name = line[1]
+            read_value = int(line[2])
 
             if not ascending:
                 read_value = -read_value
@@ -586,8 +587,8 @@ def _add_batch_to_sorted_file(
                 if amount_of_records_in_top == limit:
                     break
 
-                new_record_name = new_record[0]
-                new_record_value = int(new_record[1])
+                new_record_name = new_record[1]
+                new_record_value = int(new_record[2])
 
                 if not ascending:
                     new_record_value = -new_record_value
