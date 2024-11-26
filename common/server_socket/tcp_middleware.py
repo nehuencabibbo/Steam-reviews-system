@@ -48,6 +48,10 @@ class TCPMiddleware:
         self._socket.settimeout(timeout)
     
 
+    def is_connected(self):
+        return not self._connection is None
+
+
     def close_connection(self):
         if self._connection:
             self._connection.close()

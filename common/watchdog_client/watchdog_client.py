@@ -1,4 +1,3 @@
-import socket
 import logging
 import sys
 import os
@@ -10,7 +9,7 @@ from .leader_finder import LeaderFinder
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from middleware.middleware import Middleware
-from server_socket.client_connection import ClientConnection
+from server_socket.tcp_middleware import TCPMiddleware
 
 
 NACK_MSG = "N"
@@ -24,17 +23,17 @@ class WatchdogClient:
         self._monitor_port = monitor_port
         self._client_name = client_name
         self._client_middleware = client_middleware
-        self._connection = None
         self._leader_finder = LeaderFinder(monitors_ip, discovery_port)
+        self._middleware = TCPMiddleware()
 
     def start(self):
 
         while not self._stop:
             try:
                 logging.debug("[MONITOR] Looking for leader")
-                self._connection = self._conect_to_monitor()
-
-                if not self._connection:
+                self._conect_to_monitor()
+                
+                if not self._middleware.is_connected():
                     logging.debug("[MONITOR] Could not connect to any monitor. Retrying...")
                     continue
                 
@@ -44,12 +43,11 @@ class WatchdogClient:
                 self._answer_heartbeats()
 
             except (OSError, TimeoutError) as e:
-                sleep(0.5) # so it does not mistake sigterm with closed socket
+                sleep(0.5)
                 if not self._stop:
                     logging.debug("[MONITOR]: monitor is down. waiting for reconnection")
             finally:
-                if self._connection:
-                    self._connection.close()
+                self._middleware.close_connection()
 
 
     def _conect_to_monitor(self):
@@ -57,13 +55,11 @@ class WatchdogClient:
         logging.debug(f"[MONITOR] The leader is: {leader_id}")
 
         if leader_id is None:
-            return None
+            return
         
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         monitor_ip = f"watchdog_{leader_id}"
         try:
-            client_socket.connect((monitor_ip,  self._monitor_port))
-            return ClientConnection(client_socket)
+            self._middleware.connect((monitor_ip,  self._monitor_port))
         
         except OSError as _:
             if not self._stop:
@@ -71,8 +67,8 @@ class WatchdogClient:
 
 
     def _register(self):
-        self._connection.send(self._client_name)
-        msg = self._connection.recv()
+        self._middleware.send_message(self._client_name)
+        msg = self._middleware.receive_message()
         if msg == REGISTRATION_CONFIRM:
             logging.debug("[MONITOR] Registration confirmed")
 
@@ -80,6 +76,7 @@ class WatchdogClient:
     def stop(self):
         self._stop = True
         self._leader_finder.stop()
+        self._middleware.close()
 
 
     def _answer_heartbeats(self):
@@ -87,15 +84,15 @@ class WatchdogClient:
         while not self._stop: 
 
             logging.debug("[MONITOR] Waiting for heartbeat")
-            msg = self._connection.recv()
+            msg = self._middleware.receive_message()
 
             if not self._check_node_general_functionality():
                 logging.debug("System status is abnormal, sending NACK")
-                self._connection.send(NACK_MSG)
+                self._middleware.send_message(NACK_MSG)
                 return False
 
             logging.debug("System status is OK, sending ACK")
-            self._connection.send(msg)
+            self._middleware.send_message(msg)
         
 
     def _check_node_general_functionality(self):

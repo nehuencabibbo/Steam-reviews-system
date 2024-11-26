@@ -10,4 +10,4 @@ run_client.sh
 docker-compose-dev.yaml
 join_for_client.py
 join_sender.py
-watchdog/names
+watchdog_status

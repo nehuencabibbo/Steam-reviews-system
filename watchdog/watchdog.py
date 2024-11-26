@@ -39,18 +39,17 @@ class Watchdog:
         self._discovery_thread.start()
 
         signal.signal(signal.SIGTERM, self._sigterm_handler)
-        signal.signal(signal.SIGINT, self._sigint_handler)
 
         self._watchdog_setup()
 
 
     def _watchdog_setup(self):
         
-        with open("names/node_names.json", "r") as file:
+        with open("watchdog_status/node_names.json", "r") as file:
             nodes_names = json.load(file)
             self._nodes = {key: None for key in nodes_names}
         
-        with open("names/monitor_names.json", "r") as file:
+        with open("watchdog_status/monitor_names.json", "r") as file:
             peer_names = json.load(file)
             self._peers = {key: None for key in peer_names if key != f"{WATCHDOG_NAME_PREFIX}{self._node_id}"}
            
@@ -198,6 +197,3 @@ class Watchdog:
         self._leader_election.stop()
         self._leader_discovery.close()
 
-    def _sigint_handler(self, signal, frame):
-        #so the killed process does not participate on the next election
-        self._leader_election.stop()

@@ -53,13 +53,13 @@ def create_file(output, file_name):
         yaml.safe_dump(output, output_file, sort_keys=False, default_flow_style=False)
 
 def create_names_file(node_names, monitor_names):
-    
-    os.makedirs("watchdog/names", exist_ok=True)
 
-    with open("watchdog/names/node_names.json", "w") as file:
+    os.makedirs("watchdog_status", exist_ok=True)
+
+    with open("watchdog_status/node_names.json", "w") as file:
         json.dump(node_names, file)
     
-    with open("watchdog/names/monitor_names.json", "w") as file:
+    with open("watchdog_status/monitor_names.json", "w") as file:
         json.dump(monitor_names, file)
 
 
@@ -79,7 +79,8 @@ def add_watchdog(output, port, debug=False, num=1):
         "image": "watchdog:latest",
         "container_name": f"watchdog_{num}",
         "volumes": [
-            "/var/run/docker.sock:/var/run/docker.sock"
+            "/var/run/docker.sock:/var/run/docker.sock",
+            "./watchdog_status/:/watchdog_status"
         ],
         "environment": [
             f"NODE_ID={num}",
