@@ -1,12 +1,10 @@
 import sys
-from os import SEEK_END, makedirs, path
 import os
-import csv
 import shutil
 import logging 
 from pathlib import Path
 
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import * 
 from storage.storage import (
@@ -25,13 +23,17 @@ class ActivityLogError(Exception):
         return self.message
 
 class ActivityLog:
-    def __init__(self, range_for_partition: int = 20, show_corrupted=False):
+    def __init__(self, amount_of_end_types_to_log: int = 1, range_for_partition: int = 20, show_corrupted=False):
         self._dir = './log'
+        os.makedirs(self._dir, exist_ok=True)
+
+        self._amount_of_ends = amount_of_end_types_to_log 
+        # Cantidad de ends a loggear, UNICAMENTE para el join, es 2
+        # porque loggea los ends de juegos y reviews
         self._range_for_partition = range_for_partition
         self._procesed_lines_file_prefix = 'procesed_lines'
         self._ends_file_name = 'ends.txt'
         # Range used to separte the distinct processed lines onto files
-        makedirs(self._dir, exist_ok=True)
 
         # Tengo un log General (que es el ultimo mensaje nada mas) y 
         # un log por cliente, que solamente se guarda el numero de mensaje
@@ -50,7 +52,7 @@ class ActivityLog:
         return length + line
     
     def _get_partition_file_name(self, msg_id: int):
-        return f"{self._procesed_lines_file_prefix}_{msg_id//self._range_for_partition}.csv"
+        return f"{self._procesed_lines_file_prefix}_{msg_id//self._range_for_partition}.txt"
     
     def _get_ends_file_path(self, client_id: str): 
         return os.path.join(self._dir, client_id, self._ends_file_name)
@@ -71,7 +73,7 @@ class ActivityLog:
 
     def __append_msg_ids(self, dir: str, file_name: str, msg_ids: List[str]):
         # If file is large this is really ineficient
-        temp_file_path = os.path.join(dir, 'temp_append.csv')
+        temp_file_path = os.path.join(dir, 'temp_append.txt')
         file_path = os.path.join(dir, file_name)
 
         create_file_if_unexistent(file_path)
@@ -304,11 +306,10 @@ class ActivityLog:
         if not os.path.exists(full_path):
             return False 
         
-        with open(full_path, 'r', newline='') as log:
-            reader = csv.reader(log)
-            for row in reader:
-                row = row[0]
-                if row == msg_id:
+        with open(full_path, 'r') as log:
+            for line in log:
+                line = line.strip()
+                if line == msg_id:
                     return True
                 
         return False 
