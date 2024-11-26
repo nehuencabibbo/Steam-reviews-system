@@ -2,7 +2,6 @@ from .udp_socket import UDPSocket
 import threading
 import socket
 
-
 class UDPMiddlewareTimeoutError(Exception):
     def __init__(self, message="Socket operation timed out"):
         super().__init__(message)
@@ -16,6 +15,7 @@ class UDPMiddleware:
         self._sender_lock = threading.Lock() 
         self._sender_socket = UDPSocket(timeout=0.5, amount_of_retries=send_retries)
         self._receiver_socket = UDPSocket()
+        self._addresses_to_broadcast = []
 
 
     def bind(self, addr):
@@ -29,19 +29,22 @@ class UDPMiddleware:
             raise UDPMiddlewareTimeoutError
 
 
-    def broadcast(self, message, addresses):
-        for addr in addresses:
+    def broadcast(self, message):
+        for addr in self._addresses_to_broadcast:
             if self._stop:
                 return
 
             self.send_message(message, addr)
 
 
+    def add_addr_to_broadcast(self, addr):
+        self._addresses_to_broadcast.append(addr)
+
+
     def send_message(self, message, addr):
         with self._sender_lock:
             try:
                 return self._sender_socket.send_message(message, addr)
-            
             except (OSError, ConnectionError):
                 return False
     

@@ -50,11 +50,10 @@ class LeaderFinder:
                 logging.debug("Leader election in progress, waiting...")
                 sleep(WAIT_LEADER_ELECTION_RUNNING) 
             else:
+                self._middleware.close_connection()
                 return msg
             
-        self._middleware.close_connection()
-        
-    
+            
     def stop(self):
         self._stop = True
         self._middleware.close()

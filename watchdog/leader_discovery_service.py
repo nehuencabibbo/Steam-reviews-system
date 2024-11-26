@@ -17,6 +17,7 @@ class LeaderDiscoveryService:
     def run(self):
 
         self._middleware.bind(("", self._port), BACKLOG)
+        self._middleware.set_timeout(1) # to check if i need to close
         conn = None
         while not self._stop:
             
@@ -30,7 +31,6 @@ class LeaderDiscoveryService:
                     conn.send(f"{leader_id}")
 
             except TCPMiddlewareTimeoutError:
-                # So it can close on sigterm
                 continue
             except (OSError, ConnectionError) as e:
                 if not self._stop:

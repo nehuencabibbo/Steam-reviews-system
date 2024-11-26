@@ -35,10 +35,12 @@ class Watchdog:
 
         self._leader_election = LeaderElection(self._node_id, self._election_port, self._amount_of_monitors)
         self._leader_discovery = LeaderDiscoveryService(self._leader_discovery_port, self._leader_election)
-        self._discovery_thread = threading.Thread(target=self._leader_discovery.run, daemon=True)
+
+        self._discovery_thread = threading.Thread(target=self._leader_discovery.run)
         self._discovery_thread.start()
 
         signal.signal(signal.SIGTERM, self._sigterm_handler)
+        signal.signal(signal.SIGINT, self._sigterm_handler)
 
         self._watchdog_setup()
 
@@ -128,9 +130,10 @@ class Watchdog:
 
         middleware = UDPMiddleware(send_retries=NUMBER_OF_RETRIES)
         
-
         while not self._got_sigterm.is_set():
             self._got_sigterm.wait(TIME_BETWEEN_HEARTBETS)
+            if self._got_sigterm.is_set():
+                break
 
             message = f"{HEARTBEAT_MESSAGE},{WATCHDOG_NAME_PREFIX}{self._node_id}"
             if not middleware.send_message(message, leader_addr):
@@ -194,6 +197,8 @@ class Watchdog:
     def _sigterm_handler(self, signal, frame):
         self._got_sigterm.set()
         self._middleware.close()
-        self._leader_election.stop()
         self._leader_discovery.close()
+        self._discovery_thread.join()
+        self._leader_election.stop()
+        
 

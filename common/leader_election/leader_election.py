@@ -17,6 +17,8 @@ LEADER_QUERY_TIMEOUT = 3
 LEADER_ELECTED_TIMEOUT = 15
 MESSAGE_LENGTH = 3
 
+CHECK_STOP_TIMEOUT = 1
+
 class LeaderElection:
 
     def __init__(self, node_id, election_port, amount_of_nodes):
@@ -31,16 +33,23 @@ class LeaderElection:
         self._not_running_election = threading.Event()
         self._not_running_election.set()
         self._election_port = election_port
-        self._stop = False
+        self._stop = threading.Event()
 
         self._middleware = UDPMiddleware()
         self._middleware.bind(("", election_port + node_id))
+        self._setup()
+        self._receiver_thread = threading.Thread(target=self.receive, daemon=True)
+        self._receiver_thread.start()
 
-        self._monitors_adresses = [self._node_id_to_addr(i) for i in range(self._amount_of_nodes) if i != self._id]
 
-        threading.Thread(target=self.receive, daemon=True).start()
+    def _setup(self):
+        for i in range(self._amount_of_nodes):
+            if i == self._id:
+                continue
+            addr = self._node_id_to_addr(i)
+            self._middleware.add_addr_to_broadcast(addr)
     
-    
+
     def start_leader_election(self):
 
         if not self._not_running_election.is_set():
@@ -60,25 +69,26 @@ class LeaderElection:
         logging.info(f"NODE {self._id} | I won the election")
         with self._leader_lock:
             self._leader = self._id
-        self._send_leader_message()
+        self._send_leader_message() # takes too much time to send to every node. Do it on other thread?
         self._not_running_election.set()
 
 
     def receive(self):
+        self._middleware.set_receiver_timeout(CHECK_STOP_TIMEOUT)
 
-        while not self._stop:
+        while not self._stop.is_set():
             try:
-                msg: str  = self._middleware.receive_message(MESSAGE_LENGTH)
-                if self._stop or not threading.main_thread().is_alive():
-                    return
-                
+
+                msg: str = self._middleware.receive_message(MESSAGE_LENGTH) 
             except UDPMiddlewareTimeoutError:
+                if self._stop.is_set() or not self._got_ok.is_set():
+                    continue
+
                 logging.info("No response from leader candidate.")
-                #leader will be none, and it will be handled form the outside
                 self._handle_no_candidate_response()
 
             except OSError as e:
-                if not self._stop:
+                if not self._stop.is_set():
                     logging.error(f"Got error while listening peers: {e}")
                 return
 
@@ -109,14 +119,15 @@ class LeaderElection:
 
     def look_for_leader(self):
         message = f'{LEADER_QUERY_COMMAND},{self._id}'
-        self._middleware.broadcast(message, self._monitors_adresses)
+        self._middleware.broadcast(message)
         self._leader_found.wait(LEADER_QUERY_TIMEOUT)
 
 
     def stop(self):
-        self._stop = True
+        self._stop.set()
         self._middleware.close()
-        self._not_running_election.set() 
+        self._not_running_election.set()
+        self._receiver_thread.join()
 
 
     def _handle_no_candidate_response(self):
@@ -143,7 +154,7 @@ class LeaderElection:
                 self._leader = node_id
             self._got_ok.clear()
             self._not_running_election.set()
-            self._middleware.set_receiver_timeout(None)
+            self._middleware.set_receiver_timeout(CHECK_STOP_TIMEOUT) #None
         
         elif message == LEADER_QUERY_COMMAND:
             with self._leader_lock:
@@ -165,11 +176,11 @@ class LeaderElection:
 
     def _send_leader_message(self):
         message = f'{LEADER_COMMAND},{self._id}'
-        self._middleware.broadcast(message, self._monitors_adresses)
+        self._middleware.broadcast(message)
 
 
     def _send_ok_message(self, node_id):   
-        if self._stop:
+        if self._stop.is_set():
             return
         
         message = f'{OK_COMMAND},{self._id}'
@@ -178,7 +189,7 @@ class LeaderElection:
 
 
     def _send_leader_id_message(self, node_id):
-        if self._stop:
+        if self._stop.is_set():
             return
         
         message = f'{LEADER_QUERY_RESPONSE},{self._leader}'
