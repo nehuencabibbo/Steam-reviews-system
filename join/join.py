@@ -14,6 +14,7 @@ from common.storage.storage import (
 from common.activity_log.activity_log import ActivityLog
 from utils.utils import group_batch_by_field, node_id_to_send_to
 
+APP_ID_INDEX = 1
 END_TRANSMISSION_MESSAGE = "END"
 
 
@@ -130,7 +131,8 @@ class Join:
             write_batch_by_range_per_client(
                 "tmp/", 
                 int(self._partition_range), 
-                body
+                body,
+                APP_ID_INDEX
             )
 
         except ValueError as e:

@@ -58,7 +58,15 @@ class Percentile:
             self._recived_ends[client_id] = self._recived_ends.get(client_id, 0) + 1
 
             logging.debug(f"GOT END NUMBER: {self._recived_ends[client_id]}")
+            # TODO: Loggear el end aca (contabilizarlo)
+            # 1 - No se llego a loggear del todo? => No procese ni mande nada no pasa nada
+            # 2 - Se cae antes del ack de aca en adelante => 
+            #       recupero el estado, 
+            #       el proximo end lo filtro,
+            #       si era el ultimo end el loggeado retomo con el publish
+            # 3 - Se llego a ackear => Todo ok
 
+            # Para el join, loggear en una misma linea game_ends, review_ends y listo
             if self._recived_ends[client_id] == self._needed_ends_to_finish:
                 # create queue for answering
                 # self._middleware.create_queue(

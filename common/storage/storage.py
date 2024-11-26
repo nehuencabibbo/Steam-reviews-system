@@ -161,15 +161,16 @@ def read_sorted_file(dir: str):
 
 
 # TODO: Sacar el group_batch_by_field_de_aca
-def write_batch_by_range_per_client(dir: str, range: int, records: List[List[str]]):
+def write_batch_by_range_per_client(dir: str, range: int, records: List[List[str]], key_index: int):
     records_per_client = group_batch_by_field(records)
     # logging.debug(f'Records per client: {records_per_client}')
     for client_id, batch in records_per_client.items():
         client_dir = os.path.join(dir, client_id)
 
-        _write_batch_by_range(client_dir, range, batch)
+        _write_batch_by_range(client_dir, range, batch, key_index)
 
-def atomically_append_to_file(dir: str, file_name: str, records: List[str]):
+
+def atomically_append_to_file(dir: str, file_name: str, records: List[List[str]]):
     '''
     Records need to have the following format: 
 
@@ -216,11 +217,12 @@ def _write_batch_by_range(
         dir: str, 
         range_for_partition: int, 
         records: list[list[str]],
+        key_index: int
     ):
 
     os.makedirs(dir, exist_ok=True)
     # get the file for each record in the batch -> {"file_name": [record1, record2], ....}
-    records_per_file = group_by_file(range_for_partition, records)
+    records_per_file = group_by_file(range_for_partition, records, key_index)
     # {
     #   'partition_75290.csv': [['35199', '752900', 'Prehistoric Hunt'], ...], 
     #   'partition_118045.csv': [['35232', '1180450', 'Exitium'], ...],
@@ -234,14 +236,14 @@ def _write_batch_by_range(
 
 def group_by_file(
     range: int, 
-    records: list[list[str]]
+    records: list[list[str]],
+    key_index: int = 1
 ) -> dict[str, list[str]]:
     records_per_file = {}
-    APP_ID_INDEX = 1
     FILE_PREFIX = 'partition'
     for record in records:
         try:
-            key = int(record[APP_ID_INDEX])
+            key = int(record[key_index])
             file_name = f"{FILE_PREFIX}_{key//range}.csv"
             records_per_file[file_name] = records_per_file.get(file_name, [])
             records_per_file[file_name].append(record)
