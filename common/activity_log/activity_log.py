@@ -23,11 +23,11 @@ class ActivityLogError(Exception):
         return self.message
 
 class ActivityLog:
-    def __init__(self, amount_of_end_types_to_log: int = 1, range_for_partition: int = 20, show_corrupted=False):
+    def __init__(self, log_two_ends: bool = False, range_for_partition: int = 20):
         self._dir = './log'
         os.makedirs(self._dir, exist_ok=True)
 
-        self._amount_of_ends = amount_of_end_types_to_log 
+        self._log_two_ends = log_two_ends 
         # Cantidad de ends a loggear, UNICAMENTE para el join, es 2
         # porque loggea los ends de juegos y reviews
         self._range_for_partition = range_for_partition
@@ -41,8 +41,6 @@ class ActivityLog:
         # para loggearlo
         self._general_log_path = f'{self._dir}/{GENERAL_LOG_FILE_NAME}'
         create_file_if_unexistent(self._general_log_path)
-
-        self._show_corrupted_lines = show_corrupted
 
     '''
     UTILITY
@@ -58,7 +56,7 @@ class ActivityLog:
     def _get_ends_file_path(self, client_id: str): 
         return os.path.join(self._dir, client_id, self._ends_file_name)
     
-    def __add_end_to_client(self, client_id: str):
+    def __add_end_to_client(self, client_id: str, end_logging: int = 0):
         temp_file_path = os.path.join(self._dir, client_id, 'temp.txt')
         file_path = self._get_ends_file_path(client_id)
 
@@ -66,9 +64,25 @@ class ActivityLog:
             amount = original.readline().strip()
             # File was empty
             if amount == '':
-                temp.write('1\n')
+                line_to_write = '1'
+                if self._log_two_ends:
+                    line_to_write = ['0', '0']
+                    line_to_write[end_logging] = '1'
+                    line_to_write = ','.join(line_to_write)
+
+                temp.write(line_to_write + '\n')
             else: 
-                temp.write(f'{int(amount) + 1}\n')
+                if self._log_two_ends:
+                    # Solo le sumo a la linea correspondiente
+                    line_to_write = amount.split(',')
+                    line_to_write[end_logging] = str(int(line_to_write[end_logging]) + 1)
+                    line_to_write = ','.join(line_to_write)
+
+                    temp.write(line_to_write + '\n')
+                else: 
+                    line_to_write = f'{int(amount) + 1}'
+
+                    temp.write(line_to_write + '\n')
 
         os.replace(temp_file_path, file_path)
 
@@ -227,7 +241,16 @@ class ActivityLog:
         self._log_to_general_log(client_id, data, msg_ids, GENERAL_LOGGING)
         self._log_to_processed_lines(client_id, msg_ids)
 
-    def log_end(self, client_id: str, msg_id: str):
+    def log_end(self, client_id: str, msg_id: str, end_logging: int = 0):
+        '''
+        If log_two_ends = True on startup, then end_logging should be specified.
+
+        log_two_ends indicates that amount_of_ends1,amount_of_ends2 will be logged to
+        end log
+
+        end_logging = 0 will add 1 to amount_of_ends1, and end_logging = 1 will update 
+        amount_of_ends2
+        '''
         # Hay un par de casos aca: 
         #       1 - Se cae antes de loggear al log general => No pasa nada
         #       2 - Se cae mientras loggea al log general => No pasa nada
@@ -243,7 +266,12 @@ class ActivityLog:
         #       6 - Se cae en el medio de loggear las lineas procesadas => No hay problema, 
         #           se recuperan con el log general
         msg_id = [msg_id]
-        new_amount_of_ends = str(self.get_amount_of_ends(client_id) + 1)
+        new_amount_of_ends = str(int(self._get_amount_of_ends(client_id)) + 1)
+        # Si se estan loggeando dos ends (end1,end2), solo le sumo al que me indican por parametro
+        if self._log_two_ends:
+            new_amount_of_ends = new_amount_of_ends.split(',')
+            new_amount_of_ends[end_logging] = str(int(new_amount_of_ends[end_logging]) + 1)
+            new_amount_of_ends = ','.join(new_amount_of_ends)
         data_to_log = [
             self._get_ends_file_path(client_id),
             new_amount_of_ends,
@@ -269,9 +297,13 @@ class ActivityLog:
     '''
     READING LOG
     '''
-    def get_amount_of_ends(self, client_id: str) -> int: 
+    def _get_amount_of_ends(self, client_id: str) -> str: 
         '''
-        If client has no ends, then 0 is returned
+        Returns the raw amount of ends read without \n, 
+        if client had 0 ends, then '0' is returned.
+        
+        if log_two_ends is set to True and client has
+        no ends, then 0,0 is returned
         '''
         full_path = self._get_ends_file_path(client_id)
         os.makedirs(os.path.join(self._dir, client_id), exist_ok=True) 
@@ -281,8 +313,10 @@ class ActivityLog:
             # File is only one line
             amount = ends.readline().strip()
 
-        return 0 if amount == '' else int(amount)
-
+        if self._log_two_ends:
+            return '0,0' if amount == '' else amount
+        
+        return '0' if amount == '' else amount
 
     def read_general_log(self):
         '''
@@ -450,16 +484,31 @@ class ActivityLog:
 
         return result
     
-    def recover_ends_state(self) -> Dict[str, int]:
+    def recover_ends_state(self):
         '''
         Returns the original ENDS state, for reach client, it returns
-        the amount of recived ends  
+        the amount of recived ends.
+
+        If log_two_ends = True, then two dictioiaries, one for each end are
+        returns, any other case just one is returned
         '''
         result = {}
+        if self._log_two_ends:
+            result2 = {}
         for client_id in os.listdir(self._dir): 
             if not os.path.isdir(os.path.join(self._dir, client_id)):
                 continue
+            
+            amount = self._get_amount_of_ends(client_id)
+            if self._log_two_ends:
+                amount = amount.split(',')
 
-            result[client_id] = self.get_amount_of_ends(client_id)
+                result[client_id] = int(amount[0])
+                result2[client_id] = int(amount[1])
+            else: 
+                result[client_id] = int(amount)
 
+        if self._log_two_ends:
+            return result, result2
+        
         return result

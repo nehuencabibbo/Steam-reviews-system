@@ -110,47 +110,47 @@ class ActivityLogTests(unittest.TestCase):
     def test_01_can_log_ends_properly(self):
         client_id = '1'
 
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 0)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '0')
 
         self._activity_log.log_end(client_id, '1')
         
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 1)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1')
 
     def test_02_can_log_ends_properly_for_multiclient(self):
         client_id = '1'
         client_id_2 = '2'
 
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 0)
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id_2), 0)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '0')
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id_2), '0')
 
         self._activity_log.log_end(client_id, '1')
         
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id_2), 0)
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 1)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id_2), '0')
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1')
 
         self._activity_log.log_end(client_id_2, '1')
 
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id_2), 1)
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 1)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id_2), '1')
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1')
 
     '''
     RECOVERY TESTS
     '''
-    def test_01_loging_end_and_then_recovering_does_not_modify_the_state_of_end_or_processed_lines(self):
+    def test_01_logging_end_and_then_recovering_does_not_modify_the_state_of_end_or_processed_lines(self):
         client_id = '1'
         msg_id = '14700'
 
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 0)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '0')
         self.assertEqual(self._activity_log.is_msg_id_already_processed(client_id, msg_id), False)
 
         self._activity_log.log_end(client_id, msg_id)
 
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 1)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1')
         self.assertEqual(self._activity_log.is_msg_id_already_processed(client_id, msg_id), True)
 
         file_name, state = self._activity_log.recover()
 
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 1)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1')
         self.assertEqual(self._activity_log.is_msg_id_already_processed(client_id, msg_id), True)
 
         self.assertEqual(file_name, None)
@@ -170,7 +170,7 @@ class ActivityLogTests(unittest.TestCase):
             msg_id,
             END_LOGGING
         )
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 0)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '0')
         self.assertEqual(self._activity_log.is_msg_id_already_processed(client_id, msg_id[0]), False)
 
         file_name, state = self._activity_log.recover()
@@ -178,7 +178,7 @@ class ActivityLogTests(unittest.TestCase):
         self.assertEqual(file_name, None)
         self.assertEqual(state, None)
 
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), int(new_state[1]))
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), new_state[1])
         self.assertEqual(self._activity_log.is_msg_id_already_processed(client_id, msg_id[0]), True)
 
 
@@ -195,7 +195,7 @@ class ActivityLogTests(unittest.TestCase):
             msg_ids,
             GENERAL_LOGGING
         )
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 0)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '0')
         for msg_id in msg_ids: 
             self.assertEqual(self._activity_log.is_msg_id_already_processed(client_id, msg_id), False)
 
@@ -207,7 +207,7 @@ class ActivityLogTests(unittest.TestCase):
         for msg_id in msg_ids: 
             self.assertEqual(self._activity_log.is_msg_id_already_processed(client_id, msg_id), True)
 
-        self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 0)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '0')
 
 
     def test_04_can_recover_ends_satate_correctly(self):
