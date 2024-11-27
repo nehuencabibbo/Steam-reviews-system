@@ -33,6 +33,7 @@ class ActivityLog:
         self._range_for_partition = range_for_partition
         self._procesed_lines_file_prefix = 'procesed_lines'
         self._ends_file_name = 'ends.txt'
+        self._middleware_dir = os.path.join(self._dir, 'middleware')
         # Range used to separte the distinct processed lines onto files
 
         # Tengo un log General (que es el ultimo mensaje nada mas) y 
@@ -47,7 +48,7 @@ class ActivityLog:
     UTILITY
     '''
     def __add_checksum(self, line: bytes) -> bytes: 
-        length = len(line).to_bytes(4, byteorder='big', signed=False)
+        length = len(line).to_bytes(CHECKSUM_LENGTH_BYTES, byteorder='big', signed=False)
 
         return length + line
     
@@ -84,7 +85,7 @@ class ActivityLog:
                 for msg_id in msg_ids:
                     if line == msg_id:
                         found_duplicate = True
-                        logging.debug(f'[Atomic append] Found duplicate, discarding: {msg_ids}')
+                        logging.debug(f'Found duplicate, discarding: {msg_ids}')
                         break
                 if found_duplicate: break
                 temp.write(line + '\n')
@@ -96,6 +97,20 @@ class ActivityLog:
             os.remove(temp_file_path)
         else:
             os.replace(temp_file_path, file_path)
+
+    def _get_file_name_for_middleware_queue(self, queue_name: str) -> str: 
+        return f'{queue_name}.bin'
+    
+    def __override_end_file_value(self, client_id: str, value: int):
+        os.makedirs(os.path.join(self._dir, client_id), exist_ok=True)
+
+        temp_file_path = os.path.join(self._dir, client_id, 'temp.txt')
+        file_path = self._get_ends_file_path(client_id)
+
+        with open(temp_file_path, 'w') as temp: 
+            temp.write(f'{value}\n')
+
+        os.replace(temp_file_path, file_path)
     
     '''
     GENREAL LOG 
@@ -237,6 +252,20 @@ class ActivityLog:
         self.__add_end_to_client(client_id)
         self._log_to_processed_lines(client_id, msg_id)
 
+    def log_for_middleware(self, queue_name: str, msg: bytes):
+        # En caso de querer agregar tambien las lineas procesadas para filtrar duplicados
+        # es simplemente agregar log_to_processed_lines y clavarle de client_id middleware,
+        # todo se va a ir a una carpeta middleware/processed_lines
+        file_name = self._get_file_name_for_middleware_queue(queue_name)
+        full_path = os.path.join(self._middleware_dir, file_name)
+
+        os.makedirs(self._middleware_dir, exist_ok=True)
+        create_file_if_unexistent(full_path)
+
+        msg_with_checksum = self.__add_checksum(msg)
+        with open(full_path, 'ab') as log:
+            log.write(msg_with_checksum)
+
     '''
     READING LOG
     '''
@@ -317,18 +346,6 @@ class ActivityLog:
     '''
     RECOVERY
     '''
-    def __override_end_file_value(self, client_id: str, value: int):
-        os.makedirs(os.path.join(self._dir, client_id), exist_ok=True)
-
-        temp_file_path = os.path.join(self._dir, client_id, 'temp.txt')
-        file_path = self._get_ends_file_path(client_id)
-
-        with open(temp_file_path, 'w') as temp: 
-            temp.write(f'{value}\n')
-
-        os.replace(temp_file_path, file_path)
-
-
     def recover(self) -> Tuple[Optional[str], Optional[List[str]]]: 
         '''
         Returns state to recover based on the general log.
@@ -393,3 +410,56 @@ class ActivityLog:
             return None, None
 
         return full_file_path_to_recover, file_state
+    
+
+    def recover_middleware_state(self) -> Dict[str, Tuple[bytes, int]]: 
+        '''
+        Returns the original middleware state, as a dictionary
+        where the key is the corresponding queue_name and the 
+        value is a tuple (batch, amount_of_msgs)
+        '''
+        result = {}
+        for f in os.listdir(self._middleware_dir): 
+            # No hace falta checkear si son archivos o dir pq solo
+            # se guardan archivos aca
+            queue_name = f.rsplit('.', maxsplit=1)[0]
+            full_path = os.path.join(self._middleware_dir, f)
+            with open(full_path, 'rb') as log:
+                data = log.read()
+
+            while len(data) > 0: 
+                checksum = int.from_bytes(data[:CHECKSUM_LENGTH_BYTES], "big", signed=False)
+                data = data[CHECKSUM_LENGTH_BYTES:]
+
+                if checksum < CHECKSUM_LENGTH_BYTES:
+                    # Solo la ultima linea puede estar corrupta, 
+                    # si llega a estarlo, implica que ni se guardo
+                    # en el middleware porque primero se loggea y despues
+                    # se guarda, la descarto
+                    continue
+
+                msg = data[:checksum]
+                data = data[checksum:]
+
+                if len(msg) < checksum:
+                    # idem checkeo anterior
+                    continue
+                
+                batch, count = result.get(queue_name, (b'', 0))
+                result[queue_name] = (batch + msg, count + 1)
+
+        return result
+    
+    def recover_ends_state(self) -> Dict[str, int]:
+        '''
+        Returns the original ENDS state, for reach client, it returns
+        the amount of recived ends  
+        '''
+        result = {}
+        for client_id in os.listdir(self._dir): 
+            if not os.path.isdir(os.path.join(self._dir, client_id)):
+                continue
+
+            result[client_id] = self.get_amount_of_ends(client_id)
+
+        return result

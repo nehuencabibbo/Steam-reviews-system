@@ -96,8 +96,10 @@ class Middleware:
 
     def publish(self, message: list[str], queue_name="", exchange_name=""):
         queue_batch, amount_of_messages = self.__batchs_per_queue[queue_name]
+        # prev_batch_length = len(queue_batch)
         new_batch = self.__protocol.add_to_batch(queue_batch, message)
-
+        # added_bytes = new_batch[prev_batch_length:]
+        # loggear los added bytes (me siplifica las cosas)
         if amount_of_messages + 1 == self.__batch_size:
             self._channel.basic_publish(
                 exchange=exchange_name,

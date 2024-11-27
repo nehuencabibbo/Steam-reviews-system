@@ -17,6 +17,7 @@ FIELD_LENGTH_BYTES_AMOUNT = 4
 class ActivityLogTests(unittest.TestCase):
     def setUp(self):
         self._dir = './log'
+        self._middleware_dir = os.path.join(self._dir, 'middleware')
         if Path(self._dir).exists():
             shutil.rmtree(self._dir)
 
@@ -104,7 +105,7 @@ class ActivityLogTests(unittest.TestCase):
                 self.assertEqual(msg_ids, read_msg_ids)
 
     '''
-    LOG ENDS TESTS
+    END LOGGING
     '''
     def test_01_can_log_ends_properly(self):
         client_id = '1'
@@ -208,6 +209,104 @@ class ActivityLogTests(unittest.TestCase):
 
         self.assertEqual(self._activity_log.get_amount_of_ends(client_id), 0)
 
+
+    def test_04_can_recover_ends_satate_correctly(self):
+        client_id = '1'
+        client_id_2 = '2'
+
+        expected = {
+            client_id: 2,
+            client_id_2: 1
+        }
+
+        self._activity_log.log_end(client_id, '40')
+        self._activity_log.log_end(client_id_2, '50')
+        self._activity_log.log_end(client_id, '25')
+
+        self.assertEqual(self._activity_log.recover_ends_state(), expected)
+
+    def test_05_can_recover_middleware_correctly(self):
+        queue_name_1 = 'test1'
+        queue_name_2 = 'test2'
+
+        msg_1 = b'quack quack quack'
+        msg_2 = b'AGUANTE BOCA'
+        msg_3 = b'https://music.youtube.com/watch?v=qegp2LHzGfU'
+
+        expected = {
+            queue_name_1: (msg_1, 1),
+            queue_name_2: (msg_2 + msg_3, 2)
+        }
+
+        self._activity_log.log_for_middleware(queue_name_1, msg_1)
+        self._activity_log.log_for_middleware(queue_name_2, msg_2)
+        self._activity_log.log_for_middleware(queue_name_2, msg_3)
+
+        state = self._activity_log.recover_middleware_state()
+        
+        self.assertEqual(state, expected)
+    
+    '''
+    MIDDLEWARE LOGGING
+    '''
+    def verify_for_queue(self, queue_name: str, list_of_msgs: List[bytes]):
+        full_path = os.path.join(self._middleware_dir, f'{queue_name}.bin')
+        with open(full_path, 'rb') as log:
+            data = log.read()
+        
+        line = 0 
+        while len(data) > 0:    
+            if line == len(list_of_msgs):
+                raise Exception('Unexepcted amount of msgs')
+
+            checksum = int.from_bytes(data[:CHECKSUM_LENGTH_BYTES], "big", signed=False)
+            data = data[CHECKSUM_LENGTH_BYTES:]
+
+            if checksum < CHECKSUM_LENGTH_BYTES:
+                raise Exception('Checksum does not match')
+
+            read_msg = data[:checksum]
+            data = data[checksum:]
+
+            if len(read_msg) < checksum:
+                raise Exception('Checksum does not match')
+            
+            self.assertEqual(list_of_msgs[line], read_msg)
+            line += 1
+        
+    def test_01_can_correctly_log_to_middleware(self):
+        queue_name = 'test'
+        msg = b'quack quack quack'
+
+        self._activity_log.log_for_middleware(queue_name, msg)
+
+        self.verify_for_queue(queue_name, [msg])
+
+
+    def test_02_can_correctly_log_to_middleware_multiple_lines_for_a_single_queue(self):
+        queue_name = 'test'
+        msg_1 = b'quack quack quack'
+        msg_2 = b'AGUANTE BOCA'
+
+        self._activity_log.log_for_middleware(queue_name, msg_1)
+        self._activity_log.log_for_middleware(queue_name, msg_2)
+
+        self.verify_for_queue(queue_name, [msg_1, msg_2])
+
+
+    def test_03_can_correctly_log_to_middleware_for_multiple_queues(self):
+        queue_name_1 = 'test1'
+        queue_name_2 = 'test2'
+
+        msg_1 = b'quack quack quack'
+        msg_2 = b'AGUANTE BOCA'
+
+        self._activity_log.log_for_middleware(queue_name_1, msg_1)
+        self._activity_log.log_for_middleware(queue_name_2, msg_2)
+
+        self.verify_for_queue(queue_name_1, [msg_1])
+        self.verify_for_queue(queue_name_2, [msg_2])
+                
             
 
 if __name__ == "__main__":
