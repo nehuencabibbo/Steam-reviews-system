@@ -133,6 +133,48 @@ class ActivityLogTests(unittest.TestCase):
         self.assertEqual(self._activity_log._get_amount_of_ends(client_id_2), '1')
         self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1')
 
+    def test_03_can_properly_log_two_ends(self):
+        client_id = '1'
+        
+        self._activity_log = ActivityLog(log_two_ends = True)
+
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '0,0')
+
+        self._activity_log.log_end(client_id, '20', end_logging=0)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1,0')
+
+        self._activity_log.log_end(client_id, '21', end_logging=1)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1,1')
+
+    def test_04_can_properly_log_two_ends_for_multiclient(self):
+        # Verify for first client
+        client_id = '1'
+        
+        self._activity_log = ActivityLog(log_two_ends = True)
+
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '0,0')
+
+        self._activity_log.log_end(client_id, '20', end_logging=0)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1,0')
+
+        self._activity_log.log_end(client_id, '21', end_logging=1)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1,1')
+
+        #Verify for second client
+        client_id_2 = '3'
+
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id_2), '0,0')
+
+        self._activity_log.log_end(client_id_2, '20', end_logging=0)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id_2), '1,0')
+
+        self._activity_log.log_end(client_id_2, '21', end_logging=1)
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id_2), '1,1')
+
+        # Verify that the first client still has it's ends intact 
+
+        self.assertEqual(self._activity_log._get_amount_of_ends(client_id), '1,1')
+
     '''
     RECOVERY TESTS
     '''
@@ -245,6 +287,34 @@ class ActivityLogTests(unittest.TestCase):
         state = self._activity_log.recover_middleware_state()
         
         self.assertEqual(state, expected)
+
+    def test_06_can_recover_for_multi_end_correctly(self):
+        self._activity_log = ActivityLog(log_two_ends=True)
+
+        client_id = '4444'
+        client_id_2 = '1323'
+
+        expected_1 = {
+            client_id: 1,
+            client_id_2: 4
+        }  
+
+        expected_2 = {
+            client_id: 2,
+            client_id_2: 3
+        }
+
+        self._activity_log.log_end(client_id, '3', end_logging=0)
+        [self._activity_log.log_end(client_id_2, '3', end_logging=0) for _ in range(4)]
+
+        [self._activity_log.log_end(client_id, '3', end_logging=1) for _ in range(2)]
+        [self._activity_log.log_end(client_id_2, '3', end_logging=1) for _ in range(3)]
+
+        first, second = self._activity_log.recover_ends_state()
+
+        self.assertEqual(first, expected_1)
+        self.assertEqual(second, expected_2)
+        
     
     '''
     MIDDLEWARE LOGGING

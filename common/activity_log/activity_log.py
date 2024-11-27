@@ -266,18 +266,20 @@ class ActivityLog:
         #       6 - Se cae en el medio de loggear las lineas procesadas => No hay problema, 
         #           se recuperan con el log general
         msg_id = [msg_id]
-        new_amount_of_ends = str(int(self._get_amount_of_ends(client_id)) + 1)
+        new_amount_of_ends = self._get_amount_of_ends(client_id)
         # Si se estan loggeando dos ends (end1,end2), solo le sumo al que me indican por parametro
         if self._log_two_ends:
             new_amount_of_ends = new_amount_of_ends.split(',')
             new_amount_of_ends[end_logging] = str(int(new_amount_of_ends[end_logging]) + 1)
             new_amount_of_ends = ','.join(new_amount_of_ends)
+        else: 
+            new_amount_of_ends = str(int(new_amount_of_ends) + 1)
         data_to_log = [
             self._get_ends_file_path(client_id),
             new_amount_of_ends,
         ]
         self._log_to_general_log(client_id, data_to_log, msg_id, END_LOGGING)
-        self.__add_end_to_client(client_id)
+        self.__add_end_to_client(client_id, end_logging=end_logging)
         self._log_to_processed_lines(client_id, msg_id)
 
     def log_for_middleware(self, queue_name: str, msg: bytes):
