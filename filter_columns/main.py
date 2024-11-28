@@ -87,10 +87,8 @@ def main():
     middleware = Middleware(config["RABBIT_IP"], use_logging=True)
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
-    print('CKPT 1')
 
     filter_columns = FilterColumns(middleware, config)
-    print('CKPT 2')
     filter_columns.start()
 
 

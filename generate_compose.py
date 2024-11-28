@@ -83,6 +83,7 @@ def add_drop_nulls(output: Dict, num: int, debug: bool):
         "restart": "on-failure",
     }
 
+
 def add_counter_by_platform(
     output: Dict,
     query: str,
@@ -187,6 +188,7 @@ def add_top_k_aggregator(
         "networks": ["net"],
         "restart": "on-failure",
     }
+
 
 def add_filter_by_language(
     output: Dict,
@@ -346,7 +348,7 @@ def add_rabbit(output: Dict):
         "ports": ["15672:15672"],
         "networks": ["net"],
         "volumes": ["rabbitmq_data:/var/lib/rabbitmq"],
-        "logging": {"driver": "none"},
+        # "logging": {"driver": "none"},
         "healthcheck": {
             "test": "rabbitmq-diagnostics -q ping",
             "interval": "20s",
@@ -409,6 +411,7 @@ def generate_filters_by_value(
     for i in range(amount_of_filters):
         add_filter_by_value(**kwargs, num=i, debug=debug)
 
+
 def generate_filters_by_language(
     amount_of_filters: int,
     debug=False,
@@ -449,7 +452,7 @@ def generate_q1(output=Dict, debug=False):
 
 
 def generate_q2(output=Dict, debug=False):
-    # Recived message: 
+    # Recived message:
     #       client_id,
     #       message[GAMES_MSG_ID],
     #       message[GAMES_APP_ID],
@@ -468,14 +471,14 @@ def generate_q2(output=Dict, debug=False):
         "column_number_to_use": 6,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
-        "columns_to_keep": "0,1,2,3,4,5", # Todo menos el genero
+        "columns_to_keep": "0,1,2,3,4,5",  # Todo menos el genero
         "instances_of_myself": Q2_AMOUNT_OF_INDIE_GAMES_FILTERS,
     }
     generate_filters_by_value(
         Q2_AMOUNT_OF_INDIE_GAMES_FILTERS, debug=debug, **q2_indie_filter_args
     )
 
-    # Recived message: 
+    # Recived message:
     #       client_id,
     #       message[GAMES_MSG_ID],
     #       message[GAMES_APP_ID],
@@ -497,14 +500,13 @@ def generate_q2(output=Dict, debug=False):
         "instances_of_myself": Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS,
     }
 
-
     generate_filters_by_value(
         Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS,
         debug=debug,
         **q2_indie_games_from_last_decade_args,
     )
 
-    # Recived message: 
+    # Recived message:
     #       client_id,
     #       message[GAMES_MSG_ID],
     #       message[GAMES_NAME],
@@ -947,28 +949,28 @@ def generate_output():
     # ; GAME_FILE_PATH=data/filtered_games.csv
     # ; REVIEWS_FILE_PATH=data/filtered_reviews.csv
 
-    add_client(
-        output,
-        num=1,
-        games_file_path="data/games_sample.csv",
-        reviews_file_path="data/reviews_sample.csv",
-        debug=True,
-    )
     # add_client(
     #     output,
-    #     num=2,
-    #     # games_file_path="data/games.csv",
-    #     # reviews_file_path="data/reviews_sample.csv",
-    #     games_file_path="data/games.csv",
-    #     reviews_file_path="data/filtered_reviews.csv",
-    #     debug=False,
+    #     num=1,
+    #     games_file_path="data/games_sample.csv",
+    #     reviews_file_path="data/reviews_sample.csv",
+    #     debug=True,
     # )
+    add_client(
+        output,
+        num=2,
+        # games_file_path="data/games.csv",
+        # reviews_file_path="data/reviews_sample.csv",
+        games_file_path="data/games.csv",
+        reviews_file_path="data/filtered_reviews.csv",
+        debug=False,
+    )
     add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT)
     generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=True)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
+    # generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
 
-    # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=True)
+    # # -------------------------------------------- Q1 -----------------------------------------
+    # generate_q1(output=output, debug=True)
     #   -------------------------------------------- Q2 -----------------------------------------
     # generate_q2(output=output, debug=True)
     # -------------------------------------------- Q3 -----------------------------------------

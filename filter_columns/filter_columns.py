@@ -69,15 +69,18 @@ class FilterColumns:
             reviews_callback,
         )
 
-        print('CKPT 3')
+        print("CKPT 3")
         try:
             self._middleware.start_consuming()
-            print('CKPT 4')
+            print("CKPT 4")
         except MiddlewareError as e:
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
-            print(f'{e}')
+            print(f"{e}")
+
+        except SystemExit as e:
+            print(f"System exit")
         finally:
             self._middleware.shutdown()
 
@@ -127,6 +130,7 @@ class FilterColumns:
         forwarding_queue_name: str,
     ):
         body = self._middleware.get_rows_from_message(body)
+        logging.debug(f"ROWS: {body}")
         # logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived games body: {body}")
         if len(body) > 1:
             client_id = body.pop(0)[0]  # Get client_id,
@@ -224,3 +228,4 @@ class FilterColumns:
         self._got_sigterm = True
         # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
+        raise SystemExit

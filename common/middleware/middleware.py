@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 import pika
 import pika.exceptions
@@ -31,7 +32,7 @@ class Middleware:
         batch_size: int = 10,
         is_async: bool = False,
         on_connected_callback=None,
-        use_logging: bool = False
+        use_logging: bool = False,
     ):
         self._connection = (
             self.__create_connection(broker_ip)
@@ -44,18 +45,18 @@ class Middleware:
         self.__protocol = protocol
         self.__batch_size = batch_size
         self.__batchs_per_queue = {}
-        self.is_running = True
+        self.is_running = threading.Event()
         self._logger = None
 
-        if use_logging: 
+        if use_logging:
             self._logger = ActivityLog()
             self.__batchs_per_queue = self._logger.recover_middleware_state()
 
             for queue_name, data in self.__batchs_per_queue.items():
                 batch, amount = data
-                if amount == self.__batch_size: 
+                if amount == self.__batch_size:
                     self._channel.basic_publish(
-                        exchange='',
+                        exchange="",
                         routing_key=queue_name,
                         body=batch,
                     )
@@ -65,13 +66,13 @@ class Middleware:
                         0,
                     ]
 
-            logging.debug('[MIDDLEWARE] RECOVERED STATE:')
+            logging.debug("[MIDDLEWARE] RECOVERED STATE:")
             for queue_name, data in self.__batchs_per_queue.items():
-                logging.debug(f'{queue_name}: {data}')
+                logging.debug(f"{queue_name}: {data}")
 
     def __create_connection(self, ip):
         # delete the heartbeat parameter if its too low
-        return pika.BlockingConnection(pika.ConnectionParameters(host=ip, heartbeat=5))
+        return pika.BlockingConnection(pika.ConnectionParameters(host=ip))
 
     def __create_async_connection(self, ip, on_connected_callback):
         parameters = pika.ConnectionParameters(host=ip)
@@ -121,24 +122,26 @@ class Middleware:
 
     def publish(self, message: list[str], queue_name="", exchange_name=""):
         queue_batch, amount_of_messages = self.__batchs_per_queue[queue_name]
+        logging.debug(
+            f"Publishing: {queue_batch} | amount_of_messages: {amount_of_messages}"
+        )
         # prev_batch_length = len(queue_batch)
         # bytes1,bytes2,bytes3,
         new_batch = self.__protocol.add_to_batch(queue_batch, message)
 
         # Just log the last message for simplificty sake
         if self._logger:
-            added_msg = new_batch[len(queue_batch):]
-            logging.debug(f'[MIDDLEWARE] Recived message: {message}, for: {queue_name}')
+            added_msg = new_batch[len(queue_batch) :]
+            logging.debug(f"[MIDDLEWARE] Recived message: {message}, for: {queue_name}")
             self._logger.log_for_middleware(queue_name, added_msg)
 
-            logging.debug('[MIDDLEWARE] STATE BEFORE KILL: ')
+            logging.debug("[MIDDLEWARE] STATE BEFORE KILL: ")
             for name, data in self.__batchs_per_queue.items():
-                logging.debug(f'{name}: {data}')
-            logging.debug('KILL ME')
-            time.sleep(0.5  )
+                logging.debug(f"{name}: {data}")
+            logging.debug("KILL ME")
 
         if amount_of_messages + 1 == self.__batch_size:
-            logging.debug(f'[MIDDLEWARE] Sent batch {new_batch} for {queue_name}')
+            logging.debug(f"[MIDDLEWARE] Sent batch {new_batch} for {queue_name}")
             self._channel.basic_publish(
                 exchange=exchange_name,
                 routing_key=queue_name,
@@ -150,7 +153,9 @@ class Middleware:
                 0,
             ]
         else:
-            logging.debug(f'[MIDDLEWARE] Saved {new_batch[len(queue_batch):]} for {queue_name}')
+            logging.debug(
+                f"[MIDDLEWARE] Saved {new_batch[len(queue_batch):]} for {queue_name}"
+            )
             self.__batchs_per_queue[queue_name] = [new_batch, amount_of_messages + 1]
 
     def get_rows_from_message(self, message) -> list[list[str]]:
@@ -169,11 +174,11 @@ class Middleware:
 
     def start_consuming(self):
         try:
-            print(f'Running? {self.is_running}')
-            while self.is_running:
-                self._connection.process_data_events(time_limit=10)
-                print('Not blocked at process data events')
-                
+            print(f"Running? {self.is_running}")
+            while not self.is_running.is_set():
+                self._connection.process_data_events(time_limit=1)
+                print("Not blocked at process data events")
+
         except pika.exceptions.ChannelClosedByBroker as e:
             # Rabbit mq terminated during execution most probably
             # TODO: Is writing to a closed channel handled by this too or
@@ -207,7 +212,7 @@ class Middleware:
 
     def shutdown(self):
         try:
-            self.is_running = False
+            self.is_running.set()
             if self._connection.is_open:
                 self._connection.add_callback_threadsafe(self._connection.close)
 
