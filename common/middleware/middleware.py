@@ -1,7 +1,9 @@
 import logging
+import time
 import pika
 import pika.exceptions
 
+from common.activity_log.activity_log import ActivityLog
 from common.protocol.protocol import Protocol
 
 END_TRANSMISSION_MESSAGE = "END"
@@ -29,6 +31,7 @@ class Middleware:
         batch_size: int = 10,
         is_async: bool = False,
         on_connected_callback=None,
+        use_logging: bool = False
     ):
         self._connection = (
             self.__create_connection(broker_ip)
@@ -40,9 +43,31 @@ class Middleware:
             self._channel.basic_qos(prefetch_count=prefetch_count)
         self.__protocol = protocol
         self.__batch_size = batch_size
-        self.__max_batch_size = 1 * 1024  # TODO: receive as param
         self.__batchs_per_queue = {}
         self.is_running = True
+        self._logger = None
+
+        if use_logging: 
+            self._logger = ActivityLog()
+            self.__batchs_per_queue = self._logger.recover_middleware_state()
+
+            for queue_name, data in self.__batchs_per_queue.items():
+                batch, amount = data
+                if amount == self.__batch_size: 
+                    self._channel.basic_publish(
+                        exchange='',
+                        routing_key=queue_name,
+                        body=batch,
+                    )
+                    self._logger.remove_queue_state(queue_name)
+                    self.__batchs_per_queue[queue_name] = [
+                        b"",
+                        0,
+                    ]
+
+            logging.debug('[MIDDLEWARE] RECOVERED STATE:')
+            for queue_name, data in self.__batchs_per_queue.items():
+                logging.debug(f'{queue_name}: {data}')
 
     def __create_connection(self, ip):
         # delete the heartbeat parameter if its too low
@@ -97,20 +122,35 @@ class Middleware:
     def publish(self, message: list[str], queue_name="", exchange_name=""):
         queue_batch, amount_of_messages = self.__batchs_per_queue[queue_name]
         # prev_batch_length = len(queue_batch)
+        # bytes1,bytes2,bytes3,
         new_batch = self.__protocol.add_to_batch(queue_batch, message)
-        # added_bytes = new_batch[prev_batch_length:]
-        # loggear los added bytes (me siplifica las cosas)
+
+        # Just log the last message for simplificty sake
+        if self._logger:
+            added_msg = new_batch[len(queue_batch):]
+            logging.debug(f'[MIDDLEWARE] Recived message: {message}, for: {queue_name}')
+            self._logger.log_for_middleware(queue_name, added_msg)
+
+            logging.debug('[MIDDLEWARE] STATE BEFORE KILL: ')
+            for name, data in self.__batchs_per_queue.items():
+                logging.debug(f'{name}: {data}')
+            logging.debug('KILL ME')
+            time.sleep(0.5  )
+
         if amount_of_messages + 1 == self.__batch_size:
+            logging.debug(f'[MIDDLEWARE] Sent batch {new_batch} for {queue_name}')
             self._channel.basic_publish(
                 exchange=exchange_name,
                 routing_key=queue_name,
                 body=new_batch,
             )
+            self._logger.remove_queue_state(queue_name)
             self.__batchs_per_queue[queue_name] = [
                 b"",
                 0,
             ]
         else:
+            logging.debug(f'[MIDDLEWARE] Saved {new_batch[len(queue_batch):]} for {queue_name}')
             self.__batchs_per_queue[queue_name] = [new_batch, amount_of_messages + 1]
 
     def get_rows_from_message(self, message) -> list[list[str]]:
@@ -129,8 +169,10 @@ class Middleware:
 
     def start_consuming(self):
         try:
+            print(f'Running? {self.is_running}')
             while self.is_running:
-                self._connection.process_data_events(time_limit=1)
+                self._connection.process_data_events(time_limit=10)
+                print('Not blocked at process data events')
                 
         except pika.exceptions.ChannelClosedByBroker as e:
             # Rabbit mq terminated during execution most probably

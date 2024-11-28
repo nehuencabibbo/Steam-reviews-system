@@ -356,6 +356,13 @@ class ActivityLog:
         if Path(self._dir).exists():
             shutil.rmtree(self._dir)
 
+    def remove_queue_state(self, queue_name: str):
+        file_path = os.path.join(
+            self._middleware_dir, 
+            self._get_file_name_for_middleware_queue(queue_name)
+        )
+        os.remove(file_path)
+
     '''
     DUPLICATE FILTER
     '''
@@ -454,6 +461,7 @@ class ActivityLog:
         where the key is the corresponding queue_name and the 
         value is a tuple (batch, amount_of_msgs)
         '''
+        os.makedirs(self._middleware_dir, exist_ok=True)
         result = {}
         for f in os.listdir(self._middleware_dir): 
             # No hace falta checkear si son archivos o dir pq solo

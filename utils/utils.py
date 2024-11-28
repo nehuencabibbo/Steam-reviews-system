@@ -77,7 +77,8 @@ def group_msg_ids_per_client_by_field(
             msg_ids_per_record_by_client_id[client_id][record_id] = []
 
         if use_field_to_group_by_in_key:
-            msg_id = ','.join([msg_id, record_id[0]]) # Ver explicacion del inicio
+            msg_id = str(ord(record_id[0])) + msg_id
+            print('quack', msg_id)
     
         msg_ids_per_record_by_client_id[client_id][record_id].append(msg_id)
 

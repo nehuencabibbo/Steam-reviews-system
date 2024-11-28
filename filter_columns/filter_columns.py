@@ -4,7 +4,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import *
 from common.middleware.middleware import Middleware, MiddlewareError
-from common.protocol.protocol import Protocol
 import signal
 import logging
 
@@ -16,11 +15,9 @@ END_TRANSMISSION_MESSAGE = "END"
 class FilterColumns:
     def __init__(
         self,
-        protocol: Protocol,
         middleware: Middleware,
         config: Dict[str, Union[str, int]],
     ):
-        self._protocol = protocol
         self._middleware = middleware
         self._got_sigterm = False
 
@@ -72,12 +69,15 @@ class FilterColumns:
             reviews_callback,
         )
 
+        print('CKPT 3')
         try:
             self._middleware.start_consuming()
+            print('CKPT 4')
         except MiddlewareError as e:
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
+            print(f'{e}')
         finally:
             self._middleware.shutdown()
 
@@ -127,13 +127,13 @@ class FilterColumns:
         forwarding_queue_name: str,
     ):
         body = self._middleware.get_rows_from_message(body)
-        logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived games body: {body}")
+        # logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived games body: {body}")
         if len(body) > 1:
             client_id = body.pop(0)[0]  # Get client_id,
         else:
             client_id = body[0].pop(0)  # END message scenario
 
-        logging.debug(f"client_id: {client_id}")
+        # logging.debug(f"client_id: {client_id}")
         for message in body:
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
@@ -150,7 +150,7 @@ class FilterColumns:
 
                 return
 
-            logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived game: {message}")
+            # logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived game: {message}")
 
             columns_to_keep = []
             columns_to_keep = self._game_columns_to_keep
@@ -159,7 +159,7 @@ class FilterColumns:
                 columns_to_keep, message, client_id=client_id
             )
 
-            logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending games: {message}")
+            # logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending games: {message}")
 
             self._middleware.publish(filtered_body, forwarding_queue_name, "")
 
@@ -179,7 +179,7 @@ class FilterColumns:
         else:
             client_id = body[0].pop(0)  # END message scenario
 
-        logging.debug(f"client_id: {client_id}")
+        # logging.debug(f"client_id: {client_id}")
 
         for message in body:
 
@@ -198,7 +198,7 @@ class FilterColumns:
 
                 return
 
-            logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived review: {message}")
+            # logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived review: {message}")
 
             columns_to_keep = []
             columns_to_keep = self._reviews_columns_to_keep
@@ -207,7 +207,7 @@ class FilterColumns:
                 columns_to_keep, message, client_id=client_id
             )
 
-            logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending review: {message}")
+            # logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending review: {message}")
 
             self._middleware.publish(filtered_body, forwarding_queue_name, "")
 

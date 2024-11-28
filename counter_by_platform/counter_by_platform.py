@@ -83,6 +83,9 @@ class CounterByPlatform:
 
         os.replace(temp_file, full_file_path)
 
+    def __generate_msg_id(self):
+        pass 
+
     def __handle_message(self, delivery_tag: int, body: List[List[str]]):
         body = self._middleware.get_rows_from_message(body)
 

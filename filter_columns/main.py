@@ -84,13 +84,13 @@ def main():
     logging.debug("Logging configuration:")
     [logging.debug(f"{key}: {value}") for key, value in config.items()]
 
-    middleware = Middleware(config["RABBIT_IP"])
+    middleware = Middleware(config["RABBIT_IP"], use_logging=True)
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
+    print('CKPT 1')
 
-    protocol = Protocol()
-
-    filter_columns = FilterColumns(protocol, middleware, config)
+    filter_columns = FilterColumns(middleware, config)
+    print('CKPT 2')
     filter_columns.start()
 
 

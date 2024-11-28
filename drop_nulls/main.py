@@ -92,7 +92,7 @@ def main():
     [logging.debug(f"{key}: {value}") for key, value in config.items()]
 
     protocol = Protocol()
-    middleware = Middleware(config["RABBIT_IP"])
+    middleware = Middleware(config["RABBIT_IP"], use_logging=True)
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
