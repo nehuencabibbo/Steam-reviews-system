@@ -2,6 +2,7 @@ import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import threading
 from typing import *
 from common.protocol.protocol import Protocol
 from common.middleware.middleware import Middleware, MiddlewareError
@@ -21,7 +22,7 @@ class DropNulls:
     ):
         self._protocol = protocol
         self._middleware = middleware
-        self._got_sigterm = False
+        self._got_sigterm = threading.Event()
         self.r = 0
 
         # Directly assign each config value to an attribute
@@ -77,8 +78,10 @@ class DropNulls:
         try:
             self._middleware.start_consuming()
         except MiddlewareError as e:
-            if not self._got_sigterm:
+            if not self._got_sigterm.is_set():
                 logging.error(e)
+        except SystemExit:
+            logging.info("Exiting")
         finally:
             self._middleware.shutdown()
 
@@ -229,10 +232,10 @@ class DropNulls:
             for queue in [self.q3_reviews, self.q5_reviews]:
                 self._middleware.publish(
                     [
-                        client_id, 
+                        client_id,
                         message[REVIEW_MSG_ID],
-                        message[REVIEW_APP_ID], 
-                        message[REVIEW_SCORE]
+                        message[REVIEW_APP_ID],
+                        message[REVIEW_SCORE],
                     ],
                     queue,
                 )
@@ -253,6 +256,7 @@ class DropNulls:
 
     def __signal_handler(self, sig, frame):
         logging.debug(f"[NULL DROP {self.node_id}] Gracefully shutting down...")
-        self._got_sigterm = True
-        #self._middleware.stop_consuming_gracefully()
+        self._got_sigterm.set()
+        # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
+        raise SystemExit

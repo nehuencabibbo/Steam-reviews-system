@@ -2,6 +2,7 @@ import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import threading
 from typing import *
 from constants import *
 from common.protocol.protocol import Protocol
@@ -21,7 +22,7 @@ class FilterColumnByValue:
     ):
         self._protocol = protocol
         self._middleware = middleware
-        self._got_sigterm = False
+        self._got_sigterm = threading.Event()
         self._filter_by_criteria: Callable[[List[str]], None] = None
 
         # Config variables
@@ -61,8 +62,10 @@ class FilterColumnByValue:
             self._middleware.start_consuming()
         except MiddlewareError as e:
             # TODO: If got_sigterm is showing any error needed?
-            if not self._got_sigterm:
+            if not self._got_sigterm.is_set():
                 logging.error(e)
+        except SystemExit:
+            logging.info("Exiting")
         finally:
             self._middleware.shutdown()
 
@@ -234,7 +237,8 @@ class FilterColumnByValue:
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
-        self._got_sigterm = True
-        #self._middleware.stop_consuming_gracefully()
-        self._middleware.shutdown()
+        self._got_sigterm.set()
+        # self._middleware.stop_consuming_gracefully()
         # self._middleware.shutdown()
+        self._middleware.shutdown()
+        raise SystemExit
