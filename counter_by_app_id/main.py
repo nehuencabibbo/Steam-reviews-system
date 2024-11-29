@@ -56,11 +56,13 @@ def get_config():
         )
 
         # # Monitor
-        config_params["WATCHDOG_IP"] = os.getenv("WATCHDOG_IP")
+        config_params["WATCHDOGS_IP"] = os.getenv("WATCHDOGS_IP").split(",")
 
         config_params["WATCHDOG_PORT"] = int(os.getenv("WATCHDOG_PORT"))
 
         config_params["NODE_NAME"] = os.getenv("NODE_NAME")
+
+        config_params["LEADER_DISCOVERY_PORT"] = int(os.getenv("LEADER_DISCOVERY_PORT"))
 
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
@@ -91,10 +93,11 @@ def main():
     broker_ip = config.pop("RABBIT_IP")
     middleware = Middleware(broker_ip)
 
-    monitor_ip = config.pop("WATCHDOG_IP")
+    monitor_ip = config.pop("WATCHDOGS_IP")
     monitor_port = config.pop("WATCHDOG_PORT")
     node_name = config.pop("NODE_NAME")
-    monitor = WatchdogClient(monitor_ip, monitor_port, node_name)
+    discovery_port = config.pop("LEADER_DISCOVERY_PORT")
+    monitor = WatchdogClient(monitor_ip, monitor_port, node_name, discovery_port, middleware)
 
     counter = CounterByAppId(config, middleware, monitor)
     logging.info("RUNNING COUNTER")

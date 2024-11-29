@@ -38,6 +38,9 @@ class ClientConnection:
 
         return decoded_message
     
+    def settimeout(self, timeout):
+        self._socket.settimeout(timeout)
+    
     def _recv_message_length(self):
 
         bytes_left_to_receive = LENGTH_BYTES

@@ -47,7 +47,7 @@ class Middleware:
 
     def __create_connection(self, ip):
         # delete the heartbeat parameter if its too low
-        return pika.BlockingConnection(pika.ConnectionParameters(host=ip, heartbeat=5))
+        return pika.BlockingConnection(pika.ConnectionParameters(host=ip))
 
     def __create_async_connection(self, ip, on_connected_callback):
         parameters = pika.ConnectionParameters(host=ip)
@@ -205,3 +205,11 @@ class Middleware:
         )
         self._connection.add_callback_threadsafe(fn)
         logging.info("added threadsafe callback")
+
+    def check_connection(self):
+        try:
+            return self._connection.is_open and self._channel.is_open
+        except Exception as _:
+            logging.debug("The connection with rabbit was closed abruptly")
+            return False
+
