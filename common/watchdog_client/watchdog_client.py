@@ -14,7 +14,7 @@ from server_socket.tcp_middleware import TCPMiddleware
 
 NACK_MSG = "N"
 REGISTRATION_CONFIRM = "K"
-MIN_MEMORY_SPACE = 1024 # 1KB
+MIN_MEMORY_SPACE = 1024 
 
 class WatchdogClient:
 

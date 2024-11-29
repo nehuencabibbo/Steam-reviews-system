@@ -2,6 +2,7 @@ import threading
 import logging
 import sys
 import os
+from time import time
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from common.udpsocket.udp_middleware import UDPMiddleware, UDPMiddlewareTimeoutError
@@ -29,6 +30,8 @@ class LeaderElection:
         self._leader = None
         
         self._got_ok = threading.Event()
+        self._got_ok_time = None
+
         self._leader_found = threading.Event()
         self._not_running_election = threading.Event()
         self._not_running_election.set()
@@ -61,15 +64,14 @@ class LeaderElection:
 
         self._send_election_message()
 
-        self._got_ok.wait(LEADER_ELECTION_TIMEOUT)
-        if self._got_ok.is_set():
+        if self._got_ok.wait(LEADER_ELECTION_TIMEOUT):
             logging.info(f"NODE {self._id} | Got OK, waiting for leader")
             return    
         
         logging.info(f"NODE {self._id} | I won the election")
         with self._leader_lock:
             self._leader = self._id
-        self._send_leader_message() # takes too much time to send to every node. Do it on other thread?
+        self._send_leader_message()
         self._not_running_election.set()
 
 
@@ -79,24 +81,29 @@ class LeaderElection:
         while not self._stop.is_set():
             try:
 
-                msg: str = self._middleware.receive_message(MESSAGE_LENGTH) 
+                msg: str = self._middleware.receive_message(MESSAGE_LENGTH)
+                if not threading.main_thread().is_alive():
+                    return
+                
+                command, node_id = msg.split(",")
+                node_id = int(node_id)
+                logging.debug(f"NODE {self._id} | Got message: {command} from {node_id}")
+                self._handle_message(command, node_id)
+                
             except UDPMiddlewareTimeoutError:
                 if self._stop.is_set() or not self._got_ok.is_set():
                     continue
 
-                logging.info("No response from leader candidate.")
-                self._handle_no_candidate_response()
-
+                time_diff = self._got_ok_time - time()
+                if time_diff > LEADER_ELECTED_TIMEOUT:
+                    logging.info("No response from leader candidate.")
+                    self._handle_no_candidate_response()
+                    
             except OSError as e:
                 if not self._stop.is_set():
                     logging.error(f"Got error while listening peers: {e}")
                 return
-
-            command, node_id = msg.split(",")
-            node_id = int(node_id)
-            logging.debug(f"NODE {self._id} | Got message: {command} from {node_id}")
-            self._handle_message(command, node_id)
-
+            
 
     def i_am_leader(self):
         self._not_running_election.wait()
@@ -133,7 +140,7 @@ class LeaderElection:
     def _handle_no_candidate_response(self):
         self._got_ok.clear()
         self._not_running_election.set()
-        self._middleware.set_receiver_timeout(None)
+        self._got_ok_time = None
 
 
     def _handle_message(self, message, node_id):
@@ -144,17 +151,14 @@ class LeaderElection:
 
         elif message == OK_COMMAND:
             self._got_ok.set()
-            # so i can detect if the one that will be the leader crashed or not
-            # if that happens it nevers send the coordinator message
-            # and i cant know if it disconnected or not
-            self._middleware.set_receiver_timeout(LEADER_ELECTED_TIMEOUT)
+            self._got_ok_time = time()
 
         elif message == LEADER_COMMAND:
             with self._leader_lock:
                 self._leader = node_id
             self._got_ok.clear()
+            self._got_ok_time = None
             self._not_running_election.set()
-            self._middleware.set_receiver_timeout(CHECK_STOP_TIMEOUT) #None
         
         elif message == LEADER_QUERY_COMMAND:
             with self._leader_lock:

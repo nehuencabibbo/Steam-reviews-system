@@ -36,11 +36,9 @@ class NodeHandler:
 
         except (OSError, TimeoutError, AbnormalNodeStatus) as _:
             if not self._got_sigterm.is_set():
-                logging.info(f"Node {self._node_name} is down.")
+                logging.info(f"Node {self._node_name} is down. Restarting it...")
                 subprocess.run(['docker', 'stop', self._node_name], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 subprocess.run(['docker', 'start', self._node_name], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                
-                logging.info(f"Starting container {self._node_name}")
         finally:
             self._node_conn.close()
 

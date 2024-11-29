@@ -196,5 +196,9 @@ class Middleware:
         ),
 
     def check_connection(self):
-        #como chequeo que la queue esten conectadas?
-        return self._connection.is_open and self._channel.is_open
+        try:
+            return self._connection.is_open and self._channel.is_open
+        except Exception as _:
+            logging.debug("The connection with rabbit was closed abruptly")
+            return False
+

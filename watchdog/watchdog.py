@@ -12,9 +12,9 @@ from common.leader_election.leader_election import LeaderElection
 from leader_discovery_service import LeaderDiscoveryService
 
 NUMBER_OF_RETRIES = 5
-TIMEOUT_BEFORE_FALLEN_CHECK = 60
+TIMEOUT_BEFORE_FALLEN_CHECK = 30
 REGISTRATION_CONFIRM = "K"
-MAX_TIMEOUT = 10
+MAX_MONITOR_TIMEOUT = 7
 TIME_BETWEEN_HEARTBETS = 3
 HEARTBEAT_MESSAGE = "A"
 WATCHDOG_NAME_PREFIX = "watchdog_"
@@ -98,7 +98,9 @@ class Watchdog:
             
                 conn, _ = self._middleware.accept_connection()
                 node_name = conn.recv()
-                logging.info(f"[LEADER] Node {node_name} connected.")
+
+                #Change to info if needed
+                logging.debug(f"[LEADER] Node {node_name} connected.")
 
                 conn.send(REGISTRATION_CONFIRM)
 
@@ -171,7 +173,7 @@ class Watchdog:
     def _check_peer_status(self):
         current_time = time.time()
         for peer_name, last_heartbeat in self._peers.items():
-            if  current_time - last_heartbeat > MAX_TIMEOUT: 
+            if  current_time - last_heartbeat > MAX_MONITOR_TIMEOUT: 
                 self._restart_fallen_node(peer_name)
                 self._peers[peer_name] = time.time()       
 
