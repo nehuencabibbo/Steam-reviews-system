@@ -273,7 +273,6 @@ def sum_batch_to_records_per_client(
     logger,
     range_for_partition: int = -1,
     save_first_msg_id: bool = False,
-    use_field_to_group_by_in_key: bool = False,
 ):
     CLIENT_ID_INDEX = 0
     MSG_ID_INDEX = 1
@@ -284,7 +283,6 @@ def sum_batch_to_records_per_client(
         CLIENT_ID_INDEX,
         MSG_ID_INDEX,
         FILED_TO_COUNT_BY,
-        use_field_to_group_by_in_key=use_field_to_group_by_in_key
     )
     # Por ejemplo si se agrupa por platform: 
     # {

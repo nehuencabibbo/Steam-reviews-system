@@ -103,36 +103,48 @@ class CounterByPlatform:
         #   Linux: [MSG_ID1, MSG_ID2, ...], 
         #   Mac: [MSG_ID1, MSG_ID2, ...]}, 
         # ...}
-        self.__purge_duplicates(body)
+        body = self.__purge_duplicates_and_add_unique_msg_id(body)
 
         storage.sum_batch_to_records_per_client(
             self.storage_dir,
             body,
             self._activity_log,
-            use_field_to_group_by_in_key=True,
         )
 
         self._middleware.ack(delivery_tag)
 
-    def __purge_duplicates(self, batch: List[str]) -> List[str]:
+    def __generate_unique_msg_id(self, platform: str, msg_id: str) -> str:
+        '''
+        Generated msg id is just the first char of platform as ascii concatenated
+        to the msg id. 
+        
+        This assumes that platform initial is unique for each platform.
+        '''
+        return str(ord(platform[0])) + msg_id
+
+    def __purge_duplicates_and_add_unique_msg_id(self, batch: List[str]) -> List[str]:
         # CADA mensaje individual me tengo que fijar si esta duplicado, incluido dentro del mismo batch
         # (se puede optimizar en el middleware y cambiarlo aca tmb dsps)
-
         batch_msg_ids = set()
         filtered_batch = []
-        for msg in batch: 
+        for msg in batch:
+            # Add a custom msg id based on plaftorm
+            platform = msg[REGULAR_MESSAGE_FIELD_TO_COUNT_BY]
+            msg[REGULAR_MESSAGE_MSG_ID] = self.__generate_unique_msg_id(platform, msg[REGULAR_MESSAGE_MSG_ID])
+            
+            msg_id = msg[REGULAR_MESSAGE_MSG_ID] 
             client_id = msg[REGULAR_MESSAGE_CLIENT_ID]
-            msg_id = msg[REGULAR_MESSAGE_MSG_ID]
             if not self._activity_log.is_msg_id_already_processed(client_id, msg_id) and not msg_id in batch_msg_ids: 
                 filtered_batch.append(msg)
                 batch_msg_ids.add(msg_id)
             else: 
-                if not msg_id in batch_msg_ids:
+                if msg_id in batch_msg_ids:
                     logging.debug(f'[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (inside batch)')
                 else:
                     logging.debug(f'[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (previously processed)')
 
         return filtered_batch
+    
 
     def __send_results(self, session_id: str):
         self._middleware.create_queue(self.publish_queue)
@@ -157,7 +169,7 @@ class CounterByPlatform:
         )
         logging.debug(f"Sent results to queue {self.publish_queue}")
 
-        storage.delete_directory(client_dir)
+        # storage.delete_directory(client_dir)
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
