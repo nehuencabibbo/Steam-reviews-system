@@ -4,7 +4,7 @@ import logging
 import shutil
 from typing import *
 
-from utils.utils import group_batch_by_field
+from utils.utils import group_batch_by_field, group_msg_ids_per_client_by_field
     
 
 # TODO: use threads for all functions or some parallelization tool (maybe)
@@ -269,14 +269,36 @@ def _group_records(records: dict[str, List[str]]) -> Dict[str, List[str]]:
 # TODO: Sacar codigo repetido de aca con sum_platform_batch_to_records_per_client
 def sum_batch_to_records_per_client(
     dir: str,
-    new_records_per_client: dict[str, dict[str, int]],
+    batch: List[str],
     logger,
     range_for_partition: int = -1,
     save_first_msg_id: bool = False,
+    use_field_to_group_by_in_key: bool = False,
 ):
+    CLIENT_ID_INDEX = 0
+    MSG_ID_INDEX = 1
+    FILED_TO_COUNT_BY = 2
 
+    msg_ids_per_record_by_client_id = group_msg_ids_per_client_by_field(
+        batch,
+        CLIENT_ID_INDEX,
+        MSG_ID_INDEX,
+        FILED_TO_COUNT_BY,
+        use_field_to_group_by_in_key=use_field_to_group_by_in_key
+    )
+    # Por ejemplo si se agrupa por platform: 
+    # {
+    #    clientid1: 
+    #       {
+    #           WINDOWS: [msgid1, msgid2, ...],
+    #           LINUX: [msgid1, msgid2, ...],
+    #       }
+    #    ...
+    # }
+    # Si fuera por app_id, entonces en vez de WINDOWS y LINUX van app_ids distintos
+    
     need_to_partition_by_range = range_for_partition != -1
-    for client_id, new_records in new_records_per_client.items():
+    for client_id, new_records in msg_ids_per_record_by_client_id.items():
         logging.debug(f"NEW RECORDS: {new_records}")
 
         client_dir = os.path.join(dir, client_id)

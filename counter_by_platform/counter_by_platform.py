@@ -11,8 +11,9 @@ from utils.utils import group_msg_ids_per_client_by_field
 
 END_TRANSMISSION_MESSAGE = "END"
 
-END_TRANSMISSION_MESSAGE_INDEX = 1
+END_TRANSMISSION_MSG_ID_INDEX = 1
 END_TRANSMISSION_CLIENT_ID = 0
+END_TRANSMISSION_END_INDEX = 2
 
 REGULAR_MESSAGE_CLIENT_ID = 0
 REGULAR_MESSAGE_MSG_ID= 1
@@ -83,15 +84,12 @@ class CounterByPlatform:
 
         os.replace(temp_file, full_file_path)
 
-    def __generate_msg_id(self):
-        pass 
-
     def __handle_message(self, delivery_tag: int, body: List[List[str]]):
         body = self._middleware.get_rows_from_message(body)
 
         logging.debug(f"GOT BATCH: {body}")
 
-        if body[0][END_TRANSMISSION_MESSAGE_INDEX] == END_TRANSMISSION_MESSAGE:
+        if body[0][END_TRANSMISSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
             logging.debug("Recived END transmssion")
             session_id = body[0][END_TRANSMISSION_CLIENT_ID]
 
@@ -105,40 +103,36 @@ class CounterByPlatform:
         #   Linux: [MSG_ID1, MSG_ID2, ...], 
         #   Mac: [MSG_ID1, MSG_ID2, ...]}, 
         # ...}
-        msg_ids_per_record_by_client_id = group_msg_ids_per_client_by_field(
-            body,
-            REGULAR_MESSAGE_CLIENT_ID,
-            REGULAR_MESSAGE_MSG_ID,
-            REGULAR_MESSAGE_FIELD_TO_COUNT_BY,
-            use_field_to_group_by_in_key=True
-        )
-        logging.debug(f'change: {msg_ids_per_record_by_client_id}')
-        self.__purge_duplicates(msg_ids_per_record_by_client_id)
+        self.__purge_duplicates(body)
 
         storage.sum_batch_to_records_per_client(
             self.storage_dir,
-            msg_ids_per_record_by_client_id,
-            self._activity_log
+            body,
+            self._activity_log,
+            use_field_to_group_by_in_key=True,
         )
 
         self._middleware.ack(delivery_tag)
 
-    def __purge_duplicates(self, msg_ids_per_record_by_client_id: Dict[str, Dict[str, List[str]]]):
-        # Para cada cliente o se actualizo el archivo completo o no se actualizo, eso queire decir
-        # que si al menos UNO de los msg_id ya estaba loggeado, ya se proceso totalemente ese cliente
+    def __purge_duplicates(self, batch: List[str]) -> List[str]:
+        # CADA mensaje individual me tengo que fijar si esta duplicado, incluido dentro del mismo batch
+        # (se puede optimizar en el middleware y cambiarlo aca tmb dsps)
 
-        client_ids_to_remove = []
-        for client_id, count_per_platform in msg_ids_per_record_by_client_id.items():
-            for platform, msg_ids in count_per_platform.items(): # TODO: Por ahi hay alguna forma mejor de hacer esto
-                an_arbitrary_message_id = msg_ids[0]
-                if self._activity_log.is_msg_id_already_processed(client_id, an_arbitrary_message_id):
-                    client_ids_to_remove.append(client_id)
-                
-                break
+        batch_msg_ids = set()
+        filtered_batch = []
+        for msg in batch: 
+            client_id = msg[REGULAR_MESSAGE_CLIENT_ID]
+            msg_id = msg[REGULAR_MESSAGE_MSG_ID]
+            if not self._activity_log.is_msg_id_already_processed(client_id, msg_id) and not msg_id in batch_msg_ids: 
+                filtered_batch.append(msg)
+                batch_msg_ids.add(msg_id)
+            else: 
+                if not msg_id in batch_msg_ids:
+                    logging.debug(f'[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (inside batch)')
+                else:
+                    logging.debug(f'[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (previously processed)')
 
-        for client_id in client_ids_to_remove: 
-            del msg_ids_per_record_by_client_id[client_id]
-        
+        return filtered_batch
 
     def __send_results(self, session_id: str):
         self._middleware.create_queue(self.publish_queue)
