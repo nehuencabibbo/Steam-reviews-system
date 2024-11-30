@@ -92,11 +92,12 @@ class CounterByPlatform:
         if body[0][END_TRANSMISSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
             logging.debug("Recived END transmssion")
             session_id = body[0][END_TRANSMISSION_CLIENT_ID]
+            msg_id = body[0][END_TRANSMISSION_MSG_ID_INDEX]
 
-            self.__send_results(session_id)
+            self.__send_results(session_id, msg_id)
             self._middleware.ack(delivery_tag)
 
-            return
+            return  
 
         # {client_id: {
         #   Windows: [MSG_ID1, MSG_ID2, ...], 
@@ -146,7 +147,9 @@ class CounterByPlatform:
         return filtered_batch
     
 
-    def __send_results(self, session_id: str):
+    def __send_results(self, session_id: str, end_msg_id: str):
+        PLATFORM = 0
+        COUNT = 1
         self._middleware.create_queue(self.publish_queue)
 
         client_dir = f"{self.storage_dir}/{session_id}"
@@ -160,12 +163,12 @@ class CounterByPlatform:
                 return
 
             self._middleware.publish(
-                [session_id, record[0], record[1]], queue_name=self.publish_queue
+                [session_id, record[PLATFORM], record[COUNT]], queue_name=self.publish_queue
             )
 
         self._middleware.publish_batch(self.publish_queue)
         self._middleware.send_end(
-            queue=self.publish_queue, end_message=[session_id, END_TRANSMISSION_MESSAGE]
+            queue=self.publish_queue, end_message=[session_id, end_msg_id, END_TRANSMISSION_MESSAGE]
         )
         logging.debug(f"Sent results to queue {self.publish_queue}")
 

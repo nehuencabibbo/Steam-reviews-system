@@ -159,7 +159,7 @@ class Middleware:
                 routing_key=queue_name,
                 body=new_batch,
             )
-            self._logger.remove_queue_state(queue_name)
+            if self._logger: self._logger.remove_queue_state(queue_name)
             logging.debug(f'RESETING BATCH TO 0 FOR {queue_name}')
             self.__batchs_per_queue[queue_name] = (
                 b"",

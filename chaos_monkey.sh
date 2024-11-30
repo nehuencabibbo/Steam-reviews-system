@@ -34,7 +34,7 @@ done
 while true; do
     if [ ${#filtered_container_names_array[@]} -eq 0 ]; then
         echo "No containers to select from."
-        break
+        continue
     fi
 
     random_index=$((RANDOM % ${#filtered_container_names_array[@]}))

@@ -104,7 +104,7 @@ def main():
     logging.debug("Logging configuration:")
     [logging.info(f"{key}: {value}") for key, value in config.items()]
 
-    middleware = Middleware(config["RABBIT_IP"])
+    middleware = Middleware(config["RABBIT_IP"], use_logging=True)
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 

@@ -13,6 +13,8 @@ from typing import *
 FILE_END_MSG = "END"
 AMMOUNT_OF_QUERIES = 5
 
+END_TRANSMISSION_END_INDEX = 2
+
 
 class Client:
 
@@ -79,7 +81,7 @@ class Client:
                 self._middleware.send([str(self._msg_id)] + row)
                 self._msg_id += 1
                 time.sleep(self._sending_wait_time)
-                time.sleep(0.02)
+                # time.sleep(0.02)
                 
         logging.debug("Sending file end")
         self._middleware.send_end(str(self._msg_id))
@@ -99,7 +101,7 @@ class Client:
         if query not in self._query_results:
             self._query_results[query] = []
 
-        if results[0][1] == "END":
+        if results[0][END_TRANSMISSION_END_INDEX] == "END":
             logging.info(f"Results for query: {query}: ")
             self.__print_results_for_query(query)
             self._amount_of_queries_received += 1

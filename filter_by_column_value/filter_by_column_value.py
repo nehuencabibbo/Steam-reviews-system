@@ -12,6 +12,10 @@ from utils.utils import node_id_to_send_to
 import signal
 import logging
 
+END_TRANSMISSION_CLIENT_ID_INDEX = 0
+END_TRANSMISSION_MSG_ID_INDEX = 1
+END_TRANSMISSION_END_INDEX = 2
+
 
 class FilterColumnByValue:
     def __init__(
@@ -97,14 +101,15 @@ class FilterColumnByValue:
         #     Si es asi => No agrego nada y reencolo
         #     Si no es asi => Agrego mi id a la lista y reencolo
 
-        peers_that_recived_end = body[2:]
-        client_id = body[0]
+        client_id = body[END_TRANSMISSION_CLIENT_ID_INDEX]
+        msg_id = body[END_TRANSMISSION_MSG_ID_INDEX]
+        peers_that_recived_end = body[END_TRANSMISSION_END_INDEX + 1:]
 
         if len(peers_that_recived_end) == int(self._instances_of_myself):
-            self.__send_end_transmission_to_all_forwarding_queues(client_id)
+            self.__send_end_transmission_to_all_forwarding_queues(client_id, msg_id)
         else:
-
-            message = [client_id, END_TRANSMISSION_MESSAGE]
+            # TODO: USAR DIRECTAMENTE EL BODY NO CREAR LA LISTA
+            message = [client_id, msg_id, END_TRANSMISSION_MESSAGE]
             if not self._node_id in peers_that_recived_end:
                 peers_that_recived_end.append(self._node_id)
 
@@ -125,10 +130,10 @@ class FilterColumnByValue:
 
                 self._middleware.publish_batch(full_queue_name)
 
-    def __send_end_transmission_to_all_forwarding_queues(self, client_id: str):
+    def __send_end_transmission_to_all_forwarding_queues(self, client_id: str, msg_id: str):
         # TODO: Repeated code between this and send last batch, remove
         for i in range(len(self._amount_of_forwarding_queues)):
-            amount_of_current_queue = self._amount_of_forwarding_queues[i]
+            amount_of_current_queue = self._amount_of_forwarding_queues[i]  
             queue_name = self._forwarding_queue_names[i]
 
             for queue_number in range(amount_of_current_queue):
@@ -137,7 +142,7 @@ class FilterColumnByValue:
 
                 self._middleware.send_end(
                     queue=full_queue_name,
-                    end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                    end_message=[client_id, msg_id, END_TRANSMISSION_MESSAGE],
                 )
 
     def __handle_message(self, delivery_tag: int, body: bytes):
@@ -145,7 +150,7 @@ class FilterColumnByValue:
         for message in body:
             logging.debug(f"Recived message: {message}")
 
-            if message[1] == END_TRANSMISSION_MESSAGE:
+            if message[END_TRANSMISSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"GOT END: {body}")
                 self.__send_last_batch_to_fowarding_queues()
                 self.__handle_end_transmission(message)
