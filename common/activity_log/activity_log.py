@@ -7,10 +7,7 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import * 
-from storage.storage import (
-    atomically_append_to_file,
-    create_file_if_unexistent,
-)
+from storage.storage import create_file_if_unexistent
 from .constants import * 
 
 
@@ -32,7 +29,7 @@ class ActivityLog:
         # porque loggea los ends de juegos y reviews
         self._range_for_partition = range_for_partition
         self._procesed_lines_file_prefix = 'procesed_lines'
-        self._ends_file_name = 'ends.txt'
+        self._ends_file_prefix = 'ends'
         self._middleware_dir = os.path.join(self._dir, 'middleware')
         # Range used to separte the distinct processed lines onto files
 
@@ -53,44 +50,50 @@ class ActivityLog:
     def _get_partition_file_name(self, msg_id: int):
         return f"{self._procesed_lines_file_prefix}_{msg_id//self._range_for_partition}.txt"
     
-    def _get_ends_file_path(self, client_id: str): 
-        return os.path.join(self._dir, client_id, self._ends_file_name)
+    def _get_ends_file_name(self, end_logging: str = ''):
+        return f'{self._ends_file_prefix}{end_logging}.txt'
+
+    # def _get_ends_file_path(self, client_id: str, end_logging: str = ''): 
+    #     return os.path.join(self._dir, client_id, self._ends_file_name)
     
-    def __add_end_to_client(self, client_id: str, end_logging: int = 0):
-        temp_file_path = os.path.join(self._dir, client_id, 'temp.txt')
-        file_path = self._get_ends_file_path(client_id)
+    # def __add_end_to_client(self, client_id: str, end_logging: int = 0):
+    #     temp_file_path = os.path.join(self._dir, client_id, 'temp.txt')
+    #     file_path = self._get_ends_file_path(client_id, str(end_logging) if self._log_two_ends else '')
 
-        with open(file_path, 'r') as original, open(temp_file_path, 'w') as temp: 
-            amount = original.readline().strip()
-            # File was empty
-            if amount == '':
-                line_to_write = '1'
-                if self._log_two_ends:
-                    line_to_write = ['0', '0']
-                    line_to_write[end_logging] = '1'
-                    line_to_write = ','.join(line_to_write)
+    #     with open(file_path, 'r') as original, open(temp_file_path, 'w') as temp: 
+    #         for line in original: 
 
-                temp.write(line_to_write + '\n')
-            else: 
-                if self._log_two_ends:
-                    # Solo le sumo a la linea correspondiente
-                    line_to_write = amount.split(',')
-                    line_to_write[end_logging] = str(int(line_to_write[end_logging]) + 1)
-                    line_to_write = ','.join(line_to_write)
+    #         amount = original.readline().strip()
+    #         # File was empty
+    #         if amount == '':
+    #             line_to_write = '1'
+    #             if self._log_two_ends:
+    #                 line_to_write = ['0', '0']
+    #                 line_to_write[end_logging] = '1'
+    #                 line_to_write = ','.join(line_to_write)
 
-                    temp.write(line_to_write + '\n')
-                else: 
-                    line_to_write = f'{int(amount) + 1}'
+    #             temp.write(line_to_write + '\n')
+    #         else: 
+    #             if self._log_two_ends:
+    #                 # Solo le sumo a la linea correspondiente
+    #                 line_to_write = amount.split(',')
+    #                 line_to_write[end_logging] = str(int(line_to_write[end_logging]) + 1)
+    #                 line_to_write = ','.join(line_to_write)
 
-                    temp.write(line_to_write + '\n')
+    #                 temp.write(line_to_write + '\n')
+    #             else: 
+    #                 line_to_write = f'{int(amount) + 1}'
 
-        os.replace(temp_file_path, file_path)
+    #                 temp.write(line_to_write + '\n')
 
-    def __append_msg_ids(self, dir: str, file_name: str, msg_ids: List[str]):
+    #     os.replace(temp_file_path, file_path)
+
+    def __append_msg_ids(self, directory: str, file_name: str, msg_ids: List[str]) -> bool:
         # If file is large this is really ineficient
-        temp_file_path = os.path.join(dir, 'temp_append.txt')
-        file_path = os.path.join(dir, file_name)
+        temp_file_path = os.path.join(directory, 'temp_append.txt')
+        file_path = os.path.join(directory, file_name)
 
+        os.makedirs(directory, exist_ok=True)
         create_file_if_unexistent(file_path)
         found_duplicate = False
         with open(file_path, 'r') as original, open(temp_file_path, 'w') as temp: 
@@ -111,6 +114,8 @@ class ActivityLog:
             os.remove(temp_file_path)
         else:
             os.replace(temp_file_path, file_path)
+
+        return found_duplicate #To indicate if duplicate was found or not for duplicate detection for END
 
     def _get_file_name_for_middleware_queue(self, queue_name: str) -> str: 
         return f'{queue_name}.bin'
@@ -211,12 +216,12 @@ class ActivityLog:
             self.__append_msg_ids(client_dir, file_name, msg_ids)
 
 
-    def _log_to_general_log(self, client_id: str, data: List[str], msg_ids: List[str], log_type: str): 
+    def _log_to_general_log(self, client_id: str, data: List[str], msg_ids: List[str]):
         # La linea se pisa todo el rato, pq? porque si yo estoy escribiendo 
         # denuevo una linea (llegue hasta esta funcion), eso quiere decir
         # que ya se termino de bajar a disco la linea anterior (es
         # secuencial), por lo tanto ya no necesito la linea anterior
-        data_in_bytes = self.__get_line_for_general_log(data, log_type=log_type)
+        data_in_bytes = self.__get_line_for_general_log(data)
         msg_ids_in_bytes = self.__get_line_for_general_log(msg_ids, client_id=client_id)
         # logging.debug(f'EXPECTED DATA: {data_in_bytes}')
         # logging.debug(f'EXPECTED MSG_IDS: {msg_ids_in_bytes}')
@@ -238,49 +243,28 @@ class ActivityLog:
 
         # Para que el general log sea valido tiene que tener dos lineas y ambas tienen que estar
         # integras 
-        self._log_to_general_log(client_id, data, msg_ids, GENERAL_LOGGING)
+        self._log_to_general_log(client_id, data, msg_ids)
         self._log_to_processed_lines(client_id, msg_ids)
 
-    def log_end(self, client_id: str, msg_id: str, end_logging: int = 0):
+    def log_end(self, client_id: str, msg_id: str, end_logging: str = '') -> bool:
         '''
-        If log_two_ends = True on startup, then end_logging should be specified.
+        If log_two_ends = True on startup, then end_logging must be specified.
 
-        log_two_ends indicates that amount_of_ends1,amount_of_ends2 will be logged to
-        end log
+        It should be either 0 or 1.
 
-        end_logging = 0 will add 1 to amount_of_ends1, and end_logging = 1 will update 
-        amount_of_ends2
+        Returns if msg_id was duplicated or not
         '''
-        # Hay un par de casos aca: 
-        #       1 - Se cae antes de loggear al log general => No pasa nada
-        #       2 - Se cae mientras loggea al log general => No pasa nada
-        #       3 - Se cae justo despues de loggear al log general => 
-        #               Se recupera el estado tanto de los ENDs como
-        #               como de los mensajes procesados
-        #       4 - Se cae mientras le agrega al end => Es atomica la operacion,
-        #               si se produce esta todo bien, si no se produce al recuperar
-        #               se va a leer el log general y se va a recuperar el estado
-        #       5 - Se cae justo despues de agregar al END => El msg id se va a 
-        #           recuperar con el log general, y al recuperar el estado del end
-        #           al ser el mismo que el actual se va a pisar y no va a pasar nada
-        #       6 - Se cae en el medio de loggear las lineas procesadas => No hay problema, 
-        #           se recuperan con el log general
-        msg_id = [msg_id]
-        new_amount_of_ends = self._get_amount_of_ends(client_id)
-        # Si se estan loggeando dos ends (end1,end2), solo le sumo al que me indican por parametro
-        if self._log_two_ends:
-            new_amount_of_ends = new_amount_of_ends.split(',')
-            new_amount_of_ends[end_logging] = str(int(new_amount_of_ends[end_logging]) + 1)
-            new_amount_of_ends = ','.join(new_amount_of_ends)
-        else: 
-            new_amount_of_ends = str(int(new_amount_of_ends) + 1)
-        data_to_log = [
-            self._get_ends_file_path(client_id),
-            new_amount_of_ends,
-        ]
-        self._log_to_general_log(client_id, data_to_log, msg_id, END_LOGGING)
-        self.__add_end_to_client(client_id, end_logging=end_logging)
-        self._log_to_processed_lines(client_id, msg_id)
+        if not self._log_two_ends and end_logging != '':
+            raise ActivityLogError('Cannot pass end_logging as argument as log_two_ends = False')
+        
+        if self._log_two_ends and end_logging == '':
+            raise ActivityLogError('Need to pass end_logging argument as log_two_ends = True')
+
+        client_dir = os.path.join(self._dir, client_id)
+        file_name = self._get_ends_file_name(end_logging)
+        end_was_duplicate = self.__append_msg_ids(client_dir, file_name, [msg_id])
+
+        return end_was_duplicate
 
     def log_for_middleware(self, queue_name: str, msg: bytes):
         # En caso de querer agregar tambien las lineas procesadas para filtrar duplicados
@@ -299,26 +283,20 @@ class ActivityLog:
     '''
     READING LOG
     '''
-    def _get_amount_of_ends(self, client_id: str) -> str: 
+    def _get_amount_of_ends(self, client_id: str, end_logging: str = '') -> int: 
         '''
-        Returns the raw amount of ends read without \n, 
-        if client had 0 ends, then '0' is returned.
-        
-        if log_two_ends is set to True and client has
-        no ends, then 0,0 is returned
+        Returns the raw amount of ends read for certain type of end
         '''
-        full_path = self._get_ends_file_path(client_id)
+        full_path = os.path.join(self._dir, client_id, self._get_ends_file_name(end_logging))
         os.makedirs(os.path.join(self._dir, client_id), exist_ok=True) 
         create_file_if_unexistent(full_path)
 
+        amount = 0
         with open(full_path, 'r') as ends:
-            # File is only one line
-            amount = ends.readline().strip()
+            for _ in ends:
+                amount += 1
 
-        if self._log_two_ends:
-            return '0,0' if amount == '' else amount
-        
-        return '0' if amount == '' else amount
+        return amount
 
     def read_general_log(self):
         '''
@@ -425,18 +403,12 @@ class ActivityLog:
         try:
             for line_type, line in enumerate(self.read_general_log()):
                 if line_type == FILE_STATE_LINE: 
-                    log_type = line[0]
-                    full_file_path_to_recover = line[1]
-                    file_state = line[2:]
+                    full_file_path_to_recover = line[0]
+                    file_state = line[1:]
 
                 elif line_type == MSG_IDS_LINE: 
                     client_id = line[0]
                     msg_ids =  line[1:]
-                    if log_type == END_LOGGING:
-                        # Si se loggeo un END, entonces recupero el estado del archivo
-                        # directamente aca porque todo lo de los ends es interno
-                        self.__override_end_file_value(client_id, int(file_state[0]))
-
                     self._log_to_processed_lines(client_id, msg_ids)
                 
                 read_lines += 1
@@ -447,10 +419,6 @@ class ActivityLog:
         if read_lines != 2: 
             # Es re dificil que pase, pero puede llegar a leer solo una bien
             return None, None 
-        
-        if log_type == END_LOGGING:
-            # Si se estaba loggeando un end toda la recuperacion es interna
-            return None, None
 
         return full_file_path_to_recover, file_state
     
@@ -509,14 +477,16 @@ class ActivityLog:
             if not os.path.isdir(os.path.join(self._dir, client_id)):
                 continue
             
-            amount = self._get_amount_of_ends(client_id)
-            if self._log_two_ends:
-                amount = amount.split(',')
+            if self._log_two_ends: 
+                amount_end_0 = self._get_amount_of_ends(client_id, '0')
+                amount_end_1 = self._get_amount_of_ends(client_id, '1')
 
-                result[client_id] = int(amount[0])
-                result2[client_id] = int(amount[1])
+                if amount_end_0 != 0: result[client_id] = int(amount_end_0)
+                if amount_end_1 != 0: result2[client_id] = int(amount_end_1)
             else: 
-                result[client_id] = int(amount)
+                amount = self._get_amount_of_ends(client_id)
+
+                if amount != 0: result[client_id] = int(amount)
 
         if self._log_two_ends:
             return result, result2
