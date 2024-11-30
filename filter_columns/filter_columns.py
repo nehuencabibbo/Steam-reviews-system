@@ -9,7 +9,10 @@ import logging
 
 GAMES_MESSAGE_TYPE = "games"
 REVIEWS_MESSAGE_TYPE = "reviews"
+
 END_TRANSMISSION_MESSAGE = "END"
+END_TRANSMSSION_MSG_ID_INDEX = 0
+END_TRANSMSSION_END_INDEX = 1 #SOLO PORQUE SE POPEA EL CLIENT ID ANTES ACA, sino seria 2 pq viene [cleint_id, msg_id, END_TRANSMISSION_MESSAGE]
 
 
 class FilterColumns:
@@ -102,25 +105,31 @@ class FilterColumns:
         # Have to check if it's a client end, in which case only "END" is received, otherwise, the client ID comes
         # first
         # peers_that_recived_end = body[1:] if len(body) == 1 else body[2:]
-        peers_that_recived_end = body[1:]
+        
+        # Recived message: 
+        # [msg_id, END, peer1, peer2, ..., peerN], where peer is a node that has already recived the 
+        # end and added it's msg id to the msg
+        peers_that_recived_end = body[END_TRANSMSSION_END_INDEX + 1:]
+        end_msg_id = body[END_TRANSMSSION_MSG_ID_INDEX]
 
         if len(peers_that_recived_end) == int(self._instances_of_myself):
             logging.debug("Sending real END")
             self._middleware.send_end(
                 queue=forwarding_queue_name,
-                end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                end_message=[client_id, end_msg_id, END_TRANSMISSION_MESSAGE],
             )
         else:
             self._middleware.publish_batch(forwarding_queue_name)
             # TODO: cambiar esto, por que se crea otra lista??? reusar la de body y fulbo
             # Si lo dejamos asi, un set para mejor eficiencia en vez de una lista
-            message = [client_id, END_TRANSMISSION_MESSAGE]
+            # rta: ESTO ES BOCAAAAAAAAAAAAAAAAAA
+            message = [client_id, end_msg_id, END_TRANSMISSION_MESSAGE]
             if not self._node_id in peers_that_recived_end:
                 peers_that_recived_end.append(self._node_id)
 
             message += peers_that_recived_end
             self._middleware.publish_message(message, reciving_queue_name)
-            logging.debug(f"Publishing: {message} in {reciving_queue_name}")
+            logging.debug(f"[END MESSAGE ALGORITHM] Publishing {message} in {reciving_queue_name}")
 
     def __handle_games(
         self,
@@ -141,7 +150,7 @@ class FilterColumns:
         for message in body:
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
-            if message[0] == END_TRANSMISSION_MESSAGE:
+            if message[END_TRANSMSSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived END of games: {message}")
                 self.__handle_end_transmission(
                     message,
@@ -189,7 +198,7 @@ class FilterColumns:
 
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
-            if message[0] == END_TRANSMISSION_MESSAGE:
+            if message[END_TRANSMSSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived END of reviews: {message}")
 
                 self.__handle_end_transmission(

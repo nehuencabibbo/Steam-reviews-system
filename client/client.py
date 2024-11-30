@@ -81,7 +81,7 @@ class Client:
                 time.sleep(self._sending_wait_time)
                 
         logging.debug("Sending file end")
-        self._middleware.send_end()
+        self._middleware.send_end(str(self._msg_id))
 
     def __print_results_for_query(self, query):
         for result in self._query_results[query]:

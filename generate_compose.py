@@ -6,8 +6,8 @@ from typing import *
 
 CLIENTS_PORT = 7777
 
-AMOUNT_OF_DROP_FILTER_COLUMNS = 5
-AMOUNT_OF_DROP_NULLS = 5
+AMOUNT_OF_DROP_FILTER_COLUMNS = 2
+AMOUNT_OF_DROP_NULLS = 2
 # Q2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
@@ -949,28 +949,28 @@ def generate_output():
     # ; GAME_FILE_PATH=data/filtered_games.csv
     # ; REVIEWS_FILE_PATH=data/filtered_reviews.csv
 
-    # add_client(
-    #     output,
-    #     num=1,
-    #     games_file_path="data/games_sample.csv",
-    #     reviews_file_path="data/reviews_sample.csv",
-    #     debug=True,
-    # )
     add_client(
         output,
-        num=2,
-        # games_file_path="data/games.csv",
-        # reviews_file_path="data/reviews_sample.csv",
-        games_file_path="data/games.csv",
-        reviews_file_path="data/filtered_reviews.csv",
-        debug=False,
+        num=1,
+        games_file_path="data/games_sample.csv",
+        reviews_file_path="data/reviews_sample.csv",
+        debug=True,
     )
+    # add_client(
+    #     output,
+    #     num=2,
+    #     # games_file_path="data/games.csv",
+    #     # reviews_file_path="data/reviews_sample.csv",
+    #     games_file_path="data/games.csv",
+    #     reviews_file_path="data/filtered_reviews.csv",
+    #     debug=False,
+    # )
     add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT)
     generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=True)
-    # generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
 
     # # -------------------------------------------- Q1 -----------------------------------------
-    # generate_q1(output=output, debug=True)
+    generate_q1(output=output, debug=True)
     #   -------------------------------------------- Q2 -----------------------------------------
     # generate_q2(output=output, debug=True)
     # -------------------------------------------- Q3 -----------------------------------------

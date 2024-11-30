@@ -74,8 +74,8 @@ class ClientMiddleware:
         self.__socket.send(batch)
         self.__batch = [b"", 0]
 
-    def send_end(self, end_message: str = END_TRANSMISSION_MESSAGE):
-        end_message = self.__protocol.add_to_batch(b"", [end_message])
+    def send_end(self, msg_id: str, end_message: str = END_TRANSMISSION_MESSAGE):
+        end_message = self.__protocol.add_to_batch(b"", [msg_id, end_message])
 
         self._send_batch()
         self.__socket.send(end_message)

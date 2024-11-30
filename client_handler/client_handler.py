@@ -83,7 +83,7 @@ class ClientHandler:
                     client_id=client_id_hex,
                     batch=message,
                 )
-
+                logging.debug(f'[MESSAGE]: {message}')
                 if message[-3:] == b"END":
 
                     if forwarding_queue_name == self._reviews_queue_name:
