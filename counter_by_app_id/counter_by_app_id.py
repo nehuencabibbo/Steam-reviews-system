@@ -45,6 +45,7 @@ class CounterByAppId:
 
         self._ends_received_per_client = self._activity_log.recover_ends_state()
 
+    def _resume_publish_if_necesary(self):
         for client_id, amount in self._ends_received_per_client.items():
             if amount == self._needed_ends: 
                 # Internamente borra todo
@@ -61,6 +62,7 @@ class CounterByAppId:
         callback = self._middleware.__class__.generate_callback(self.__handle_message)
         self._middleware.attach_callback(consume_queue_name, callback)
 
+        self._resume_publish_if_necesary()
         try:
             logging.debug("Starting to consume...")
             self._middleware.start_consuming()
@@ -169,7 +171,7 @@ class CounterByAppId:
                 else:
                     logging.debug(f'[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (previously processed)')
 
-        return filtered_batch
+        return filtered_batch   
 
 
     def __send_results(self, client_id: str):

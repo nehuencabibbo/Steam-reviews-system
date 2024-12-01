@@ -1,6 +1,7 @@
 # Protocol
 END_TRANSMISSION_MESSAGE = "END"
-APP_ID = 1
+APP_ID = 2
+MSG_ID = 1
 CLIENT_ID = 0
 
 # Criteria
