@@ -4,6 +4,8 @@ from configparser import ConfigParser
 import logging
 from common.middleware.middleware import Middleware
 from common.watchdog_client.watchdog_client import WatchdogClient
+from common.activity_log.activity_log import ActivityLog
+
 
 
 def get_config():
@@ -98,8 +100,9 @@ def main():
     node_name = config.pop("NODE_NAME")
     discovery_port = config.pop("LEADER_DISCOVERY_PORT")
     monitor = WatchdogClient(monitor_ip, monitor_port, node_name, discovery_port, middleware)
+    activity_log = ActivityLog()
 
-    counter = CounterByAppId(config, middleware, monitor)
+    counter = CounterByAppId(config, middleware, monitor, activity_log)
     logging.info("RUNNING COUNTER")
     counter.run()
 

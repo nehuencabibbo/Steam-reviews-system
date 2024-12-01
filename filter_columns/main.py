@@ -95,7 +95,7 @@ def main():
     logging.debug("Logging configuration:")
     [logging.debug(f"{key}: {value}") for key, value in config.items()]
 
-    middleware = Middleware(config["RABBIT_IP"])
+    middleware = Middleware(config["RABBIT_IP"], use_logging=True)
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
@@ -105,9 +105,8 @@ def main():
     discovery_port = config.pop("LEADER_DISCOVERY_PORT")
     monitor = WatchdogClient(monitor_ip, monitor_port, node_name, discovery_port, middleware)
 
-    protocol = Protocol()
+    filter_columns = FilterColumns(middleware, monitor, config)
 
-    filter_columns = FilterColumns(protocol, middleware, monitor, config)
     filter_columns.start()
 
 

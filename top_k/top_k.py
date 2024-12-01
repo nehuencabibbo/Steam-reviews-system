@@ -1,7 +1,9 @@
 import logging
+import os
 import signal
 import threading
 
+from common.activity_log.activity_log import ActivityLog
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
     read_sorted_file,
@@ -10,13 +12,18 @@ from common.storage.storage import (
 )
 from common.watchdog_client.watchdog_client import WatchdogClient
 
+from typing import *
 
 END_TRANSMISSION_MESSAGE = "END"
 SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
+END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX = 0
+END_TRANSMISSION_MESSAGE_MSG_ID_INDEX = 1
+END_TRANSMISSION_MESSAGE_END_INDEX = 2
+
 
 class TopK:
-    def __init__(self, middleware: Middleware, monitor: WatchdogClient, config: dict[str, str]):
+    def __init__(self, middleware: Middleware, monitor: WatchdogClient, config: dict[str, str], activity_log: ActivityLog):
         self.__middleware = middleware
         self._client_monitor = monitor
 
@@ -27,7 +34,11 @@ class TopK:
         self._input_top_k_queue_name = config["INPUT_TOP_K_QUEUE_NAME"]
         self._amount_of_receiving_queues = config["AMOUNT_OF_RECEIVING_QUEUES"]
         self._output_top_k_queue_name = config["OUTPUT_TOP_K_QUEUE_NAME"]
-        self._k = config["K"]
+        self._k = int(config["K"])
+        self._activity_log = activity_log
+
+        self.__total_ends_received_per_client = self._activity_log.recover_ends_state()
+
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -58,6 +69,8 @@ class TopK:
             f"{self._node_id}_{self._input_top_k_queue_name}",
             games_callback,
         )
+
+        self.__resume_publish_if_necesary()
         try:
             self.__middleware.start_consuming()
         except MiddlewareError as e:
@@ -66,6 +79,33 @@ class TopK:
         finally:
             self.__middleware.shutdown()
             monitor_thread.join()
+
+    def __resume_publish_if_necesary(self):
+        # Si me cai mientras estaba mandando los resultados (me llego el ultimo END)
+        # tengo que retomar mandar los resultados
+        client_ids_to_clear = []
+        for client_id, amount in self.__total_ends_received_per_client.items():
+            if amount == self._amount_of_receiving_queues: 
+                
+                self.__middleware.create_queue(self._output_top_k_queue_name)
+                # TODO: HANDELEAR CASO QUE SE ROMPA MID MANDAR COSAS
+                logging.debug('Sending top [Restart]')
+                self.__send_top(self._output_top_k_queue_name, client_id=client_id)
+
+                
+                end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
+                self.__middleware.send_end(
+                    queue=self._output_top_k_queue_name,
+                    end_message=end_message,
+                )
+                client_ids_to_clear.append(client_id)
+
+        for client_id in client_ids_to_clear:   
+            client_storage_dir = f"/tmp/{client_id}"
+            # TODO: Si se rompe mientras borra la data del cliente tambien hay que
+            # handelearlo
+            self._clear_client_data(client_id, client_storage_dir)
+            self._activity_log.remove_client_logs(client_id)
 
     def __callback(self, delivery_tag, body, message_type):
         body = self.__middleware.get_rows_from_message(body)
@@ -97,32 +137,12 @@ class TopK:
             self.__middleware.ack(delivery_tag)
             return
 
-        if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
-            client_id = body[0][0]
-            self.__total_ends_received_per_client[client_id] = (
-                self.__total_ends_received_per_client.get(client_id, 0) + 1
-            )
+        if len(body) == 1 and body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
             logging.debug("END of games received")
+            client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
+            msg_id = body[0][END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
 
-            if (
-                self.__total_ends_received_per_client[client_id]
-                == self._amount_of_receiving_queues
-            ):
-                forwarding_queue = self._output_top_k_queue_name
-                # Add the client id if its sink node
-                forwarding_queue_name = forwarding_queue
-
-                self.__middleware.create_queue(forwarding_queue_name)
-                self.__send_top(forwarding_queue_name, client_id=client_id)
-
-                end_message = [client_id, END_TRANSMISSION_MESSAGE]
-                self.__middleware.send_end(
-                    queue=forwarding_queue_name,
-                    end_message=end_message,
-                )
-
-                client_storage_dir = f"/tmp/{client_id}"
-                self._clear_client_data(client_id, client_storage_dir)
+            self.__handle_end_transmission(client_id, msg_id)
 
             self.__middleware.ack(delivery_tag)
 
@@ -130,7 +150,10 @@ class TopK:
 
         try:
             add_batch_to_sorted_file_per_client(
-                "tmp", body, ascending=False, limit=int(self._k)
+                "tmp",
+                body,
+                ascending=False,
+                limit=self._k,
             )
 
         except ValueError as e:
@@ -140,13 +163,73 @@ class TopK:
 
         self.__middleware.ack(delivery_tag)
 
+    def __handle_end_transmission(self, client_id: str, msg_id: str):
+        if not os.path.exists(os.path.join('tmp', client_id)):
+            # Si se borro la data del cliente, eso quiere decir que
+            # se le mando el top, se borro la data y este end esta duplicado 
+            # o que esto es un END pelado del cliente
+            # 
+            # Por el segundo caso no puedo descartar el END y tengo que mandarlo,
+            # asi que simplemente propago el END, y luego el client_handler va a filtrar
+            # para no mandar duplicados al cliente o mandarle ENDS pelados sin data sin sentido 
+            logging.debug('Recived END, but client directory was already deleted. Propagating END')
+
+            end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
+            self.__middleware.send_end(
+                queue=self._output_top_k_queue_name,
+                end_message=end_message,
+            )
+
+            return 
+        
+
+        end_was_duplicated = self._activity_log.log_end(client_id, msg_id)
+        if end_was_duplicated: return
+
+        self.__total_ends_received_per_client[client_id] = (
+            self.__total_ends_received_per_client.get(client_id, 0) + 1
+        )
+
+        if (
+            self.__total_ends_received_per_client[client_id]
+            == self._amount_of_receiving_queues
+        ):
+            self.__middleware.create_queue(self._output_top_k_queue_name)
+            # TODO: HANDELEAR CASO QUE SE ROMPA MID MANDAR COSAS
+            logging.debug('Sending top [Handle end transmssion]')
+            self.__send_top(self._output_top_k_queue_name, client_id=client_id)
+
+            end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
+            self.__middleware.send_end(
+                queue=self._output_top_k_queue_name,
+                end_message=end_message,
+            )
+
+            client_storage_dir = f"/tmp/{client_id}"
+            # TODO: Si se rompe mientras borra la data del cliente tambien hay que
+            # handelearlo
+            self._clear_client_data(client_id, client_storage_dir)
+            self._activity_log.remove_client_logs(client_id)    
+
     def __send_top(self, forwarding_queue_name, client_id):
+        NAME = 0
+        COUNT = 1
+        MSG_ID = 2
+        logging.debug("Sending the following top:")
         for record in read_sorted_file(f"tmp/{client_id}"):
-            # if not "Q" in forwarding_queue_name:
-            record.insert(0, client_id)
+            # Si no se lo paso a un agregador, sino que se lo estoy mandando al cliente,
+            # le tengo que mandar solo lo que le interesa
+            if "Q" in forwarding_queue_name:
+                record = [client_id, record[NAME], record[COUNT]]
+            # Si se lo paso a un agregador, se lo tengo que pasar en el orden
+            # en el que yo mismo lo espero
+            else:
+                record = [client_id, record[MSG_ID], record[NAME], record[COUNT]]
+
+            logging.debug(record)
             self.__middleware.publish(record, forwarding_queue_name, "")
 
-        self.__middleware.publish_batch(forwarding_queue_name)
+        self.__middleware.publish_batch(forwarding_queue_name)  
         logging.debug(f"Top sent to queue: {forwarding_queue_name}")
 
     def _clear_client_data(self, client_id: str, storage_dir: str):
@@ -156,22 +239,7 @@ class TopK:
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
 
-        try:
-            self.__total_timeouts_received_per_client.pop(
-                client_id
-            )  # removed timeout count for the client
-        except KeyError:
-            # When can this happen? when the timeout comes before the client data (for whatever reason)
-            logging.debug(
-                f"No session found with id: {client_id} while removing ends. Omitting."
-            )
-
-        try:
-            self.__total_ends_received_per_client.pop(
-                client_id
-            )  # removed end count for the client
-        except KeyError:
-            # When can this happen? when the there was no timeout for a given client
-            logging.debug(
-                f"No session found with id: {client_id} while removing timeouts. Omitting."
-            )
+        if client_id in self.__total_ends_received_per_client:
+            del self.__total_ends_received_per_client[client_id]
+        if client_id in self.__total_timeouts_received_per_client:
+            del self.__total_timeouts_received_per_client[client_id]

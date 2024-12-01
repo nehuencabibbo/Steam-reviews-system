@@ -19,6 +19,8 @@ MAX_RESTART_SESSION_RETRIES = 8
 MAX_NEW_SESSION_RETRIES = 3
 MAX_SESSION_ACKS_RETRIES = 5
 
+END_TRANSMISSION_END_INDEX = 2
+
 
 class Client:
 
@@ -46,6 +48,9 @@ class Client:
         self._heartbeat_timeout = threading.Event()
         self._restart_session_timeout = threading.Event()
         self._has_restarted = False
+
+        # TODO: Encapsular esto en el middleware
+        self._msg_id = 0 
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -271,7 +276,7 @@ class Client:
             self._query_results[query] = []
 
         for result in results:
-            if result[0] == "END":
+            if result[END_TRANSMISSION_END_INDEX] == "END":
                 logging.info(f"Results for query: {query}: ")
                 self.__print_results_for_query(query)
                 self._queries_results_left.remove(query)

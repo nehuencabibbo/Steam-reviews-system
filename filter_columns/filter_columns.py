@@ -4,7 +4,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import *
 from common.middleware.middleware import Middleware, MiddlewareError
-from common.protocol.protocol import Protocol
 from common.watchdog_client.watchdog_client import WatchdogClient
 
 import signal
@@ -13,19 +12,20 @@ import threading
 
 GAMES_MESSAGE_TYPE = "games"
 REVIEWS_MESSAGE_TYPE = "reviews"
+
 END_TRANSMISSION_MESSAGE = "END"
 SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
+END_TRANSMSSION_MSG_ID_INDEX = 0
+END_TRANSMSSION_END_INDEX = 1 #SOLO PORQUE SE POPEA EL CLIENT ID ANTES ACA, sino seria 2 pq viene [cleint_id, msg_id, END_TRANSMISSION_MESSAGE]
 
 
 class FilterColumns:
     def __init__(
         self,
-        protocol: Protocol,
         middleware: Middleware,
         monitor: WatchdogClient,
         config: Dict[str, Union[str, int]],
     ):
-        self._protocol = protocol
         self._middleware = middleware
         self._got_sigterm = False
         self._client_monitor = monitor
@@ -81,12 +81,18 @@ class FilterColumns:
             reviews_callback,
         )
 
+        print("CKPT 3")
         try:
             self._middleware.start_consuming()
+            print("CKPT 4")
         except MiddlewareError as e:
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
+            print(f"{e}")
+
+        except SystemExit as e:
+            print(f"System exit")
         finally:
             self._middleware.shutdown()
             monitor_thread.join()
@@ -109,27 +115,31 @@ class FilterColumns:
         # Have to check if it's a client end, in which case only "END" is received, otherwise, the client ID comes
         # first
         # peers_that_recived_end = body[1:] if len(body) == 1 else body[2:]
-        peers_that_recived_end = (
-            body[1:] if body[0] == END_TRANSMISSION_MESSAGE else body[2:]
-        )
+        
+        # Recived message: 
+        # [msg_id, END, peer1, peer2, ..., peerN], where peer is a node that has already recived the 
+        # end and added it's msg id to the msg
+        peers_that_recived_end = body[END_TRANSMSSION_END_INDEX + 1:]
+        end_msg_id = body[END_TRANSMSSION_MSG_ID_INDEX]
 
         if len(peers_that_recived_end) == int(self._instances_of_myself):
             logging.debug("Sending real END")
             self._middleware.send_end(
                 queue=forwarding_queue_name,
-                end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                end_message=[client_id, end_msg_id, END_TRANSMISSION_MESSAGE],
             )
         else:
             self._middleware.publish_batch(forwarding_queue_name)
             # TODO: cambiar esto, por que se crea otra lista??? reusar la de body y fulbo
             # Si lo dejamos asi, un set para mejor eficiencia en vez de una lista
-            message = [client_id, END_TRANSMISSION_MESSAGE]
+            # rta: ESTO ES BOCAAAAAAAAAAAAAAAAAA
+            message = [client_id, end_msg_id, END_TRANSMISSION_MESSAGE]
             if not self._node_id in peers_that_recived_end:
                 peers_that_recived_end.append(self._node_id)
 
             message += peers_that_recived_end
             self._middleware.publish_message(message, reciving_queue_name)
-            logging.debug(f"Publishing: {message} in {reciving_queue_name}")
+            logging.debug(f"[END MESSAGE ALGORITHM] Publishing {message} in {reciving_queue_name}")
 
     def __handle_timeout(
         self,
@@ -178,16 +188,18 @@ class FilterColumns:
         forwarding_queue_name: str,
     ):
         body = self._middleware.get_rows_from_message(body)
-        logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived games body: {body}")
+        logging.debug(f"ROWS: {body}")
+        # logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived games body: {body}")
         if len(body) > 1:
             client_id = body.pop(0)[0]  # Get client_id,
         else:
             client_id = body[0].pop(0)  # END message scenario
 
-        logging.debug(f"client_id: {client_id}")
+        # logging.debug(f"client_id: {client_id}")
         for message in body:
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
+
             if message[0] == SESSION_TIMEOUT_MESSAGE:
                 logging.info(
                     f"Received TIMEOUT while processing games for client: {client_id}"
@@ -202,12 +214,7 @@ class FilterColumns:
 
                 return
 
-            # TODO: handle message ids
-            if (
-                message[0] == END_TRANSMISSION_MESSAGE
-                or len(message) > 1
-                and message[1] == END_TRANSMISSION_MESSAGE
-            ):
+            if message[END_TRANSMSSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived END of games: {message}")
                 self.__handle_end_transmission(
                     message,
@@ -220,7 +227,7 @@ class FilterColumns:
 
                 return
 
-            logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived game: {message}")
+            # logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived game: {message}")
 
             columns_to_keep = []
             columns_to_keep = self._game_columns_to_keep
@@ -229,7 +236,7 @@ class FilterColumns:
                 columns_to_keep, message, client_id=client_id
             )
 
-            logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending games: {message}")
+            # logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending games: {message}")
 
             self._middleware.publish(filtered_body, forwarding_queue_name, "")
 
@@ -249,7 +256,7 @@ class FilterColumns:
         else:
             client_id = body[0].pop(0)  # END message scenario
 
-        logging.debug(f"client_id: {client_id}")
+        # logging.debug(f"client_id: {client_id}")
 
         for message in body:
 
@@ -270,11 +277,8 @@ class FilterColumns:
             # TODO: handle message ids
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
-            if (
-                message[0] == END_TRANSMISSION_MESSAGE
-                or len(message) > 1
-                and message[1] == END_TRANSMISSION_MESSAGE
-            ):
+
+            if message[END_TRANSMSSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Recived END of reviews: {message}")
 
                 self.__handle_end_transmission(
@@ -287,7 +291,7 @@ class FilterColumns:
 
                 return
 
-            logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived review: {message}")
+            # logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived review: {message}")
 
             columns_to_keep = []
             columns_to_keep = self._reviews_columns_to_keep
@@ -296,7 +300,7 @@ class FilterColumns:
                 columns_to_keep, message, client_id=client_id
             )
 
-            logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending review: {message}")
+            # logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending review: {message}")
 
             self._middleware.publish(filtered_body, forwarding_queue_name, "")
 
@@ -314,3 +318,4 @@ class FilterColumns:
         # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
         self._client_monitor.stop()
+        raise SystemExit

@@ -4,6 +4,7 @@ from configparser import ConfigParser
 from percentile import Percentile
 from common.middleware.middleware import Middleware
 from common.watchdog_client.watchdog_client import WatchdogClient
+from common.activity_log.activity_log import ActivityLog
 
 def get_config():
     config_params = {}
@@ -14,6 +15,7 @@ def get_config():
         # Node related
         # config_params["NODE_ID"] = os.getenv("NODE_ID")
         config_params["NEEDED_ENDS_TO_FINISH"] = int(os.getenv('NEEDED_ENDS_TO_FINISH', config["DEFAULT"]["NEEDED_ENDS_TO_FINISH"]))
+        config_params["NODE_ID"] = os.getenv('NODE_ID', config["DEFAULT"]["NODE_ID"])
 
         # queues
         config_params["CONSUME_QUEUE"] = os.getenv("CONSUME_QUEUE", config["DEFAULT"]["CONSUME_QUEUE"])
@@ -62,6 +64,7 @@ def init_logger(logging_level):
 
 def main():
     config = get_config()
+    [logging.debug(f"{key}: {value}") for key, value in config.items()]
 
     logging_level = config.pop("LOGGING_LEVEL")
     init_logger(logging_level)
@@ -75,9 +78,12 @@ def main():
     monitor_port = config.pop("WATCHDOG_PORT")
     node_name = config.pop("NODE_NAME")
     discovery_port = config.pop("LEADER_DISCOVERY_PORT")
+    
     monitor = WatchdogClient(monitor_ip, monitor_port, node_name, discovery_port, middleware)
+    activity_log = ActivityLog()
 
-    percentile = Percentile(config, middleware, monitor)
+    percentile = Percentile(config, middleware, monitor, activity_log)
+
     percentile.run()
 
 

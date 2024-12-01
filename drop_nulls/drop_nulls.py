@@ -2,6 +2,7 @@ import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import threading
 from typing import *
 from common.protocol.protocol import Protocol
 from common.middleware.middleware import Middleware, MiddlewareError
@@ -25,7 +26,7 @@ class DropNulls:
         self._protocol = protocol
         self._middleware = middleware
         self._client_monitor = monitor
-        self._got_sigterm = False
+        self._got_sigterm = threading.Event()
         self.r = 0
 
         # Directly assign each config value to an attribute
@@ -85,8 +86,10 @@ class DropNulls:
         try:
             self._middleware.start_consuming()
         except MiddlewareError as e:
-            if not self._got_sigterm:
+            if not self._got_sigterm.is_set():
                 logging.error(e)
+        except SystemExit:
+            logging.info("Exiting")
         finally:
             self._middleware.shutdown()
             monitor_thread.join()
@@ -94,18 +97,17 @@ class DropNulls:
     def __handle_end_transmission(
         self, body: List[str], reciving_queue_name: str, message_type: str
     ):
-        peers_that_received_end = body[2:]
-        client_id = body[0]
+        client_id = body[END_TRANSMISSION_CLIENT_ID_INDEX]
+        msg_id = body[END_TRANSMISSION_MSG_ID_INDEX]
+        peers_that_received_end = body[END_TRANSMISSION_END_INDEX + 1:]
+
 
         if len(peers_that_received_end) == self.instances_of_myself:
             logging.debug(f"Sending real END. {message_type}")
             if message_type == GAMES_MESSAGE_TYPE:
-                self.__forward_to_all_games_queues(client_id, END_TRANSMISSION_MESSAGE)
+                self.__handle_games_end_transmission_by_query(client_id, msg_id)
             elif message_type == REVIEWS_MESSAGE_TYPE:
-                self.__forward_to_all_reviews_queues(
-                    client_id, END_TRANSMISSION_MESSAGE
-                )
-                # self.__handle_reviews_end_transmission_by_query(client_id)
+                self.__handle_reviews_end_transmission_by_query(client_id, msg_id)
             else:
                 raise Exception(f"Unknown message type: {message_type}")
 
@@ -117,11 +119,12 @@ class DropNulls:
             else:
                 raise Exception(f"Unknown message type: {message_type}")
 
-            message = [client_id, END_TRANSMISSION_MESSAGE]
+            message = [client_id,msg_id, END_TRANSMISSION_MESSAGE]
             if self.node_id not in peers_that_received_end:
                 peers_that_received_end.append(self.node_id)
 
             message += peers_that_received_end
+            logging.debug(f"[END MESSAGE ALGORITHM] Publishing {message} in {reciving_queue_name}")
             self._middleware.publish_message(message, reciving_queue_name)
 
     def __handle_timeout(
@@ -166,18 +169,18 @@ class DropNulls:
         for queue in [self.q2_games, self.q3_games, self.q4_games, self.q5_games]:
             self._middleware.publish_batch(queue)
 
-    def __forward_to_all_games_queues(self, client_id: str, message):
+    def __handle_games_end_transmission_by_query(self, client_id: str, msg_id: str):
         for i in range(self.count_by_platform_nodes):
             logging.debug(f"SENDING_TO: {i}_{self.q1_platform}")
             self._middleware.send_end(
                 queue=f"{i}_{self.q1_platform}",
-                end_message=[client_id, message],
+                end_message=[client_id, msg_id, END_TRANSMISSION_MESSAGE],
             )
 
         for queue in [self.q2_games, self.q3_games, self.q4_games, self.q5_games]:
             self._middleware.send_end(
                 queue=queue,
-                end_message=[client_id, message],
+                end_message=[client_id, msg_id, END_TRANSMISSION_MESSAGE],
             )
 
     def __handle_games(self, delivery_tag: int, body: bytes):
@@ -193,8 +196,8 @@ class DropNulls:
                 )
                 self._middleware.ack(delivery_tag)
                 return
-
-            if message[1] == END_TRANSMISSION_MESSAGE:
+            
+            if message[END_TRANSMISSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Received games END: {message}")
                 self.__handle_end_transmission(
                     message,
@@ -209,24 +212,24 @@ class DropNulls:
                 logging.debug("Dropped prev value")
                 continue
 
-            client_id = message[0]
+            client_id = message[GAMES_SESSION_ID]
+            msg_id = message[GAMES_MSG_ID]
             for platform, platform_index in PLATFORMS.items():
                 platform_supported = message[platform_index]
                 if platform_supported.lower() == "true":
                     node_id = node_id_to_send_to(
                         client_id, platform, self.count_by_platform_nodes
                     )
+                    message_to_send = [client_id, msg_id, platform]
                     self._middleware.publish(
-                        [client_id, platform],
+                        message_to_send,
                         f"{node_id}_{self.q1_platform}",
-                    )
-                    logging.debug(
-                        f"Q1: Sent {[client_id, platform]} to {node_id}_{self.q1_platform}"
                     )
 
             self._middleware.publish(
                 [
                     client_id,
+                    message[GAMES_MSG_ID],
                     message[GAMES_APP_ID],
                     message[GAMES_NAME],
                     message[GAMES_RELEASE_DATE],
@@ -240,6 +243,7 @@ class DropNulls:
                 self._middleware.publish(
                     [
                         client_id,
+                        message[GAMES_MSG_ID],
                         message[GAMES_APP_ID],
                         message[GAMES_NAME],
                         message[GAMES_GENRE],
@@ -249,11 +253,11 @@ class DropNulls:
 
         self._middleware.ack(delivery_tag)
 
-    def __forward_to_all_reviews_queues(self, client_id: str, message):
+    def __handle_reviews_end_transmission_by_query(self, client_id: str, msg_id: str):
         for queue in [self.q3_reviews, self.q5_reviews, self.q4_reviews]:
             self._middleware.send_end(
                 queue=queue,
-                end_message=[client_id, message],
+                end_message=[client_id, msg_id, END_TRANSMISSION_MESSAGE],
             )
 
     def __handle_reviews_last_batch(self):
@@ -271,7 +275,7 @@ class DropNulls:
                 self._middleware.ack(delivery_tag)
                 return
 
-            if message[1] == END_TRANSMISSION_MESSAGE:
+            if message[END_TRANSMISSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Received reviews END: {message}")
                 self.__handle_end_transmission(
                     message,
@@ -289,7 +293,12 @@ class DropNulls:
             client_id = message[0]
             for queue in [self.q3_reviews, self.q5_reviews]:
                 self._middleware.publish(
-                    [client_id, message[REVIEW_APP_ID], message[REVIEW_SCORE]],
+                    [
+                        client_id,
+                        message[REVIEW_MSG_ID],
+                        message[REVIEW_APP_ID],
+                        message[REVIEW_SCORE],
+                    ],
                     queue,
                 )
                 logging.info(
@@ -300,6 +309,7 @@ class DropNulls:
             self._middleware.publish(
                 [
                     client_id,
+                    message[REVIEW_MSG_ID],
                     message[REVIEW_APP_ID],
                     message[REVIEW_TEXT],
                     message[REVIEW_SCORE],
@@ -311,7 +321,7 @@ class DropNulls:
 
     def __signal_handler(self, sig, frame):
         logging.debug(f"[NULL DROP {self.node_id}] Gracefully shutting down...")
-        self._got_sigterm = True
-        # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
         self._client_monitor.stop()
+        self._got_sigterm.set()
+        raise SystemExit

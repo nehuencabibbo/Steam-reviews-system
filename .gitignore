@@ -12,3 +12,5 @@ join_for_client.py
 join_sender.py
 .vscode
 watchdog_status
+log.txt
+testing/

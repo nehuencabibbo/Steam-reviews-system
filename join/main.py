@@ -6,6 +6,7 @@ from join.join import Join
 from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
 from common.watchdog_client.watchdog_client import WatchdogClient
+from common.activity_log.activity_log import ActivityLog
 
 from configparser import ConfigParser
 import logging
@@ -113,11 +114,11 @@ def main():
     logging.debug("Logging configuration:")
     [logging.info(f"{key}: {value}") for key, value in config.items()]
 
-    middleware = Middleware(config["RABBIT_IP"])
+    middleware = Middleware(config["RABBIT_IP"], use_logging=True)
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    protocol = Protocol()
+    activity_log = ActivityLog(log_two_ends=True)
 
     monitor_ip = config.pop("WATCHDOGS_IP")
     monitor_port = config.pop("WATCHDOG_PORT")
@@ -125,7 +126,8 @@ def main():
     discovery_port = config.pop("LEADER_DISCOVERY_PORT")
     monitor = WatchdogClient(monitor_ip, monitor_port, node_name, discovery_port, middleware)
     
-    join = Join(protocol, middleware, monitor, config)
+    join = Join(middleware, monitor, config, activity_log)
+
     join.start()
 
 

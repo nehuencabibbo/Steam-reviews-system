@@ -1,5 +1,7 @@
 # Parent directory is included in the search path for modules
 import os
+from common.activity_log.activity_log import ActivityLog
+
 from configparser import ConfigParser
 import logging
 
@@ -78,13 +80,16 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
+
     monitor_ip = config.pop("WATCHDOGS_IP")
     monitor_port = config.pop("WATCHDOG_PORT")
     node_name = config.pop("NODE_NAME")
     discovery_port = config.pop("LEADER_DISCOVERY_PORT")
     monitor = WatchdogClient(monitor_ip, monitor_port, node_name, discovery_port, middleware)
+    activity_log = ActivityLog()
 
-    top_k = TopK(middleware, monitor, config)
+    top_k = TopK(middleware, monitor, config, activity_log)
+
     top_k.start()
 
 

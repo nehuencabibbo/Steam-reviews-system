@@ -716,5 +716,20 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(records[1], ["linux", "2"])
 
 
+    def test_add_batch_to_sorted_file_with_duplicate_record(self):
+        # NEW_RECORDS = [[MSG_ID, NAME, AVG_PLAYTIME_FOREVER]]
+        records1 = [["ID1", "PEPE", "5"], ["ID2", "tuper", "8"]]
+        records2 = [["ID1", "PEPE", "5"], ["ID3", "tri", "10"]]
+
+        storage._add_batch_to_sorted_file(self._dir, records1)
+        storage._add_batch_to_sorted_file(self._dir, records2)
+
+        reader = storage.read_sorted_file(self._dir)
+        read_records = [row for row in reader]
+        print(read_records)
+
+        self.assertEqual(len(read_records), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

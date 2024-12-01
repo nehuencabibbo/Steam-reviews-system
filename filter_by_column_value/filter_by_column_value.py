@@ -1,9 +1,8 @@
 import sys, os
 
-from common.storage.storage import write_by_range
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import threading
 from typing import *
 from constants import *
 from common.protocol.protocol import Protocol
@@ -15,6 +14,11 @@ import signal
 import logging
 import threading
 
+END_TRANSMISSION_CLIENT_ID_INDEX = 0
+END_TRANSMISSION_MSG_ID_INDEX = 1
+END_TRANSMISSION_END_INDEX = 2
+
+
 class FilterColumnByValue:
     def __init__(
         self,
@@ -25,7 +29,7 @@ class FilterColumnByValue:
     ):
         self._protocol = protocol
         self._middleware = middleware
-        self._got_sigterm = False
+        self._got_sigterm = threading.Event()
         self._filter_by_criteria: Callable[[List[str]], None] = None
         self._client_monitor = monitor
 
@@ -70,8 +74,10 @@ class FilterColumnByValue:
             self._middleware.start_consuming()
         except MiddlewareError as e:
             # TODO: If got_sigterm is showing any error needed?
-            if not self._got_sigterm:
+            if not self._got_sigterm.is_set():
                 logging.error(e)
+        except SystemExit:
+            logging.info("Exiting")
         finally:
             self._middleware.shutdown()
             monitor_thread.join()
@@ -94,6 +100,31 @@ class FilterColumnByValue:
             for queue_number in range(queues_to_create):
                 full_queue_name = f"{queue_number}_{queue_name}"
                 self._middleware.create_queue(full_queue_name)
+
+    def __handle_end_transmission(self, body: List[str]): 
+        # Si me llego un END...
+        # 1) Me fijo si los la cantidad de ids que hay es igual a
+        # la cantidad total de instancias de mi mismo que hay.
+        # Si es asi => Envio el END a la proxima cola
+        # Si no es asi => Checkeo si mi ID esta en la lista
+        #     Si es asi => No agrego nada y reencolo
+        #     Si no es asi => Agrego mi id a la lista y reencolo
+
+        client_id = body[END_TRANSMISSION_CLIENT_ID_INDEX]
+        msg_id = body[END_TRANSMISSION_MSG_ID_INDEX]
+        peers_that_recived_end = body[END_TRANSMISSION_END_INDEX + 1:]
+
+        if len(peers_that_recived_end) == int(self._instances_of_myself):
+            self.__send_end_transmission_to_all_forwarding_queues(client_id, msg_id)
+        else:
+            # TODO: USAR DIRECTAMENTE EL BODY NO CREAR LA LISTA
+            message = [client_id, msg_id, END_TRANSMISSION_MESSAGE]
+            if not self._node_id in peers_that_recived_end:
+                peers_that_recived_end.append(self._node_id)
+
+            message += peers_that_recived_end
+
+            self._middleware.publish_message(message, self._receiving_queue_name)
 
     def __handle_consensus_tranmission(self, body: List[str], consensus_message):
         # Si me llego un END...
@@ -147,6 +178,21 @@ class FilterColumnByValue:
                     end_message=[client_id, message],
                 )
 
+    def __send_end_transmission_to_all_forwarding_queues(self, client_id: str, msg_id: str):
+        # TODO: Repeated code between this and send last batch, remove
+        for i in range(len(self._amount_of_forwarding_queues)):
+            amount_of_current_queue = self._amount_of_forwarding_queues[i]  
+            queue_name = self._forwarding_queue_names[i]
+
+            for queue_number in range(amount_of_current_queue):
+                full_queue_name = f"{queue_number}_{queue_name}"
+                logging.debug(f"Sending END to queue: {full_queue_name}")
+
+                self._middleware.send_end(
+                    queue=full_queue_name,
+                    end_message=[client_id, msg_id, END_TRANSMISSION_MESSAGE],
+                )
+
     def __handle_message(self, delivery_tag: int, body: bytes):
         body = self._middleware.get_rows_from_message(body)
         for message in body:
@@ -161,10 +207,10 @@ class FilterColumnByValue:
 
                 return
 
-            if message[1] == END_TRANSMISSION_MESSAGE:
+            if message[END_TRANSMISSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"GOT END: {body}")
                 self.__send_last_batch_to_fowarding_queues()
-                self.__handle_consensus_tranmission(message, END_TRANSMISSION_MESSAGE)
+                self.__handle_end_transmission(message)
                 self._middleware.ack(delivery_tag)
 
                 return
@@ -254,8 +300,7 @@ class FilterColumnByValue:
 
     def __signal_handler(self, sig, frame):
         logging.debug("Gracefully shutting down...")
-        self._got_sigterm = True
-        # self._middleware.stop_consuming_gracefully()
         self._middleware.shutdown()
         self._client_monitor.stop()
-        # self._middleware.shutdown()
+        self._got_sigterm.set()
+        raise SystemExit

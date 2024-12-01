@@ -5,10 +5,39 @@ from typing import *
 
 FIELD_LENGTH_BYTES_AMOUNT = 4
 
+class ProtocolError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self):
+        return self.message
+
 
 class Protocol:
     @staticmethod
-    def encode(row: List[str]) -> bytes:
+    def __remove_and_validate_checksum(message: bytes) -> bytes: 
+        checksum = message[:4]
+        message = message[4:]
+
+        checksum = int.from_bytes(checksum, byteorder='big', signed=False)
+
+        if checksum != len(message):
+            raise ProtocolError((
+                f'ERROR: Checksum does not match, '
+                f'expected: {checksum}, got: {len(message)}'
+            ))
+        
+        return message
+
+    @staticmethod
+    def _add_checksum(message: bytes) -> bytes:
+        length = len(message).to_bytes(4, byteorder='big', signed=False)
+
+        return length + message
+    
+    @staticmethod
+    def encode(row: List[str], add_checksum=False) -> bytes:
         result = b""
         for field in row:
             encoded_field = field.encode("utf-8")
@@ -18,8 +47,11 @@ class Protocol:
             result += encoded_field_length
             result += encoded_field
 
-        return result
+        if add_checksum: 
+            result = Protocol._add_checksum(result)
 
+        return result
+    
     @staticmethod
     def add_to_batch(current_batch: bytes, row: List[str]) -> bytes:
         encoded_row = Protocol.encode(row)
@@ -39,7 +71,7 @@ class Protocol:
         return encoded_row_length + encoded_row + current_batch
 
     @staticmethod
-    def decode_batch(message: bytes) -> list[list[str]]:
+    def decode_batch(message: bytes, has_checksum = False) -> list[list[str]]:
         res = []
         while len(message) > 0:
             row_length = int.from_bytes(message[:4], "big", signed=False)
@@ -53,7 +85,10 @@ class Protocol:
         return res
 
     @staticmethod
-    def decode(message: bytes) -> List[str]:
+    def decode(message: bytes, has_checksum=False) -> List[str]:
+        if has_checksum: 
+            message = Protocol.__remove_and_validate_checksum(message)
+
         result = []
         while len(message) > 0:
             field_length = int.from_bytes(message[:4], "big", signed=False)
@@ -178,6 +213,16 @@ class TestProtocol(unittest.TestCase):
         # Assert the result
         self.assertEqual(decoded, expected_decoded)
 
+    def test_for_log(self):
+        data = ['/tmp/006b8b4567/platform_count.csv', 'WINDOWS,722', 'MAC,133', 'LINUX,85']
+        msg_ids = ['006b8b4567', '729,L', '773,L', '770,W', '771,W', '772,W', '773,W', '775,W', '776,W', '729,L', '773,L', '773,M', '776,M', '729,L', '773,L']
+
+        encoded_data = Protocol.encode(data, add_checksum=True)
+        encoded_msg_ids = Protocol.encode(msg_ids, add_checksum=True)
+
+        print(encoded_data)
+        print("----------------------------------------")
+        print(encoded_msg_ids)
 
 if __name__ == "__main__":
     unittest.main()

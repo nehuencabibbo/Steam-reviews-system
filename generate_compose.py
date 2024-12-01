@@ -42,7 +42,7 @@ Q4_AMOUNT_OF_SECOND_JOINS = 2
 Q4_AMOUNT_OF_THIRD_JOINS = 1  # TODO: NEEDS AGGREGATOR FOR SCALING THIS NODE
 # Q5
 Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
-Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 2
+Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
 Q5_AMOUNT_OF_COUNTERS = 2
 Q5_AMOUNT_OF_JOINS = 2
 Q5_AMOUNT_OF_PERCENTILES = 1
@@ -266,6 +266,7 @@ def add_top_k_aggregator(
     }
 
 
+
 def add_filter_by_language(
     output: Dict,
     query: str,
@@ -455,7 +456,7 @@ def add_rabbit(output: Dict):
         "ports": ["15672:15672"],
         "networks": ["net"],
         "volumes": ["rabbitmq_data:/var/lib/rabbitmq"],
-        "logging": {"driver": "none"},
+        # "logging": {"driver": "none"},
         "healthcheck": {
             "test": "rabbitmq-diagnostics -q ping",
             "interval": "20s",
@@ -568,6 +569,14 @@ def generate_q1(node_names: list, output=Dict,debug=True):
 
 
 def generate_q2(node_names: list, output=Dict, debug=False):
+    # Recived message:
+    #       client_id,
+    #       message[GAMES_MSG_ID],
+    #       message[GAMES_APP_ID],
+    #       message[GAMES_NAME],
+    #       message[GAMES_RELEASE_DATE],
+    #       message[GAMES_AVG_PLAYTIME_FOREVER],
+    #       message[GAMES_GENRE],
 
     q2_indie_filter_args = {
         "output": output,
@@ -576,16 +585,23 @@ def generate_q2(node_names: list, output=Dict, debug=False):
         "input_queue_name": "q2_games",
         "output_queue_name": "q2_indie_games",
         "amount_of_forwarding_queues": 1,
-        # "column_number_to_use": 4,  # genre
-        "column_number_to_use": 5,  # genre
+        "column_number_to_use": 6,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
-        "columns_to_keep": "0,1,2,3,4",
+        "columns_to_keep": "0,1,2,3,4,5",  # Todo menos el genero
         "instances_of_myself": Q2_AMOUNT_OF_INDIE_GAMES_FILTERS,
     }
     generate_filters_by_value(
         Q2_AMOUNT_OF_INDIE_GAMES_FILTERS, node_names, debug=debug, **q2_indie_filter_args
     )
+
+    # Recived message:
+    #       client_id,
+    #       message[GAMES_MSG_ID],
+    #       message[GAMES_APP_ID],
+    #       message[GAMES_NAME],
+    #       message[GAMES_RELEASE_DATE],
+    #       message[GAMES_AVG_PLAYTIME_FOREVER],
 
     q2_indie_games_from_last_decade_args = {
         "output": output,
@@ -594,12 +610,10 @@ def generate_q2(node_names: list, output=Dict, debug=False):
         "input_queue_name": "0_q2_indie_games",
         "output_queue_name": "q2_indie_games_from_last_decade",
         "amount_of_forwarding_queues": Q2_AMOUNT_OF_TOP_K_NODES,
-        # "column_number_to_use": 2,  # release date
-        "column_number_to_use": 3,  # release date
+        "column_number_to_use": 4,  # release date
         "value_to_filter_by": 201,
         "criteria": "CONTAINS",
-        # "columns_to_keep": "1,3",  # name, avg_forever
-        "columns_to_keep": "0,2,4",  # client_id, name, avg_forever
+        "columns_to_keep": "0,1,3,5",  # client_id, msg_id, name, avg_forever
         "instances_of_myself": Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS,
     }
 
@@ -609,6 +623,12 @@ def generate_q2(node_names: list, output=Dict, debug=False):
         debug=debug,
         **q2_indie_games_from_last_decade_args,
     )
+
+    # Recived message:
+    #       client_id,
+    #       message[GAMES_MSG_ID],
+    #       message[GAMES_NAME],
+    #       message[GAMES_AVG_PLAYTIME_FOREVER],
 
     q2_top_k_args = {
         "output": output,
@@ -972,10 +992,10 @@ def generate_q5(node_names: list, output: Dict, debug=False):
         "input_queue_name": "q5_games",
         "output_queue_name": "q5_action_games",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_JOINS,
-        "column_number_to_use": 3,  # client_id, app_id, name, genre
+        "column_number_to_use": 4,  # client_id, msg_id, app_id, name, genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
-        "columns_to_keep": "0,1,2",  # client_id, app_id, name, genre
+        "columns_to_keep": "0,1,2,3",  # client_id, msg_id, app_id, name, genre
         "instances_of_myself": Q5_AMOUNT_OF_ACTION_GAMES_FILTERS,
     }
     generate_filters_by_value(
@@ -989,10 +1009,10 @@ def generate_q5(node_names: list, output: Dict, debug=False):
         "input_queue_name": "q5_reviews",
         "output_queue_name": "q5_negative_reviews",
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_COUNTERS,
-        "column_number_to_use": 2,  # client_id, app_id, review_score
+        "column_number_to_use": 3,  # client_id, msg_id, app_id, review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
-        "columns_to_keep": "0,1",  # client_id, app_id,
+        "columns_to_keep": "0,1,2",  # client_id, msg_id, app_id,
         "instances_of_myself": Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
     }
     generate_filters_by_value(
@@ -1024,8 +1044,9 @@ def generate_q5(node_names: list, output: Dict, debug=False):
         "needed_games_ends": 1,
         "needed_reviews_ends": Q5_AMOUNT_OF_COUNTERS,
         "amount_of_forwarding_queues": Q5_AMOUNT_OF_PERCENTILES,
-        "games_columns_to_keep": "1",  # app_id, name
-        "reviews_columns_to_keep": "1",  # count
+        # TODO: esto se tiene que cambiar para que coincida con los demas nodos
+        "games_columns_to_keep": "2",  # client_id, msg_id, app_id, name -> NO TENER EN CUENTA EL CLIENT ID PARA EL NUM
+        "reviews_columns_to_keep": "2",  # client_id, msg_id, count -> IDEM ARRIBA
     }
 
     generate_joins(
