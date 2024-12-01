@@ -26,7 +26,7 @@ done
 # Filter out elements containing "client" or "rabbit"
 filtered_container_names_array=()
 for name in "${container_names_array[@]}"; do
-    if [[ ! $name =~ client ]] && [[ ! $name =~ rabbit ]] && [[ ! $name =~ join ]] && [[ ! $name =~ percentile ]]; then
+    if [[ ! $name =~ client ]] && [[ ! $name =~ rabbit ]] && [[ ! $name =~ percentile ]]; then
         filtered_container_names_array+=("$name")
     fi
 done

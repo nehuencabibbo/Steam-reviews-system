@@ -108,7 +108,7 @@ def main():
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)
 
-    activity_log = ActivityLog()
+    activity_log = ActivityLog(log_two_ends=True)
 
     join = Join(middleware, config, activity_log)
     join.start()

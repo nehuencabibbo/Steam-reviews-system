@@ -20,6 +20,8 @@ END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX = 0
 END_TRANSMISSION_MESSAGE_MSG_ID_INDEX = 1
 END_TRANSMISSION_MESSAGE_END_INDEX = 2
 
+GAMES_END_LOGGING = 0
+REVIEWS_END_LOGGING = 1
 
 class Join:
     def __init__(
@@ -45,6 +47,31 @@ class Join:
         self._node_id = config["NODE_ID"]
 
         self._activity_log = activity_log
+        
+        self._amount_of_games_ends_recived, self._amount_of_reviews_ends_recived = self._activity_log.recover_ends_state()
+        logging.debug('[RECOVERY] Recovering ends')
+        logging.debug(f'[RECOVERY] GAMES: {self._amount_of_games_ends_recived}')
+        logging.debug(f'[RECOVERY] REVIEWS: {self._amount_of_games_ends_recived}')
+        client_ids_to_remove = []
+        for client_id, amount in self._amount_of_games_ends_recived.items():
+            if amount == self._needed_reviews_ends:
+                # If all games arrived, send all remaining reviews
+                logging.debug(f'[RECOVERY] Sending all stored reviews to {self._output_queue_name}')
+                self.__send_stored_reviews(
+                    client_id, 
+                    forwarding_queue_name=self._output_queue_name
+                )
+                # If all reviews arrived too for that client, the forward end and remove everything
+                if self._amount_of_reviews_ends_recived.get(client_id, 0) == self._needed_reviews_ends:
+                    self.__send_end_to_forward_queues(client_id)
+                    client_ids_to_remove.append(client_id)
+
+
+        for client_id in client_ids_to_remove:
+            logging.debug(f'[RECOVERY] deleting {client_id} directory')
+            self.__clear_client_data(client_id)
+            logging.debug(f'[RECOVERY] deleting {client_id} logs')
+            self._activity_log.remove_client_logs(client_id)
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -95,6 +122,11 @@ class Join:
 
         if len(body) == 1 and body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
             client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
+            msg_id = body[0][END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
+
+            was_duplicate = self._activity_log.log_end(client_id, msg_id, end_logging=GAMES_END_LOGGING)
+            if was_duplicate: return
+
             self._amount_of_games_ends_recived[client_id] = (
                 self._amount_of_games_ends_recived.get(client_id, 0) + 1
             )
@@ -113,12 +145,9 @@ class Join:
                     client_id, forwarding_queue_name=forwarding_queue_name
                 )
 
-                if not client_id in self._amount_of_reviews_ends_recived:
-                    self._amount_of_reviews_ends_recived[client_id] = 0
-
                 if (
-                    self._amount_of_reviews_ends_recived[client_id]
-                    == self._needed_reviews_ends
+                    client_id in self._amount_of_reviews_ends_recived and 
+                    self._amount_of_reviews_ends_recived[client_id] == self._needed_reviews_ends
                 ):
                     self.__send_end_to_forward_queues(client_id)
                     self.__clear_client_data(client_id)
@@ -153,9 +182,12 @@ class Join:
         for review in body:
             logging.debug(f"Recived review: {review}")
             client_id = review[END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
+            msg_id = review[END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
 
             if review[END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
-
+                
+                was_duplicate = self._activity_log.log_end(client_id, msg_id, end_logging=REVIEWS_END_LOGGING)
+                if was_duplicate: return 
                 self._amount_of_reviews_ends_recived[client_id] = (
                     self._amount_of_reviews_ends_recived.get(client_id, 0) + 1
                 )
@@ -188,7 +220,6 @@ class Join:
             else:
                 self.__join_and_send(review, client_id, forwarding_queue_name)
 
-        # Cayo aca
         self.__middleware.ack(delivery_tag)
 
     def __send_end_to_forward_queues(self, client_id: str):
