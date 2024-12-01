@@ -33,32 +33,6 @@ class TopK:
 
         self.__total_ends_received_per_client = self._activity_log.recover_ends_state()
 
-        # Si me cai mientras estaba mandando los resultados (me llego el ultimo END)
-        # tengo que retomar mandar los resultados
-        client_ids_to_clear = []
-        for client_id, amount in self.__total_ends_received_per_client.items():
-            if amount == self._amount_of_receiving_queues: 
-                
-                self.__middleware.create_queue(self._output_top_k_queue_name)
-                # TODO: HANDELEAR CASO QUE SE ROMPA MID MANDAR COSAS
-                logging.debug('Sending top [Restart]')
-                self.__send_top(self._output_top_k_queue_name, client_id=client_id)
-
-                
-                end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
-                self.__middleware.send_end(
-                    queue=self._output_top_k_queue_name,
-                    end_message=end_message,
-                )
-                client_ids_to_clear.append(client_id)
-
-        for client_id in client_ids_to_clear:   
-            client_storage_dir = f"/tmp/{client_id}"
-            # TODO: Si se rompe mientras borra la data del cliente tambien hay que
-            # handelearlo
-            self._clear_client_data(client_id, client_storage_dir)
-            self._activity_log.remove_client_logs(client_id)
-
 
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
@@ -84,6 +58,8 @@ class TopK:
             f"{self._node_id}_{self._input_top_k_queue_name}",
             games_callback,
         )
+
+        self.__resume_publish_if_necesary()
         try:
             self.__middleware.start_consuming()
         except MiddlewareError as e:
@@ -91,6 +67,33 @@ class TopK:
                 logging.error(e)
         finally:
             self.__middleware.shutdown()
+
+    def __resume_publish_if_necesary(self):
+        # Si me cai mientras estaba mandando los resultados (me llego el ultimo END)
+        # tengo que retomar mandar los resultados
+        client_ids_to_clear = []
+        for client_id, amount in self.__total_ends_received_per_client.items():
+            if amount == self._amount_of_receiving_queues: 
+                
+                self.__middleware.create_queue(self._output_top_k_queue_name)
+                # TODO: HANDELEAR CASO QUE SE ROMPA MID MANDAR COSAS
+                logging.debug('Sending top [Restart]')
+                self.__send_top(self._output_top_k_queue_name, client_id=client_id)
+
+                
+                end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
+                self.__middleware.send_end(
+                    queue=self._output_top_k_queue_name,
+                    end_message=end_message,
+                )
+                client_ids_to_clear.append(client_id)
+
+        for client_id in client_ids_to_clear:   
+            client_storage_dir = f"/tmp/{client_id}"
+            # TODO: Si se rompe mientras borra la data del cliente tambien hay que
+            # handelearlo
+            self._clear_client_data(client_id, client_storage_dir)
+            self._activity_log.remove_client_logs(client_id)
 
     def __callback(self, delivery_tag, body, message_type):
         body = self.__middleware.get_rows_from_message(body)
@@ -131,10 +134,7 @@ class TopK:
             # Por el segundo caso no puedo descartar el END y tengo que mandarlo,
             # asi que simplemente propago el END, y luego el client_handler va a filtrar
             # para no mandar duplicados al cliente o mandarle ENDS pelados sin data sin sentido 
-            logging.debug((
-                'Recived END, but client folder was already deleted.'
-                'Probably duplicated, propagating END'
-            ))
+            logging.debug('Recived END, but client directory was already deleted. Propagating END')
 
             end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
             self.__middleware.send_end(

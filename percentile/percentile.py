@@ -32,16 +32,6 @@ class Percentile:
         self._activity_log = activity_log
 
         self._recived_ends = self._activity_log.recover_ends_state()
-        client_ids_to_remove = []
-        for client_id, amount in self._recived_ends.items():
-            if amount == self._needed_ends_to_finish:
-                self._send_results(client_id)
-                client_ids_to_remove.append(client_id)
-
-        for client_id in client_ids_to_remove:
-            client_dir = os.path.join(self._storage_dir, client_id)
-            self._clear_client_data(client_id,client_dir)
-            self._activity_log.remove_client_logs(client_id)
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -54,6 +44,7 @@ class Percentile:
         callback = self._middleware.generate_callback(self._handle_message)
         self._middleware.attach_callback(self._consume_queue, callback)
 
+        self.__resume_publish_if_necesary()
         try:
             logging.debug("Starting to consume...")
             self._middleware.start_consuming()
@@ -62,6 +53,19 @@ class Percentile:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
+
+        
+    def __resume_publish_if_necesary(self):
+        client_ids_to_remove = []
+        for client_id, amount in self._recived_ends.items():
+            if amount == self._needed_ends_to_finish:
+                self._send_results(client_id)
+                client_ids_to_remove.append(client_id)
+
+        for client_id in client_ids_to_remove:
+            client_dir = os.path.join(self._storage_dir, client_id)
+            self._clear_client_data(client_id,client_dir)
+            self._activity_log.remove_client_logs(client_id)
 
 
     def _handle_message(self, delivery_tag, body):
@@ -94,6 +98,10 @@ class Percentile:
         if not os.path.exists(client_dir):
             logging.debug('Recived END, but client directory was already deleted. Probably duplicate')
 
+            self._middleware.send_end(
+                self._publish_queue, 
+                end_message=[client_id, self._node_id, END_TRANSMISSION_MESSAGE]
+            )
             return
         
         was_duplicate = self._activity_log.log_end(client_id, msg_id)

@@ -952,7 +952,7 @@ def generate_output():
     add_client(
         output,
         num=1,
-        games_file_path="data/games_sample.csv",
+        games_file_path="data/games.csv",
         reviews_file_path="data/reviews_sample.csv",
         debug=True,
     )
@@ -970,9 +970,9 @@ def generate_output():
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
 
     # # -------------------------------------------- Q1 -----------------------------------------
-    # generate_q1(output=output, debug=True)
+    generate_q1(output=output, debug=True)
     #   -------------------------------------------- Q2 -----------------------------------------
-    # generate_q2(output=output, debug=True)
+    generate_q2(output=output, debug=True)
     # -------------------------------------------- Q3 -----------------------------------------
     # generate_q3(output=output, debug=False)
     # -------------------------------------------- Q4 -----------------------------------------

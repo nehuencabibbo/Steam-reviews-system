@@ -106,6 +106,22 @@ class CounterByAppId:
         self._middleware.ack(delivery_tag)
 
     def __handle_end_transmssion(self, client_id: str, msg_id: str):
+        client_dir = os.path.join(self._storage_dir, client_id)
+        if not os.path.exists(client_dir):
+            # Los resultados ya fueron mandados, el END tiene que ser 
+            # propagado igual, ya que en el caso, por ejemplo de que 
+            # se manden 5 filas y se filtren todas, entonces me va a 
+            # llegar un END solo, el cual voy a tener que propagar  
+
+            # OBS: Enviar resultados vacios === Mandar solo el END
+            logging.debug('Recived END, but client directory was already deleted. Propagating END')
+            self.__send_end_to_forwarding_queues(
+                prefix_queue_name=self._publish_queue, 
+                client_id=client_id
+            )
+
+            return
+        
         was_duplicate = self._activity_log.log_end(client_id, msg_id)
         if was_duplicate:
             logging.debug((
@@ -175,8 +191,6 @@ class CounterByAppId:
 
 
     def __send_results(self, client_id: str):
-        queue_name = self._publish_queue
-
         storage_dir = f"{self._storage_dir}/{client_id}"
         reader = storage.read_all_files(storage_dir)
 
@@ -191,9 +205,8 @@ class CounterByAppId:
 
         self.__send_last_batch_to_forwarding_queues()
         self.__send_end_to_forwarding_queues(
-            prefix_queue_name=queue_name, 
+            prefix_queue_name=self._publish_queue, 
             client_id=client_id
-
         )
         self._clear_client_data(client_id, storage_dir)
         self._activity_log.remove_client_logs(client_id)
