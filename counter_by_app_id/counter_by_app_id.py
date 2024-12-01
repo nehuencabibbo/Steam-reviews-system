@@ -12,8 +12,9 @@ from utils.utils import node_id_to_send_to, group_msg_ids_per_client_by_field
 
 END_TRANSMISSION_MESSAGE = "END"
 
-END_MESSAGE_CLIENT_ID = 0
-END_MESSAGE_END = 1
+END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX = 0
+END_TRANSMISSION_MESSAGE_MSG_ID_INDEX = 1
+END_TRANSMISSION_MESSAGE_END_INDEX = 2
 
 REGULAR_MESSAGE_CLIENT_ID = 0
 REGULAR_MESSAGE_MSG_ID = 1
@@ -41,6 +42,13 @@ class CounterByAppId:
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
         self.__recover_state()
+
+        self._ends_received_per_client = self._activity_log.recover_ends_state()
+
+        for client_id, amount in self._ends_received_per_client.items():
+            if amount == self._needed_ends: 
+                # Internamente borra todo
+                self.__send_results(client_id)
 
     def run(self):
         # Creating receiving queue
@@ -73,38 +81,47 @@ class CounterByAppId:
 
         logging.debug(f"GOT MSG: {body}")
 
-        if body[0][END_MESSAGE_END] == END_TRANSMISSION_MESSAGE:
-            client_id = body[0][END_MESSAGE_CLIENT_ID]
-            self._ends_received_per_client[client_id] = (
-                self._ends_received_per_client.get(client_id, 0) + 1
-            )
-
-            logging.debug(
-                f"Amount of ends received up to now: {self._ends_received_per_client[client_id]} | Expecting: {self._needed_ends}"
-            )
-            if self._ends_received_per_client[client_id] == self._needed_ends:
-                self.__send_results(client_id)
+        if body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
+            client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
+            msg_id = body[0][END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
+            
+            self.__handle_end_transmssion(client_id, msg_id)
 
             self._middleware.ack(delivery_tag)
+
             return
 
-        count_per_client_by_app_id = group_msg_ids_per_client_by_field(
-            body, 
-            REGULAR_MESSAGE_CLIENT_ID, 
-            REGULAR_MESSAGE_MSG_ID,
-            REGULAR_MESSAGE_APP_ID,
-        )
-        self.__purge_duplicates(count_per_client_by_app_id)
+        body = self.__purge_duplicates(body)
 
         storage.sum_batch_to_records_per_client(
             self._storage_dir,  
-            count_per_client_by_app_id,
+            body,
             self._activity_log,
             range_for_partition=self._range_for_partition,
             save_first_msg_id=True
         )
 
         self._middleware.ack(delivery_tag)
+
+    def __handle_end_transmssion(self, client_id: str, msg_id: str):
+        was_duplicate = self._activity_log.log_end(client_id, msg_id)
+        if was_duplicate:
+            logging.debug((
+                f'END {msg_id} was duplicate, filtering it out'
+            ))
+
+            return
+        
+        self._ends_received_per_client[client_id] = (
+            self._ends_received_per_client.get(client_id, 0) + 1
+        )
+
+        logging.debug(
+            f"Amount of ends received up to now: {self._ends_received_per_client[client_id]} | Expecting: {self._needed_ends}"
+        )
+        if self._ends_received_per_client[client_id] == self._needed_ends:
+            self.__send_results(client_id)
+
 
     def __recover_state(self):
         full_file_path, file_state = self._activity_log.recover()
@@ -134,32 +151,25 @@ class CounterByAppId:
 
         os.replace(temp_file, full_file_path)
 
-    def __purge_duplicates(self, msg_ids_per_record_by_client_id: Dict[str, Dict[str, List[str]]]):
-        # Para entender, ver sum_batch_to_records_per_client de common/storage.py
-        #
-        # Para cada cliente, se guarda pone en un determinado rango de archivos particionados
-        # una cierto count de un determinado app_id, eso quiere decir que la operacion
-        # que es atomica es guardar para cada archivo de particion que se haga, como esto depende
-        # mas del guardado que otra cosa, no puedo directamente aca hacer un group_by_file_dict()
-        # y si para un archivo veo un duplicado, volarlo, porque quedaria acoplado raro al storage
-        # el counter.
-        #  
-        # Aun asi es una optimizacion, porque si hay mucho de un mismo count_by_app_id (logico, los juegos
-        # top le ganan por mucho a los mas chicos), entonces si en un batch vienen varios de un mismo app_id,
-        # los estoy descartando a la vez
-        #
-        # Tambien dado que las particiones son chicas, no se cuanto optimize borrar por archivo de particion
-        app_ids_to_remove_from_clients: List[Tuple[str, str]] = []
-        for client_id, count_per_app_id in msg_ids_per_record_by_client_id.items():
-            for app_id, msg_ids in count_per_app_id.items(): # TODO: Por ahi hay alguna forma mejor de hacer esto
-                an_arbitrary_message_id = msg_ids[0]
-                if self._activity_log.is_msg_id_already_processed(client_id, an_arbitrary_message_id):
-                    app_ids_to_remove_from_clients.append((client_id, app_id))
-                
-                break
+    def __purge_duplicates(self, batch: List[str]) -> List[str]:
+        batch_msg_ids = set()
+        filtered_batch = []
+        for msg in batch:
+            # Add a custom msg id based on plaftorm
+            client_id = msg[REGULAR_MESSAGE_CLIENT_ID]
+            msg_id = msg[REGULAR_MESSAGE_MSG_ID] 
+            app_id = msg[REGULAR_MESSAGE_APP_ID]
 
-        for client_id, app_id in app_ids_to_remove_from_clients: 
-            del msg_ids_per_record_by_client_id[client_id][app_id]
+            if not self._activity_log.is_msg_id_already_processed(client_id, msg_id) and not msg_id in batch_msg_ids: 
+                filtered_batch.append(msg)
+                batch_msg_ids.add(msg_id)
+            else: 
+                if msg_id in batch_msg_ids:
+                    logging.debug(f'[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (inside batch)')
+                else:
+                    logging.debug(f'[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (previously processed)')
+
+        return filtered_batch
 
 
     def __send_results(self, client_id: str):
@@ -179,8 +189,12 @@ class CounterByAppId:
 
         self.__send_last_batch_to_forwarding_queues()
         self.__send_end_to_forwarding_queues(
-            prefix_queue_name=queue_name, client_id=client_id
+            prefix_queue_name=queue_name, 
+            client_id=client_id
+
         )
+        self._clear_client_data(client_id, storage_dir)
+        self._activity_log.remove_client_logs(client_id)
 
         # self._clear_client_data(client_id, storage_dir)
 
@@ -204,7 +218,7 @@ class CounterByAppId:
         for i in range(self._amount_of_forwarding_queues):
             self._middleware.send_end(
                 f"{i}_{prefix_queue_name}",
-                end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                end_message=[client_id, str(self._node_id), END_TRANSMISSION_MESSAGE],
             )
             logging.debug(f"Sent END of client: {client_id}")
 
@@ -213,7 +227,9 @@ class CounterByAppId:
             logging.debug(f"Couldn't delete directory: {storage_dir}")
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
-        self._ends_received_per_client.pop(client_id)
+
+        if client_id in self._ends_received_per_client:
+            del self._ends_received_per_client[client_id]
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")

@@ -970,15 +970,15 @@ def generate_output():
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True)
 
     # # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=True)
+    # generate_q1(output=output, debug=True)
     #   -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=True)
+    # generate_q2(output=output, debug=True)
     # -------------------------------------------- Q3 -----------------------------------------
     # generate_q3(output=output, debug=False)
     # -------------------------------------------- Q4 -----------------------------------------
     # generate_q4(output=output, debug=False)
     # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output, debug=True)
+    generate_q5(output=output, debug=True)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

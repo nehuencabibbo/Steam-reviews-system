@@ -58,7 +58,6 @@ class TopK:
             # handelearlo
             self._clear_client_data(client_id, client_storage_dir)
             self._activity_log.remove_client_logs(client_id)
-            if client_id in self.__total_ends_received_per_client: del self.__total_ends_received_per_client[client_id]
 
 
         signal.signal(signal.SIGINT, self.__signal_handler)
@@ -173,7 +172,6 @@ class TopK:
             # handelearlo
             self._clear_client_data(client_id, client_storage_dir)
             self._activity_log.remove_client_logs(client_id)    
-            if client_id in self.__total_ends_received_per_client: del self.__total_ends_received_per_client[client_id]
 
     def __send_top(self, forwarding_queue_name, client_id):
         NAME = 0
@@ -202,6 +200,5 @@ class TopK:
             logging.debug(f"Couldn't delete directory: {storage_dir}")
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
-        self.__total_ends_received_per_client.pop(
-            client_id
-        )  # removed end count for the client
+        if client_id in self.__total_ends_received_per_client:
+            del self.__total_ends_received_per_client[client_id]

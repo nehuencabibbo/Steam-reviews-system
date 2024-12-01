@@ -14,6 +14,7 @@ def get_config():
         # Node related
         # config_params["NODE_ID"] = os.getenv("NODE_ID")
         config_params["NEEDED_ENDS_TO_FINISH"] = int(os.getenv('NEEDED_ENDS_TO_FINISH', config["DEFAULT"]["NEEDED_ENDS_TO_FINISH"]))
+        config_params["NODE_ID"] = os.getenv('NODE_ID', config["DEFAULT"]["NODE_ID"])
 
         # queues
         config_params["CONSUME_QUEUE"] = os.getenv("CONSUME_QUEUE", config["DEFAULT"]["CONSUME_QUEUE"])
@@ -53,6 +54,7 @@ def init_logger(logging_level):
 
 def main():
     config = get_config()
+    [logging.debug(f"{key}: {value}") for key, value in config.items()]
 
     logging_level = config.pop("LOGGING_LEVEL")
     init_logger(logging_level)

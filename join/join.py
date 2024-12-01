@@ -3,19 +3,22 @@ import signal
 from typing import * 
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
+    delete_directory,
     read,
     read_by_range,
-    save,
     write_batch_by_range_per_client,
-    delete_directory,
-    delete_file,
     atomically_append_to_file,
 )
 from common.activity_log.activity_log import ActivityLog
-from utils.utils import group_batch_by_field, node_id_to_send_to
+from utils.utils import node_id_to_send_to
 
-APP_ID_INDEX = 1
+REGULAR_MESSAGE_CLIENT_ID_INDEX = 0
+REGULAR_MESSAGE_APP_ID_INDEX = 1
+
 END_TRANSMISSION_MESSAGE = "END"
+END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX = 0
+END_TRANSMISSION_MESSAGE_MSG_ID_INDEX = 1
+END_TRANSMISSION_MESSAGE_END_INDEX = 2
 
 
 class Join:
@@ -39,6 +42,7 @@ class Join:
         self._instances_of_myself = config["INSTANCES_OF_MYSELF"]
         self._games_columns_to_keep = config["GAMES_COLUMNS_TO_KEEP"]
         self._reviews_columns_to_keep = config["REVIEWS_COLUMNS_TO_KEEP"]
+        self._node_id = config["NODE_ID"]
 
         self._activity_log = activity_log
 
@@ -89,8 +93,8 @@ class Join:
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
         body = self.__middleware.get_rows_from_message(body)
 
-        if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
-            client_id = body[0][0]
+        if len(body) == 1 and body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
+            client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
             self._amount_of_games_ends_recived[client_id] = (
                 self._amount_of_games_ends_recived.get(client_id, 0) + 1
             )
@@ -132,7 +136,7 @@ class Join:
                 "tmp/", 
                 int(self._partition_range), 
                 body,
-                APP_ID_INDEX
+                REGULAR_MESSAGE_APP_ID_INDEX
             )
 
         except ValueError as e:
@@ -148,12 +152,9 @@ class Join:
         body = self.__middleware.get_rows_from_message(body)
         for review in body:
             logging.debug(f"Recived review: {review}")
-            client_id = review.pop(0)
+            client_id = review[END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
 
-            if not client_id in self._amount_of_games_ends_recived:
-                self._amount_of_games_ends_recived[client_id] = 0
-
-            if len(review) == 1 and review[0] == END_TRANSMISSION_MESSAGE:
+            if review[END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
 
                 self._amount_of_reviews_ends_recived[client_id] = (
                     self._amount_of_reviews_ends_recived.get(client_id, 0) + 1
@@ -176,6 +177,8 @@ class Join:
 
                 return
 
+            client_id = review.pop(REGULAR_MESSAGE_CLIENT_ID_INDEX) 
+            # TODO: Sacar este pop, pasar la review completa y usar las ctes
             # Here we check for games ENDs, NOT for reviews
             if not (
                 self._amount_of_games_ends_recived[client_id] == self._needed_games_ends
@@ -195,7 +198,8 @@ class Join:
             "Q" in forwarding_queue_name
         ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
             self.__middleware.publish_batch(forwarding_queue_name)
-            end_message = [client_id, "END", f"{self._instances_of_myself}"]
+            # TODO: Si hay mas de un agregador hay un problema? por el self._instances_of_myself
+            end_message = [client_id, self._node_id, "END", f"{self._instances_of_myself}"]
             self.__middleware.send_end(forwarding_queue_name, end_message=end_message)
             logging.debug(f"Sent end to: {forwarding_queue_name}")
             return
@@ -204,7 +208,7 @@ class Join:
             self.__middleware.publish_batch(f"{i}_{forwarding_queue_name}")
             self.__middleware.send_end(
                 f"{i}_{forwarding_queue_name}",
-                end_message=[client_id, END_TRANSMISSION_MESSAGE],
+                end_message=[client_id, self._node_id, END_TRANSMISSION_MESSAGE],
             )
             logging.debug(f"Sent end to: {i}_{forwarding_queue_name}")
 
@@ -282,5 +286,13 @@ class Join:
     def __clear_client_data(self, client_id: str):
         # delete_directory(f"/tmp/{client_id}")
         # delete_file(f"/tmp/reviews_{client_id}.csv")
-        self._amount_of_games_ends_recived.pop(client_id)
-        self._amount_of_reviews_ends_recived.pop(client_id)
+        client_dir = f'/tmp/{client_id}'
+        if not delete_directory(client_dir):
+            logging.debug(f"Couldn't delete directory: {client_dir}")
+        else:
+            logging.debug(f"Deleted directory: {client_dir}")
+
+        if client_id in self._amount_of_games_ends_recived:
+            del self._amount_of_games_ends_recived[client_id]
+        if client_id in self._amount_of_reviews_ends_recived:
+            del self._amount_of_reviews_ends_recived[client_id]

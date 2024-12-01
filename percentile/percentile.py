@@ -8,10 +8,13 @@ from common.storage import storage
 from common.activity_log.activity_log import ActivityLog
 import math
 
-END_TRANSMISSION_MESSAGE = "END"
 FILE_NAME = "percentile_data.csv"
 NO_RECORDS = 0
 
+END_TRANSMISSION_MESSAGE = "END"
+END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX = 0
+END_TRANSMISSION_MESSAGE_MSG_ID_INDEX = 1
+END_TRANSMISSION_MESSAGE_END_INDEX = 2
 
 class Percentile:
 
@@ -24,6 +27,7 @@ class Percentile:
         self._needed_ends_to_finish = config["NEEDED_ENDS_TO_FINISH"]
         self._storage_dir = config["STORAGE_DIR"]
         self._percentile = config["PERCENTILE"]
+        self._node_id = config["NODE_ID"]
 
         self._activity_log = activity_log
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
@@ -52,8 +56,8 @@ class Percentile:
         body = self._middleware.get_rows_from_message(body)
         logging.debug(f"BODY: {body}")
 
-        if len(body) == 1 and body[0][1] == END_TRANSMISSION_MESSAGE:
-            client_id = body[0][0]
+        if len(body) == 1 and body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
+            client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
             logging.debug(f'END FROM CLIENT: {client_id}')
             self._recived_ends[client_id] = self._recived_ends.get(client_id, 0) + 1
 
@@ -104,7 +108,7 @@ class Percentile:
 
         self._middleware.publish_batch(forwarding_queue_name)
         self._middleware.send_end(
-            forwarding_queue_name, end_message=[client_id, END_TRANSMISSION_MESSAGE]
+            forwarding_queue_name, end_message=[client_id, self._node_id,  END_TRANSMISSION_MESSAGE]
         )
 
         self._clear_client_data(client_id, storage_dir)
@@ -144,7 +148,9 @@ class Percentile:
             logging.debug(f"Couldn't delete directory: {storage_dir}")
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
-        self._recived_ends.pop(client_id)  # removed end count for the client
+        
+        if client_id in self._recived_ends:
+            del self._recived_ends[client_id]
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
