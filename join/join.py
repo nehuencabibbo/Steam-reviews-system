@@ -187,7 +187,7 @@ class Join:
             if review[END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
                 
                 was_duplicate = self._activity_log.log_end(client_id, msg_id, end_logging=REVIEWS_END_LOGGING)
-                if was_duplicate: return 
+                if was_duplicate: break # Viene solo en un batch el end
                 self._amount_of_reviews_ends_recived[client_id] = (
                     self._amount_of_reviews_ends_recived.get(client_id, 0) + 1
                 )

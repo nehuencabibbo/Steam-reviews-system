@@ -30,6 +30,19 @@ class Percentile:
         self._node_id = config["NODE_ID"]
 
         self._activity_log = activity_log
+
+        self._recived_ends = self._activity_log.recover_ends_state()
+        client_ids_to_remove = []
+        for client_id, amount in self._recived_ends.items():
+            if amount == self._needed_ends_to_finish:
+                self._send_results(client_id)
+                client_ids_to_remove.append(client_id)
+
+        for client_id in client_ids_to_remove:
+            client_dir = os.path.join(self._storage_dir, client_id)
+            self._clear_client_data(client_id,client_dir)
+            self._activity_log.remove_client_logs(client_id)
+
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
 
@@ -58,27 +71,12 @@ class Percentile:
 
         if len(body) == 1 and body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
             client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
-            logging.debug(f'END FROM CLIENT: {client_id}')
-            self._recived_ends[client_id] = self._recived_ends.get(client_id, 0) + 1
+            msg_id = body[0][END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
 
-            logging.debug(f"GOT END NUMBER: {self._recived_ends[client_id]}")
-            # TODO: Loggear el end aca (contabilizarlo)
-            # 1 - No se llego a loggear del todo? => No procese ni mande nada no pasa nada
-            # 2 - Se cae antes del ack de aca en adelante => 
-            #       recupero el estado, 
-            #       el proximo end lo filtro,
-            #       si era el ultimo end el loggeado retomo con el publish
-            # 3 - Se llego a ackear => Todo ok
-
-            # Para el join, loggear en una misma linea game_ends, review_ends y listo
-            if self._recived_ends[client_id] == self._needed_ends_to_finish:
-                # create queue for answering
-                # self._middleware.create_queue(
-                #     f'{self._config["PUBLISH_QUEUE"]}_{client_id}'
-                # )
-                self._handle_end_message(client_id)
+            self._handle_end_transmission(client_id, msg_id)
 
             self._middleware.ack(delivery_tag)
+
             return
 
         storage.add_batch_to_sorted_file_per_client(
@@ -87,9 +85,34 @@ class Percentile:
         )
         
         self._middleware.ack(delivery_tag)
+
+
+    def _handle_end_transmission(self, client_id: str, msg_id: str):
+        logging.debug(f'END FROM CLIENT: {client_id}')
+
+        client_dir = os.path.join(self._storage_dir, client_id)
+        if not os.path.exists(client_dir):
+            logging.debug('Recived END, but client directory was already deleted. Probably duplicate')
+
+            return
+        
+        was_duplicate = self._activity_log.log_end(client_id, msg_id)
+        if was_duplicate: 
+            logging.debug(f'Filtered duplicate END {msg_id}')
+
+            return 
+
+        self._recived_ends[client_id] = self._recived_ends.get(client_id, 0) + 1
+
+        logging.debug(f"GOT END NUMBER: {self._recived_ends[client_id]}")
+
+        if self._recived_ends[client_id] == self._needed_ends_to_finish:
+            self._send_results(client_id)
+            self._clear_client_data(client_id, client_dir)
+            self._activity_log.remove_client_logs(client_id)
         
 
-    def _handle_end_message(self, client_id):
+    def _send_results(self, client_id):
 
         percentile = self._get_percentile(client_id)
         logging.debug(f"Percentile is: {percentile}")
@@ -108,10 +131,9 @@ class Percentile:
 
         self._middleware.publish_batch(forwarding_queue_name)
         self._middleware.send_end(
-            forwarding_queue_name, end_message=[client_id, self._node_id,  END_TRANSMISSION_MESSAGE]
+            forwarding_queue_name, 
+            end_message=[client_id, self._node_id, END_TRANSMISSION_MESSAGE]
         )
-
-        self._clear_client_data(client_id, storage_dir)
 
     def _get_percentile(self, client_id):
         # to get the rank, i need to read the file if i do not have a countera (i need the amount of messages)
