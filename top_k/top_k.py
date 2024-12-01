@@ -35,23 +35,30 @@ class TopK:
 
         # Si me cai mientras estaba mandando los resultados (me llego el ultimo END)
         # tengo que retomar mandar los resultados
+        client_ids_to_clear = []
         for client_id, amount in self.__total_ends_received_per_client.items():
             if amount == self._amount_of_receiving_queues: 
+                
                 self.__middleware.create_queue(self._output_top_k_queue_name)
                 # TODO: HANDELEAR CASO QUE SE ROMPA MID MANDAR COSAS
+                logging.debug('Sending top [Restart]')
                 self.__send_top(self._output_top_k_queue_name, client_id=client_id)
 
                 
-                end_message = [client_id, 0, END_TRANSMISSION_MESSAGE]
+                end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
                 self.__middleware.send_end(
                     queue=self._output_top_k_queue_name,
                     end_message=end_message,
                 )
+                client_ids_to_clear.append(client_id)
 
-                client_storage_dir = f"/tmp/{client_id}"
-                # TODO: Si se rompe mientras borra la data del cliente tambien hay que
-                # handelearlo
-                self._clear_client_data(client_id, client_storage_dir)
+        for client_id in client_ids_to_clear:   
+            client_storage_dir = f"/tmp/{client_id}"
+            # TODO: Si se rompe mientras borra la data del cliente tambien hay que
+            # handelearlo
+            self._clear_client_data(client_id, client_storage_dir)
+            self._activity_log.remove_client_logs(client_id)
+            if client_id in self.__total_ends_received_per_client: del self.__total_ends_received_per_client[client_id]
 
 
         signal.signal(signal.SIGINT, self.__signal_handler)
@@ -95,29 +102,7 @@ class TopK:
             client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
             msg_id = body[0][END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
 
-            self._activity_log.log_end(client_id, msg_id)
-            self.__total_ends_received_per_client[client_id] = (
-                self.__total_ends_received_per_client.get(client_id, 0) + 1
-            )
-
-            if (
-                self.__total_ends_received_per_client[client_id]
-                == self._amount_of_receiving_queues
-            ):
-                self.__middleware.create_queue(self._output_top_k_queue_name)
-                # TODO: HANDELEAR CASO QUE SE ROMPA MID MANDAR COSAS
-                self.__send_top(self._output_top_k_queue_name, client_id=client_id)
-
-                end_message = [client_id, msg_id, END_TRANSMISSION_MESSAGE]
-                self.__middleware.send_end(
-                    queue=self._output_top_k_queue_name,
-                    end_message=end_message,
-                )
-
-                client_storage_dir = f"/tmp/{client_id}"
-                # TODO: Si se rompe mientras borra la data del cliente tambien hay que
-                # handelearlo
-                self._clear_client_data(client_id, client_storage_dir)
+            self.__handle_end_transmission(client_id, msg_id)
 
             self.__middleware.ack(delivery_tag)
 
@@ -137,6 +122,58 @@ class TopK:
             )
 
         self.__middleware.ack(delivery_tag)
+
+    def __handle_end_transmission(self, client_id: str, msg_id: str):
+        if not os.path.exists(os.path.join('tmp', client_id)):
+            # Si se borro la data del cliente, eso quiere decir que
+            # se le mando el top, se borro la data y este end esta duplicado 
+            # o que esto es un END pelado del cliente
+            # 
+            # Por el segundo caso no puedo descartar el END y tengo que mandarlo,
+            # asi que simplemente propago el END, y luego el client_handler va a filtrar
+            # para no mandar duplicados al cliente o mandarle ENDS pelados sin data sin sentido 
+            logging.debug((
+                'Recived END, but client folder was already deleted.'
+                'Probably duplicated, propagating END'
+            ))
+
+            end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
+            self.__middleware.send_end(
+                queue=self._output_top_k_queue_name,
+                end_message=end_message,
+            )
+
+            return 
+        
+
+        end_was_duplicated = self._activity_log.log_end(client_id, msg_id)
+        if end_was_duplicated: return
+
+        self.__total_ends_received_per_client[client_id] = (
+            self.__total_ends_received_per_client.get(client_id, 0) + 1
+        )
+
+        if (
+            self.__total_ends_received_per_client[client_id]
+            == self._amount_of_receiving_queues
+        ):
+            self.__middleware.create_queue(self._output_top_k_queue_name)
+            # TODO: HANDELEAR CASO QUE SE ROMPA MID MANDAR COSAS
+            logging.debug('Sending top [Handle end transmssion]')
+            self.__send_top(self._output_top_k_queue_name, client_id=client_id)
+
+            end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
+            self.__middleware.send_end(
+                queue=self._output_top_k_queue_name,
+                end_message=end_message,
+            )
+
+            client_storage_dir = f"/tmp/{client_id}"
+            # TODO: Si se rompe mientras borra la data del cliente tambien hay que
+            # handelearlo
+            self._clear_client_data(client_id, client_storage_dir)
+            self._activity_log.remove_client_logs(client_id)    
+            if client_id in self.__total_ends_received_per_client: del self.__total_ends_received_per_client[client_id]
 
     def __send_top(self, forwarding_queue_name, client_id):
         NAME = 0

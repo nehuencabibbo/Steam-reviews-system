@@ -110,6 +110,7 @@ def main():
         config["RABBIT_IP"],
         prefetch_count=config["PREFETCH_COUNT"],
         batch_size=config["BATCH_SIZE"],
+        use_logging=True
     )
     config.pop("RABBIT_IP", None)
     config.pop("LOGGING_LEVEL", None)

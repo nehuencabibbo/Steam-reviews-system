@@ -40,7 +40,7 @@ while true; do
     random_index=$((RANDOM % ${#filtered_container_names_array[@]}))
     
     container_to_stop="${filtered_container_names_array[$random_index]}"
-    docker stop "$container_to_stop"
+    docker kill "$container_to_stop"
     echo "Stopping container: $container_to_stop, sleeping for: $SLEEP_TIME_AFTER_STOP seconds"
     sleep "$SLEEP_TIME_AFTER_STOP"
     docker start "$container_to_stop"

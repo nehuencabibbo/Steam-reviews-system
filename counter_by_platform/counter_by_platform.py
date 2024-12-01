@@ -148,6 +148,7 @@ class CounterByPlatform:
     
 
     def __send_results(self, session_id: str, end_msg_id: str):
+        # TODO: Hacer que si no existe el directorio, simplemente propague el end 
         PLATFORM = 0
         COUNT = 1
         self._middleware.create_queue(self.publish_queue)
