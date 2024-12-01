@@ -200,6 +200,7 @@ class FilterColumns:
             # Have to check both, the END from the client, and the consensus END, which has the client id as
             # prefix
 
+            # TODO: Fix
             if message[0] == SESSION_TIMEOUT_MESSAGE:
                 logging.info(
                     f"Received TIMEOUT while processing games for client: {client_id}"

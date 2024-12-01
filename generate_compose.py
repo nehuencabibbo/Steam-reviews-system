@@ -17,8 +17,8 @@ AMOUNT_OF_WATCHDOGS = 3
 LEADER_DISCOVERY_PORT = 10015
 
 #ALL QUERIES
-AMOUNT_OF_DROP_FILTER_COLUMNS = 5
-AMOUNT_OF_DROP_NULLS = 5
+AMOUNT_OF_FILTER_COLUMNS = 1
+AMOUNT_OF_DROP_NULLS = 1    
 # Q2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
@@ -103,7 +103,7 @@ def add_filter_columns(output: Dict, num: int, debug: bool):
         "container_name": f"filter_columns{num}",
         "environment": [
             f"NODE_ID={num}",
-            f"INSTANCES_OF_MYSELF={AMOUNT_OF_DROP_FILTER_COLUMNS}",
+            f"INSTANCES_OF_MYSELF={AMOUNT_OF_FILTER_COLUMNS}",
             f"LOGGING_LEVEL={'INFO' if not debug else 'DEBUG'}",
             f"WATCHDOG_PORT={WATCHDOG_PORT}",
             f"WATCHDOGS_IP={','.join([f'watchdog_{i}' for i in range(AMOUNT_OF_WATCHDOGS)])}",
@@ -490,7 +490,7 @@ def add_client_handler(output: Dict, num: int, debug: bool, port: int, node_name
     depends_on: dict[str, str] = {
         "rabbitmq": {"condition": "service_healthy"},
     }
-    # for i in range(AMOUNT_OF_DROP_FILTER_COLUMNS):
+    # for i in range(AMOUNT_OF_FILTER_COLUMNS):
     #     depends_on[f"filter_columns{i}"] = {"condition": "service_started"}
 
     logging.debug(f"depends_on: {depends_on}")
@@ -1091,31 +1091,31 @@ def generate_output(node_names: list, monitor_names: list):
         # reviews_file_path="data/reviews_sample.csv",
         games_file_path="data/games_sample.csv",
         reviews_file_path="data/reviews_sample.csv",
-        debug=False,
+        debug=True,
     )
-    add_client(
-        output,
-        num=2,
-        # games_file_path="data/games_sample.csv",
-        # reviews_file_path="data/reviews_sample.csv",
-        games_file_path="data/games.csv",
-        reviews_file_path="data/filtered_reviews.csv",
-        debug=False,
-    )
-    add_client_handler(output=output, num=1, debug=False, port=CLIENTS_PORT, node_names=node_names)
-    generate_drop_columns(output, AMOUNT_OF_DROP_FILTER_COLUMNS, debug=False, node_names=node_names)
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False, node_names=node_names)
+    # add_client(
+    #     output,
+    #     num=2,
+    #     # games_file_path="data/games_sample.csv",
+    #     # reviews_file_path="data/reviews_sample.csv",
+    #     games_file_path="data/games.csv",
+    #     reviews_file_path="data/filtered_reviews.csv",
+    #     debug=False,
+    # )
+    add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT, node_names=node_names)
+    generate_drop_columns(output, AMOUNT_OF_FILTER_COLUMNS, debug=True, node_names=node_names)
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True, node_names=node_names)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=False, node_names=node_names)
+    generate_q1(output=output, debug=True, node_names=node_names)
     # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=False, node_names=node_names)
+    # generate_q2(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=False, node_names=node_names)
+    # generate_q3(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=False, node_names=node_names)
+    # generate_q4(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=False, node_names=node_names)
+    # generate_q5(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
