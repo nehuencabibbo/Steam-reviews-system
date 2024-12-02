@@ -61,7 +61,7 @@ class Middleware:
                     self._channel.basic_publish(
                         exchange="",
                         routing_key=queue_name,
-                        body=batch,
+                        body=batch, 
                     )
                     self._logger.remove_queue_state(queue_name)
 
@@ -131,9 +131,9 @@ class Middleware:
 
     def publish(self, message: list[str], queue_name="", exchange_name=""):
         queue_batch, amount_of_messages = self.__batchs_per_queue[queue_name]
-        logging.debug(
-            f"Publishing: {queue_batch} | amount_of_messages: {amount_of_messages}"
-        )
+        # logging.debug(
+        #     f"Publishing: {queue_batch} | amount_of_messages: {amount_of_messages}"
+        # )
         # prev_batch_length = len(queue_batch)
         # bytes1,bytes2,bytes3,
         new_batch = self.__protocol.add_to_batch(queue_batch, message)
@@ -144,22 +144,22 @@ class Middleware:
         #     time.sleep(0.1)
         if self._logger:
             added_msg = new_batch[len(queue_batch) :]
-            logging.debug(
-                f"[MIDDLEWARE] Recived message: {added_msg}, for: {queue_name}"
-            )
+            # logging.debug(
+            #     f"[MIDDLEWARE] Recived message: {added_msg}, for: {queue_name}"
+            # )
             self._logger.log_for_middleware(queue_name, added_msg)
 
-            logging.debug("[MIDDLEWARE] STATE BEFORE KILL: ")
-            for name, data in self.__batchs_per_queue.items():
-                if "q1" in name:
-                    logging.debug(f"{name}: {data}")
+            # logging.debug("[MIDDLEWARE] STATE BEFORE KILL: ")
+            # for name, data in self.__batchs_per_queue.items():
+            #     if "q1" in name:
+            #         logging.debug(f"{name}: {data}")
 
             # if 'q1' in queue_name:
             #     logging.debug("KILL ME")
             #     time.sleep(0.1)
 
         if amount_of_messages + 1 == self.__batch_size:
-            logging.debug(f"[MIDDLEWARE] Sent batch {new_batch} for {queue_name}")
+            # logging.debug(f"[MIDDLEWARE] Sent batch {new_batch} for {queue_name}")
             self._channel.basic_publish(
                 exchange=exchange_name,
                 routing_key=queue_name,
@@ -167,15 +167,15 @@ class Middleware:
             )
             if self._logger:
                 self._logger.remove_queue_state(queue_name)
-            logging.debug(f"RESETING BATCH TO 0 FOR {queue_name}")
+            # logging.debug(f"RESETING BATCH TO 0 FOR {queue_name}")
             self.__batchs_per_queue[queue_name] = (
                 b"",
                 0,
             )
         else:
-            logging.debug(
-                f"[MIDDLEWARE] Saved {new_batch[len(queue_batch):]} for {queue_name}"
-            )
+            # logging.debug(
+            #     f"[MIDDLEWARE] Saved {new_batch[len(queue_batch):]} for {queue_name}"
+            # )
             self.__batchs_per_queue[queue_name] = (new_batch, amount_of_messages + 1)
 
     def get_rows_from_message(self, message) -> list[list[str]]:

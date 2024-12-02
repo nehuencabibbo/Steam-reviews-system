@@ -112,7 +112,7 @@ class CounterByPlatform:
             logging.info(f"Received timeout for client: {session_id}")
 
             client_dir = f"{self.storage_dir}/{session_id}"
-            storage.delete_directory(client_dir)
+            # storage.delete_directory(client_dir)
             self._middleware.ack(delivery_tag)
 
             return
@@ -223,7 +223,7 @@ class CounterByPlatform:
         )
         logging.debug(f"Sent results to queue {self.publish_queue}")
 
-        storage.delete_directory(client_dir)
+        # storage.delete_directory(client_dir)
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")

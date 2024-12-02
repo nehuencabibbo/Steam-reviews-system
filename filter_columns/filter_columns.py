@@ -188,7 +188,7 @@ class FilterColumns:
         forwarding_queue_name: str,
     ):
         body = self._middleware.get_rows_from_message(body)
-        logging.debug(f"ROWS: {body}")
+        # logging.debug(f"ROWS: {body}")
         # logging.debug(f"[FILTER COLUMNS {self._node_id}] Recived games body: {body}")
         if len(body) > 1:
             client_id = body.pop(0)[0]  # Get client_id,
@@ -237,7 +237,7 @@ class FilterColumns:
                 columns_to_keep, message, client_id=client_id
             )
 
-            # logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending games: {message}")
+            logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending games: {message}")
 
             self._middleware.publish(filtered_body, forwarding_queue_name, "")
 
@@ -301,7 +301,7 @@ class FilterColumns:
                 columns_to_keep, message, client_id=client_id
             )
 
-            # logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending review: {message}")
+            logging.debug(f"[FILTER COLUMNS {self._node_id}] Sending review: {message}")
 
             self._middleware.publish(filtered_body, forwarding_queue_name, "")
 
