@@ -36,7 +36,6 @@ class ClientHandler:
     ):
         self._middleware = middleware
         self._client_middleware = client_middleware
-        self._ends_received = 0
         self._port = kwargs["CLIENTS_PORT"]
         self._games_queue_name = kwargs["GAMES_QUEUE_NAME"]
         self._reviews_queue_name = kwargs["REVIEWS_QUEUE_NAME"]
@@ -118,7 +117,7 @@ class ClientHandler:
 
         elif msg_type == "Q":
             rows = self._middleware.get_rows_from_message(message)
-            logging.info(f"Req: {rows}")
+            logging.debug(f"Req: {rows}")
 
             self._send_query_results_if_there_are(
                 session_id=rows[0][0], query=rows[1][0]
@@ -273,8 +272,10 @@ class ClientHandler:
 
         logging.info(f"received results from queue: {query} from client: {client_id}")
 
-        connection_id = self._clients_info[client_id][CLIENT_INFO_CONNECTION_ID_INDEX]
         batch_per_client, client_ends = self._get_batch_per_client_and_ends(rows)
+        logging.info(
+            f"batch_per_client: {batch_per_client} | client_ends: {client_ends}"
+        )
 
         # Update client info
         storage.save_multiclient_batch(
@@ -308,7 +309,8 @@ class ClientHandler:
         # Get the batch for every client
         for record in records:
             client_id = record[0]
-            record = record[1:]
+            record = record[2:]  # TODO: Stop ignoring msg_id
+
             if record[0] == "END":
                 clients_ends.add(client_id)
             if not client_id in batch_per_client:
@@ -318,8 +320,10 @@ class ClientHandler:
         return (batch_per_client, clients_ends)
 
     def _add_finished_query_to_clients(self, clients: set[str], query: str):
+        logging.info(f"Clients: {clients}")
         for client_id in clients:
             client_info = self._clients_info[client_id]
+            logging.info(f"client_info: {client_info}")
 
             with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
                 client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX].add(query)

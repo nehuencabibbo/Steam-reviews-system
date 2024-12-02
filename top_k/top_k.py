@@ -23,7 +23,13 @@ END_TRANSMISSION_MESSAGE_END_INDEX = 2
 
 
 class TopK:
-    def __init__(self, middleware: Middleware, monitor: WatchdogClient, config: dict[str, str], activity_log: ActivityLog):
+    def __init__(
+        self,
+        middleware: Middleware,
+        monitor: WatchdogClient,
+        config: dict[str, str],
+        activity_log: ActivityLog,
+    ):
         self.__middleware = middleware
         self._client_monitor = monitor
 
@@ -39,7 +45,6 @@ class TopK:
 
         self.__total_ends_received_per_client = self._activity_log.recover_ends_state()
 
-
         signal.signal(signal.SIGINT, self.__signal_handler)
         signal.signal(signal.SIGTERM, self.__signal_handler)
 
@@ -51,7 +56,7 @@ class TopK:
         self._client_monitor.stop()
 
     def start(self):
-        
+
         monitor_thread = threading.Thread(target=self._client_monitor.start)
         monitor_thread.start()
 
@@ -85,14 +90,13 @@ class TopK:
         # tengo que retomar mandar los resultados
         client_ids_to_clear = []
         for client_id, amount in self.__total_ends_received_per_client.items():
-            if amount == self._amount_of_receiving_queues: 
-                
+            if amount == self._amount_of_receiving_queues:
+
                 self.__middleware.create_queue(self._output_top_k_queue_name)
                 # TODO: HANDELEAR CASO QUE SE ROMPA MID MANDAR COSAS
-                logging.debug('Sending top [Restart]')
+                logging.debug("Sending top [Restart]")
                 self.__send_top(self._output_top_k_queue_name, client_id=client_id)
 
-                
                 end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
                 self.__middleware.send_end(
                     queue=self._output_top_k_queue_name,
@@ -100,7 +104,7 @@ class TopK:
                 )
                 client_ids_to_clear.append(client_id)
 
-        for client_id in client_ids_to_clear:   
+        for client_id in client_ids_to_clear:
             client_storage_dir = f"/tmp/{client_id}"
             # TODO: Si se rompe mientras borra la data del cliente tambien hay que
             # handelearlo
@@ -137,7 +141,10 @@ class TopK:
             self.__middleware.ack(delivery_tag)
             return
 
-        if len(body) == 1 and body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
+        if (
+            len(body) == 1
+            and body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE
+        ):
             logging.debug("END of games received")
             client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
             msg_id = body[0][END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
@@ -164,15 +171,17 @@ class TopK:
         self.__middleware.ack(delivery_tag)
 
     def __handle_end_transmission(self, client_id: str, msg_id: str):
-        if not os.path.exists(os.path.join('tmp', client_id)):
+        if not os.path.exists(os.path.join("tmp", client_id)):
             # Si se borro la data del cliente, eso quiere decir que
-            # se le mando el top, se borro la data y este end esta duplicado 
+            # se le mando el top, se borro la data y este end esta duplicado
             # o que esto es un END pelado del cliente
-            # 
+            #
             # Por el segundo caso no puedo descartar el END y tengo que mandarlo,
             # asi que simplemente propago el END, y luego el client_handler va a filtrar
-            # para no mandar duplicados al cliente o mandarle ENDS pelados sin data sin sentido 
-            logging.debug('Recived END, but client directory was already deleted. Propagating END')
+            # para no mandar duplicados al cliente o mandarle ENDS pelados sin data sin sentido
+            logging.debug(
+                "Recived END, but client directory was already deleted. Propagating END"
+            )
 
             end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
             self.__middleware.send_end(
@@ -180,11 +189,11 @@ class TopK:
                 end_message=end_message,
             )
 
-            return 
-        
+            return
 
         end_was_duplicated = self._activity_log.log_end(client_id, msg_id)
-        if end_was_duplicated: return
+        if end_was_duplicated:
+            return
 
         self.__total_ends_received_per_client[client_id] = (
             self.__total_ends_received_per_client.get(client_id, 0) + 1
@@ -196,7 +205,7 @@ class TopK:
         ):
             self.__middleware.create_queue(self._output_top_k_queue_name)
             # TODO: HANDELEAR CASO QUE SE ROMPA MID MANDAR COSAS
-            logging.debug('Sending top [Handle end transmssion]')
+            logging.debug("Sending top [Handle end transmssion]")
             self.__send_top(self._output_top_k_queue_name, client_id=client_id)
 
             end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
@@ -209,7 +218,7 @@ class TopK:
             # TODO: Si se rompe mientras borra la data del cliente tambien hay que
             # handelearlo
             self._clear_client_data(client_id, client_storage_dir)
-            self._activity_log.remove_client_logs(client_id)    
+            self._activity_log.remove_client_logs(client_id)
 
     def __send_top(self, forwarding_queue_name, client_id):
         NAME = 0
@@ -220,7 +229,7 @@ class TopK:
             # Si no se lo paso a un agregador, sino que se lo estoy mandando al cliente,
             # le tengo que mandar solo lo que le interesa
             if "Q" in forwarding_queue_name:
-                record = [client_id, record[NAME], record[COUNT]]
+                record = [client_id, record[MSG_ID], record[NAME], record[COUNT]]
             # Si se lo paso a un agregador, se lo tengo que pasar en el orden
             # en el que yo mismo lo espero
             else:
@@ -229,7 +238,7 @@ class TopK:
             logging.debug(record)
             self.__middleware.publish(record, forwarding_queue_name, "")
 
-        self.__middleware.publish_batch(forwarding_queue_name)  
+        self.__middleware.publish_batch(forwarding_queue_name)
         logging.debug(f"Top sent to queue: {forwarding_queue_name}")
 
     def _clear_client_data(self, client_id: str, storage_dir: str):

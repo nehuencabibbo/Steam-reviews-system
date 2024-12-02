@@ -5,7 +5,7 @@ import shutil
 from typing import *
 
 from utils.utils import group_batch_by_field, group_msg_ids_per_client_by_field
-    
+
 
 # TODO: use threads for all functions or some parallelization tool (maybe)
 
@@ -52,7 +52,7 @@ def delete_file(file_path: str):
 
 
 def read_by_range(dir: str, range: int, key: int):
-    logging.debug(f'READING KEY: {key}, RANGE: {range}')
+    logging.debug(f"READING KEY: {key}, RANGE: {range}")
     file_name = f"partition_{key//range}.csv"
 
     file_path = os.path.join(dir, file_name)
@@ -171,6 +171,17 @@ def read_sorted_file(dir: str):
 #         _write_batch_on_file(dir=f"{dir}/{client_id}/", file_name=file_name, records=batchs)
 
 
+def _write_batch_on_file(dir: str, file_name: str, records: list[list[str]]):
+    os.makedirs(dir, exist_ok=True)
+
+    # for file_name, records in records_per_file.items():
+    file_path = os.path.join(dir, file_name)
+    with open(file_path, "a", newline="") as f:
+        writer = csv.writer(f)
+        for record in records:
+            writer.writerow(record)
+
+
 def save_multiclient_batch(
     dir: str, batchs_per_client: dict[str, list[str]], file_name: str
 ):
@@ -196,7 +207,9 @@ def _get_batch_per_client(records):
 
 
 # TODO: Sacar el group_batch_by_field_de_aca
-def write_batch_by_range_per_client(dir: str, range: int, records: List[List[str]], key_index: int):
+def write_batch_by_range_per_client(
+    dir: str, range: int, records: List[List[str]], key_index: int
+):
     records_per_client = group_batch_by_field(records)
     # logging.debug(f'Records per client: {records_per_client}')
     for client_id, batch in records_per_client.items():
@@ -206,37 +219,42 @@ def write_batch_by_range_per_client(dir: str, range: int, records: List[List[str
 
 
 def atomically_append_to_file(dir: str, file_name: str, records: List[List[str]]):
-    '''
-    Records need to have the following format: 
+    """
+    Records need to have the following format:
 
         [
             [UNIQUE_IDENTIFIER, ...],
             ...
         ]
-    
-    If a unique identifier (for ANY record) is present in the corresponding file, 
-    then the whole append operation will be aborted, as that indicates that this 
-    list of record has already been processed completly 
-    '''
+
+    If a unique identifier (for ANY record) is present in the corresponding file,
+    then the whole append operation will be aborted, as that indicates that this
+    list of record has already been processed completly
+    """
     UNIQUE_IDENTIFIER_INDEX = 0
     # If file is large this is really ineficient
-    temp_file_path = os.path.join(dir, 'temp_append.csv')
+    temp_file_path = os.path.join(dir, "temp_append.csv")
     file_path = os.path.join(dir, file_name)
 
     create_file_if_unexistent(file_path)
     found_duplicate = False
-    with open(file_path, 'r', newline='') as original, open(temp_file_path, 'w', newline='') as temp: 
+    with open(file_path, "r", newline="") as original, open(
+        temp_file_path, "w", newline=""
+    ) as temp:
         reader = csv.reader(original)
         writer = csv.writer(temp)
-        
+
         # Aunque esto sea O(n^2), al ser tan acotados los archivos, no es tan costoso.
-        for line in reader: 
+        for line in reader:
             for record in records:
                 if line[UNIQUE_IDENTIFIER_INDEX] == record[UNIQUE_IDENTIFIER_INDEX]:
                     found_duplicate = True
-                    logging.debug(f'[Atomic append] Found duplicate, discarding: {records}')
+                    logging.debug(
+                        f"[Atomic append] Found duplicate, discarding: {records}"
+                    )
                     break
-            if found_duplicate: break
+            if found_duplicate:
+                break
             writer.writerow(line)
 
         for record in records:
@@ -249,17 +267,14 @@ def atomically_append_to_file(dir: str, file_name: str, records: List[List[str]]
 
 
 def _write_batch_by_range(
-        dir: str, 
-        range_for_partition: int, 
-        records: list[list[str]],
-        key_index: int
-    ):
+    dir: str, range_for_partition: int, records: list[list[str]], key_index: int
+):
 
     os.makedirs(dir, exist_ok=True)
     # get the file for each record in the batch -> {"file_name": [record1, record2], ....}
     records_per_file = group_by_file(range_for_partition, records, key_index)
     # {
-    #   'partition_75290.csv': [['35199', '752900', 'Prehistoric Hunt'], ...], 
+    #   'partition_75290.csv': [['35199', '752900', 'Prehistoric Hunt'], ...],
     #   'partition_118045.csv': [['35232', '1180450', 'Exitium'], ...],
     # }
     # logging.debug(f"Records per file: {records_per_file}")
@@ -270,12 +285,10 @@ def _write_batch_by_range(
 
 
 def group_by_file(
-    range: int, 
-    records: list[list[str]],
-    key_index: int = 1
+    range: int, records: list[list[str]], key_index: int = 1
 ) -> dict[str, list[str]]:
     records_per_file = {}
-    FILE_PREFIX = 'partition'
+    FILE_PREFIX = "partition"
     for record in records:
         try:
             key = int(record[key_index])
@@ -318,9 +331,9 @@ def sum_batch_to_records_per_client(
         MSG_ID_INDEX,
         FILED_TO_COUNT_BY,
     )
-    # Por ejemplo si se agrupa por platform: 
+    # Por ejemplo si se agrupa por platform:
     # {
-    #    clientid1: 
+    #    clientid1:
     #       {
     #           WINDOWS: [msgid1, msgid2, ...],
     #           LINUX: [msgid1, msgid2, ...],
@@ -328,7 +341,7 @@ def sum_batch_to_records_per_client(
     #    ...
     # }
     # Si fuera por app_id, entonces en vez de WINDOWS y LINUX van app_ids distintos
-    
+
     need_to_partition_by_range = range_for_partition != -1
     for client_id, new_records in msg_ids_per_record_by_client_id.items():
         logging.debug(f"NEW RECORDS: {new_records}")
@@ -364,7 +377,6 @@ def _group_by_file_dict(
             raise e
 
     return records_per_file
-
 
 
 def create_file_if_unexistent(full_path: str):
@@ -471,12 +483,7 @@ def add_batch_to_sorted_file_per_client(
     for client_id, batch in records_per_client.items():
         client_dir = os.path.join(dir, client_id)
 
-        _add_batch_to_sorted_file(
-            client_dir, 
-            batch, 
-            ascending=ascending, 
-            limit=limit
-        )
+        _add_batch_to_sorted_file(client_dir, batch, ascending=ascending, limit=limit)
 
 
 # JUST FOR _add_batch_to_sorted_file use

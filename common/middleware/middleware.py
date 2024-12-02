@@ -55,14 +55,16 @@ class Middleware:
             for queue_name, data in self.__batchs_per_queue.items():
                 batch, amount = data
                 if amount == self.__batch_size:
-                    logging.debug(f'[MIDDLEWARE] While recovering, reached batch limit for {queue_name}, sending {batch}')
+                    logging.debug(
+                        f"[MIDDLEWARE] While recovering, reached batch limit for {queue_name}, sending {batch}"
+                    )
                     self._channel.basic_publish(
                         exchange="",
                         routing_key=queue_name,
                         body=batch,
                     )
                     self._logger.remove_queue_state(queue_name)
-                    
+
                     self.__batchs_per_queue[queue_name] = [
                         b"",
                         0,
@@ -70,7 +72,7 @@ class Middleware:
 
             logging.debug("[MIDDLEWARE] RECOVERED STATE:")
             for queue_name, data in self.__batchs_per_queue.items():
-                if 'q1' in queue_name:
+                if "q1" in queue_name:
                     logging.debug(f"{queue_name}: {data}")
 
     def __create_connection(self, ip):
@@ -89,7 +91,7 @@ class Middleware:
             self.__batchs_per_queue[name] = (
                 b"",
                 0,
-            )  
+            )
         self._channel.queue_declare(queue=name)
 
     def create_anonymous_queue(self):
@@ -141,15 +143,17 @@ class Middleware:
         #     logging.debug('PREPARE FOR KILL')
         #     time.sleep(0.1)
         if self._logger:
-            added_msg = new_batch[len(queue_batch):]
-            logging.debug(f"[MIDDLEWARE] Recived message: {added_msg}, for: {queue_name}")
+            added_msg = new_batch[len(queue_batch) :]
+            logging.debug(
+                f"[MIDDLEWARE] Recived message: {added_msg}, for: {queue_name}"
+            )
             self._logger.log_for_middleware(queue_name, added_msg)
 
             logging.debug("[MIDDLEWARE] STATE BEFORE KILL: ")
             for name, data in self.__batchs_per_queue.items():
-                if 'q1' in name:
+                if "q1" in name:
                     logging.debug(f"{name}: {data}")
-            
+
             # if 'q1' in queue_name:
             #     logging.debug("KILL ME")
             #     time.sleep(0.1)
@@ -161,8 +165,9 @@ class Middleware:
                 routing_key=queue_name,
                 body=new_batch,
             )
-            if self._logger: self._logger.remove_queue_state(queue_name)
-            logging.debug(f'RESETING BATCH TO 0 FOR {queue_name}')
+            if self._logger:
+                self._logger.remove_queue_state(queue_name)
+            logging.debug(f"RESETING BATCH TO 0 FOR {queue_name}")
             self.__batchs_per_queue[queue_name] = (
                 b"",
                 0,
@@ -186,13 +191,12 @@ class Middleware:
         self._channel.basic_publish(
             exchange=exchange_name, routing_key=queue, body=end_message
         )
+        logging.debug(f"Sent: {end_message} to: {queue}")
 
     def start_consuming(self):
         try:
-            print(f"Running? {self.is_running}")
             while not self.is_running.is_set():
                 self._connection.process_data_events(time_limit=1)
-                print("Not blocked at process data events")
 
         except pika.exceptions.ChannelClosedByBroker as e:
             # Rabbit mq terminated during execution most probably
@@ -272,4 +276,3 @@ class Middleware:
         except Exception as _:
             logging.debug("The connection with rabbit was closed abruptly")
             return False
-

@@ -56,7 +56,7 @@ def get_config():
             os.getenv("NEEDED_GAMES_ENDS", config["DEFAULT"]["NEEDED_GAMES_ENDS"])
         )
 
-        # For forwarding to the client 
+        # For forwarding to the client
         config_params["INSTANCES_OF_MYSELF"] = int(
             os.getenv("INSTANCES_OF_MYSELF", config["DEFAULT"]["INSTANCES_OF_MYSELF"])
         )
@@ -124,9 +124,11 @@ def main():
     monitor_port = config.pop("WATCHDOG_PORT")
     node_name = config.pop("NODE_NAME")
     discovery_port = config.pop("LEADER_DISCOVERY_PORT")
-    monitor = WatchdogClient(monitor_ip, monitor_port, node_name, discovery_port, middleware)
-    
-    join = Join(middleware, monitor, config, activity_log)
+    monitor = WatchdogClient(
+        monitor_ip, monitor_port, node_name, discovery_port, middleware
+    )
+
+    join = Join(middleware, config, activity_log, monitor)
 
     join.start()
 

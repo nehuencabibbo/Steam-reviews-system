@@ -19,7 +19,7 @@ MAX_RESTART_SESSION_RETRIES = 8
 MAX_NEW_SESSION_RETRIES = 3
 MAX_SESSION_ACKS_RETRIES = 5
 
-END_TRANSMISSION_END_INDEX = 2
+END_TRANSMISSION_END_INDEX = 0
 
 
 class Client:
@@ -50,7 +50,7 @@ class Client:
         self._has_restarted = False
 
         # TODO: Encapsular esto en el middleware
-        self._msg_id = 0 
+        self._msg_id = 0
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -269,8 +269,11 @@ class Client:
     def __handle_query_result(self, results):
         if len(results) == 0:
             return
+        logging.debug(f"Result: {results}")
 
-        query = results.pop(-1)[0]
+        query = results.pop(-1)[
+            0
+        ]  # [['WINDOWS', '1900'], ['MAC', '386'], ['LINUX', '233'], ['END'], ['Q1']] -> e.g of results for Q1
 
         if query not in self._query_results:
             self._query_results[query] = []

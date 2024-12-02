@@ -21,8 +21,15 @@ END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX = 0
 END_TRANSMISSION_MESSAGE_MSG_ID_INDEX = 1
 END_TRANSMISSION_MESSAGE_END_INDEX = 2
 
+
 class Percentile:
-    def __init__(self, config: dict, middleware: Middleware, monitor: WatchdogClient, activity_log: ActivityLog):
+    def __init__(
+        self,
+        config: dict,
+        middleware: Middleware,
+        monitor: WatchdogClient,
+        activity_log: ActivityLog,
+    ):
         self._middleware = middleware
         self._got_sigterm = False
         self._client_monitor = monitor
@@ -42,7 +49,6 @@ class Percentile:
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
-
     def run(self):
 
         monitor_thread = threading.Thread(target=self._client_monitor.start)
@@ -53,8 +59,7 @@ class Percentile:
 
         callback = self._middleware.generate_callback(self._handle_message)
         self._middleware.attach_callback(self._consume_queue, callback)
-
-        self.__resume_publish_if_necesary()
+        # self.__resume_publish_if_necesary()
         try:
             logging.debug("Starting to consume...")
             self._middleware.start_consuming()
@@ -65,7 +70,6 @@ class Percentile:
             self._middleware.shutdown()
             monitor_thread.join()
 
-        
     def __resume_publish_if_necesary(self):
         client_ids_to_remove = []
         for client_id, amount in self._recived_ends.items():
@@ -75,9 +79,8 @@ class Percentile:
 
         for client_id in client_ids_to_remove:
             client_dir = os.path.join(self._storage_dir, client_id)
-            self._clear_client_data(client_id,client_dir)
+            self._clear_client_data(client_id, client_dir)
             self._activity_log.remove_client_logs(client_id)
-
 
     def _handle_message(self, delivery_tag, body):
         body = self._middleware.get_rows_from_message(body)
@@ -111,7 +114,10 @@ class Percentile:
             self._middleware.ack(delivery_tag)
             return
 
-        if len(body) == 1 and body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
+        if (
+            len(body) == 1
+            and body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE
+        ):
             client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
             msg_id = body[0][END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
 
@@ -121,32 +127,30 @@ class Percentile:
 
             return
 
-        storage.add_batch_to_sorted_file_per_client(
-            self._storage_dir, 
-            body
-        )
-        
+        storage.add_batch_to_sorted_file_per_client(self._storage_dir, body)
+
         self._middleware.ack(delivery_tag)
 
-
     def _handle_end_transmission(self, client_id: str, msg_id: str):
-        logging.debug(f'END FROM CLIENT: {client_id}')
+        logging.debug(f"END FROM CLIENT: {client_id}")
 
         client_dir = os.path.join(self._storage_dir, client_id)
         if not os.path.exists(client_dir):
-            logging.debug('Recived END, but client directory was already deleted. Probably duplicate')
+            logging.debug(
+                "Recived END, but client directory was already deleted. Probably duplicate"
+            )
 
             self._middleware.send_end(
-                self._publish_queue, 
-                end_message=[client_id, self._node_id, END_TRANSMISSION_MESSAGE]
+                self._publish_queue,
+                end_message=[client_id, self._node_id, END_TRANSMISSION_MESSAGE],
             )
             return
-        
-        was_duplicate = self._activity_log.log_end(client_id, msg_id)
-        if was_duplicate: 
-            logging.debug(f'Filtered duplicate END {msg_id}')
 
-            return 
+        was_duplicate = self._activity_log.log_end(client_id, msg_id)
+        if was_duplicate:
+            logging.debug(f"Filtered duplicate END {msg_id}")
+
+            return
 
         self._recived_ends[client_id] = self._recived_ends.get(client_id, 0) + 1
 
@@ -156,7 +160,6 @@ class Percentile:
             self._send_results(client_id)
             self._clear_client_data(client_id, client_dir)
             self._activity_log.remove_client_logs(client_id)
-        
 
     def _send_results(self, client_id):
 
@@ -177,8 +180,8 @@ class Percentile:
 
         self._middleware.publish_batch(forwarding_queue_name)
         self._middleware.send_end(
-            forwarding_queue_name, 
-            end_message=[client_id, self._node_id, END_TRANSMISSION_MESSAGE]
+            forwarding_queue_name,
+            end_message=[client_id, self._node_id, END_TRANSMISSION_MESSAGE],
         )
 
     def _get_percentile(self, client_id):
@@ -216,12 +219,12 @@ class Percentile:
             logging.debug(f"Couldn't delete directory: {storage_dir}")
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
-        
+
         if client_id in self._recived_ends:
             del self._recived_ends[client_id]
         if client_id in self._received_client_timeouts:
             del self._received_client_timeouts[client_id]
-            
+
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
         self._got_sigterm = True

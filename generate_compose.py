@@ -8,17 +8,17 @@ from typing import *
 
 CLIENTS_PORT = 7777
 
-#WATCHDOG
+# WATCHDOG
 WATCHDOG_PORT = 8080
-WATCHDOG_ELECTION_PORT=9000  
-WATCHDOG_LEADER_COMUNICATION_PORT=9500
+WATCHDOG_ELECTION_PORT = 9000
+WATCHDOG_LEADER_COMUNICATION_PORT = 9500
 WAIT_BETWEEN_HEARTBEAT = 5.0
 AMOUNT_OF_WATCHDOGS = 3
 LEADER_DISCOVERY_PORT = 10015
 
-#ALL QUERIES
+# ALL QUERIES
 AMOUNT_OF_FILTER_COLUMNS = 1
-AMOUNT_OF_DROP_NULLS = 1    
+AMOUNT_OF_DROP_NULLS = 1
 # Q2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
@@ -52,13 +52,14 @@ def create_file(output, file_name):
     with open(file_name, "w") as output_file:
         yaml.safe_dump(output, output_file, sort_keys=False, default_flow_style=False)
 
+
 def create_names_file(node_names, monitor_names):
 
     os.makedirs("watchdog_status", exist_ok=True)
 
     with open("watchdog_status/node_names.json", "w") as file:
         json.dump(node_names, file)
-    
+
     with open("watchdog_status/monitor_names.json", "w") as file:
         json.dump(monitor_names, file)
 
@@ -81,7 +82,7 @@ def add_watchdog(output, port, debug=False, num=1):
         "container_name": f"watchdog_{num}",
         "volumes": [
             "/var/run/docker.sock:/var/run/docker.sock",
-            "./watchdog_status/:/watchdog_status"
+            "./watchdog_status/:/watchdog_status",
         ],
         "environment": [
             f"NODE_ID={num}",
@@ -145,7 +146,7 @@ def add_counter_by_platform(
     debug: bool,
     node_names: list,
 ):
-    node_names.append(f"{query}_counter{num}") #move to generator if any
+    node_names.append(f"{query}_counter{num}")  # move to generator if any
     output["services"][f"{query}_counter{num}"] = {
         "container_name": f"{query}_counter{num}",
         "image": "counter_by_platform:latest",
@@ -242,7 +243,7 @@ def add_top_k_aggregator(
     k: int,
     amount_of_top_k_nodes: int,
     debug: bool,
-    node_names:list,
+    node_names: list,
 ):
     node_names.append(f"{query}_top_k{num}")
     output["services"][f"{query}_top_k{num}"] = {
@@ -266,7 +267,6 @@ def add_top_k_aggregator(
     }
 
 
-
 def add_filter_by_language(
     output: Dict,
     query: str,
@@ -280,7 +280,7 @@ def add_filter_by_language(
     columns_to_keep: str,
     instances_of_myself: str,
     debug: bool,
-    node_names:list,
+    node_names: list,
     batch_size: int = 10,
     prefetch_count=100,
 ):
@@ -437,6 +437,7 @@ def generate_watchdogs(output, amount, monitor_names: list, debug=False):
         add_watchdog(output, port=WATCHDOG_PORT, debug=debug, num=i)
         monitor_names.append(f"watchdog_{i}")
 
+
 def generate_drop_nulls(output: Dict, amount: int, node_names: list, debug=False):
     for i in range(amount):
         add_drop_nulls(output=output, num=i, debug=debug)
@@ -485,8 +486,10 @@ def add_client(
     }
 
 
-def add_client_handler(output: Dict, num: int, debug: bool, port: int, node_names: list):
-    node_names.append(f"client_handler{num}") #move to generate... if any
+def add_client_handler(
+    output: Dict, num: int, debug: bool, port: int, node_names: list
+):
+    node_names.append(f"client_handler{num}")  # move to generate... if any
     depends_on: dict[str, str] = {
         "rabbitmq": {"condition": "service_healthy"},
     }
@@ -524,7 +527,7 @@ def generate_filters_by_value(
 ):
     for i in range(amount_of_filters):
         add_filter_by_value(**kwargs, num=i, debug=debug, node_names=node_names)
-        
+
 
 def generate_filters_by_language(
     amount_of_filters: int,
@@ -536,12 +539,14 @@ def generate_filters_by_language(
         add_filter_by_language(**kwargs, num=i, debug=debug, node_names=node_names)
 
 
-def generate_counters_by_app_id(amount_of_counters: int, node_names:list, debug=False, **kwargs):
+def generate_counters_by_app_id(
+    amount_of_counters: int, node_names: list, debug=False, **kwargs
+):
     for i in range(amount_of_counters):
         add_counter_by_app_id(**kwargs, node_names=node_names, num=i, debug=debug)
 
 
-def generate_tops_k(amount_of_tops_k: int, node_names:list, debug=False, **kwargs):
+def generate_tops_k(amount_of_tops_k: int, node_names: list, debug=False, **kwargs):
     for i in range(amount_of_tops_k):
         add_top_k(**kwargs, num=i, node_names=node_names, debug=debug)
 
@@ -553,10 +558,16 @@ def generate_joins(
     **kwargs,
 ):
     for i in range(amount_of_joins):
-        add_join(**kwargs, num=i, node_names=node_names, debug=debug, instances_of_myself=amount_of_joins)
+        add_join(
+            **kwargs,
+            num=i,
+            node_names=node_names,
+            debug=debug,
+            instances_of_myself=amount_of_joins,
+        )
 
 
-def generate_q1(node_names: list, output=Dict,debug=True):
+def generate_q1(node_names: list, output=Dict, debug=True):
     add_counter_by_platform(
         output=output,
         query="q1",
@@ -564,7 +575,7 @@ def generate_q1(node_names: list, output=Dict,debug=True):
         consume_queue_sufix="q1_platform",
         publish_queue="Q1",
         debug=debug,
-        node_names=node_names
+        node_names=node_names,
     )
 
 
@@ -592,7 +603,10 @@ def generate_q2(node_names: list, output=Dict, debug=False):
         "instances_of_myself": Q2_AMOUNT_OF_INDIE_GAMES_FILTERS,
     }
     generate_filters_by_value(
-        Q2_AMOUNT_OF_INDIE_GAMES_FILTERS, node_names, debug=debug, **q2_indie_filter_args
+        Q2_AMOUNT_OF_INDIE_GAMES_FILTERS,
+        node_names,
+        debug=debug,
+        **q2_indie_filter_args,
     )
 
     # Recived message:
@@ -650,7 +664,7 @@ def generate_q2(node_names: list, output=Dict, debug=False):
         k=10,
         amount_of_top_k_nodes=Q2_AMOUNT_OF_TOP_K_NODES,
         debug=debug,
-        node_names = node_names
+        node_names=node_names,
     )
 
 
@@ -670,7 +684,10 @@ def generate_q3(node_names: list, output: Dict, debug=False):
     }
 
     generate_filters_by_value(
-        Q3_AMOUNT_OF_INDIE_GAMES_FILTERS, node_names, debug=debug, **q3_filter_indie_games_args
+        Q3_AMOUNT_OF_INDIE_GAMES_FILTERS,
+        node_names,
+        debug=debug,
+        **q3_filter_indie_games_args,
     )
 
     q3_filter_positive_args = {
@@ -687,7 +704,10 @@ def generate_q3(node_names: list, output: Dict, debug=False):
         "instances_of_myself": Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS,
     }
     generate_filters_by_value(
-        Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS, node_names, debug=debug, **q3_filter_positive_args
+        Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS,
+        node_names,
+        debug=debug,
+        **q3_filter_positive_args,
     )
 
     q3_counter_by_app_id_args = {
@@ -699,7 +719,10 @@ def generate_q3(node_names: list, output: Dict, debug=False):
         "needed_ends": 1,  # filter sends only one end
     }
     generate_counters_by_app_id(
-        Q3_AMOUNT_OF_COUNTERS_BY_APP_ID, node_names, debug=debug, **q3_counter_by_app_id_args
+        Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
+        node_names,
+        debug=debug,
+        **q3_counter_by_app_id_args,
     )
 
     q3_join_args = {
@@ -732,7 +755,9 @@ def generate_q3(node_names: list, output: Dict, debug=False):
         "amount_of_receiving_queues": Q3_AMOUNT_OF_JOINS,
     }
 
-    generate_tops_k(Q3_AMOUNT_OF_TOP_K_NODES, node_names=node_names, debug=debug, **q3_tops_k_args)
+    generate_tops_k(
+        Q3_AMOUNT_OF_TOP_K_NODES, node_names=node_names, debug=debug, **q3_tops_k_args
+    )
 
     add_top_k_aggregator(
         output=output,
@@ -772,7 +797,10 @@ def generate_q4(node_names: list, output: Dict, debug=False):
     }
 
     generate_filters_by_value(
-        Q4_AMOUNT_OF_ACTION_GAMES_FILTERS, node_names=node_names, debug=debug, **q4_filter_action_games_args
+        Q4_AMOUNT_OF_ACTION_GAMES_FILTERS,
+        node_names=node_names,
+        debug=debug,
+        **q4_filter_action_games_args,
     )
 
     q4_filter_negative_reviews_args = {
@@ -799,7 +827,7 @@ def generate_q4(node_names: list, output: Dict, debug=False):
 
     generate_filters_by_value(
         Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
-        node_names=node_names, 
+        node_names=node_names,
         debug=debug,
         **q4_filter_negative_reviews_args,
     )
@@ -908,7 +936,7 @@ def generate_q4(node_names: list, output: Dict, debug=False):
 
     generate_filters_by_language(
         Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS,
-        node_names=node_names, 
+        node_names=node_names,
         debug=debug,
         **q4_filter_english_reviews_args,
     )
@@ -999,7 +1027,10 @@ def generate_q5(node_names: list, output: Dict, debug=False):
         "instances_of_myself": Q5_AMOUNT_OF_ACTION_GAMES_FILTERS,
     }
     generate_filters_by_value(
-        Q5_AMOUNT_OF_ACTION_GAMES_FILTERS, node_names=node_names, debug=debug, **q5_filter_action_games_args
+        Q5_AMOUNT_OF_ACTION_GAMES_FILTERS,
+        node_names=node_names,
+        debug=debug,
+        **q5_filter_action_games_args,
     )
 
     q5_filter_negative_reviews_args = {
@@ -1032,7 +1063,10 @@ def generate_q5(node_names: list, output: Dict, debug=False):
     }
 
     generate_counters_by_app_id(
-        Q5_AMOUNT_OF_COUNTERS, node_names=node_names, debug=debug, **q5_negative_reviews_counter_args
+        Q5_AMOUNT_OF_COUNTERS,
+        node_names=node_names,
+        debug=debug,
+        **q5_negative_reviews_counter_args,
     )
 
     q5_join = {
@@ -1102,20 +1136,24 @@ def generate_output(node_names: list, monitor_names: list):
     #     reviews_file_path="data/filtered_reviews.csv",
     #     debug=False,
     # )
-    add_client_handler(output=output, num=1, debug=True, port=CLIENTS_PORT, node_names=node_names)
-    generate_drop_columns(output, AMOUNT_OF_FILTER_COLUMNS, debug=True, node_names=node_names)
+    add_client_handler(
+        output=output, num=1, debug=False, port=CLIENTS_PORT, node_names=node_names
+    )
+    generate_drop_columns(
+        output, AMOUNT_OF_FILTER_COLUMNS, debug=True, node_names=node_names
+    )
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True, node_names=node_names)
 
     # -------------------------------------------- Q1 -----------------------------------------
     generate_q1(output=output, debug=True, node_names=node_names)
     # -------------------------------------------- Q2 -----------------------------------------
-    # generate_q2(output=output, debug=False, node_names=node_names)
+    generate_q2(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q3 -----------------------------------------
     # generate_q3(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q4 -----------------------------------------
     # generate_q4(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output, debug=False, node_names=node_names)
+    generate_q5(output=output, debug=True, node_names=node_names)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
