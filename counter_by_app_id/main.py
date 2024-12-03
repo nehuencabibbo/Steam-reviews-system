@@ -66,6 +66,9 @@ def get_config():
 
         config_params["LEADER_DISCOVERY_PORT"] = int(os.getenv("LEADER_DISCOVERY_PORT"))
 
+        #Testing
+        config_params["EXIT"] = int(os.getenv("EXIT", config["DEFAULT"]["EXIT"]))
+
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
     except ValueError as e:

@@ -9,6 +9,7 @@ from common.server_socket.tcp_middleware import TCPMiddleware
 def get_config():
     config_params = {}
     config = ConfigParser(os.environ)
+    config.read("config.ini")
     try:
         config_params["LOGGING_LEVEL"] = os.getenv(
             "LOGGING_LEVEL", config["DEFAULT"]["LOGGING_LEVEL"]
@@ -26,9 +27,20 @@ def get_config():
             config["DEFAULT"]["WAIT_BETWEEN_HEARTBEAT"],
             )
         )
-        config_params["LEADER_DISCOVERY_PORT"] = int(os.getenv("LEADER_DISCOVERY_PORT", config["DEFAULT"]["LEADER_DISCOVERY_PORT"]))
+        config_params["LEADER_DISCOVERY_PORT"] = int(
+            os.getenv("LEADER_DISCOVERY_PORT", 
+            config["DEFAULT"]["LEADER_DISCOVERY_PORT"]
+            )
+        )
 
-        config_params["AMOUNT_OF_MONITORS"] = int(os.getenv("AMOUNT_OF_MONITORS", config["DEFAULT"]["AMOUNT_OF_MONITORS"]))
+        config_params["AMOUNT_OF_MONITORS"] = int(
+            os.getenv("AMOUNT_OF_MONITORS", 
+            config["DEFAULT"]["AMOUNT_OF_MONITORS"]
+            )
+        )
+
+        #Testing
+        config_params["EXIT"] = int(os.getenv("EXIT", config["DEFAULT"]["EXIT"]))
 
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
