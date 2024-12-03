@@ -30,11 +30,9 @@ class WatchdogClient:
 
         while not self._stop:
             try:
-                logging.debug("[MONITOR] Looking for leader")
                 self._conect_to_monitor()
                 
                 if not self._middleware.is_connected():
-                    logging.debug("[MONITOR] Could not connect to any monitor. Retrying...")
                     continue
                 
                 logging.debug(f"[MONITOR] Connected to monitor. Checking in...")
@@ -52,11 +50,12 @@ class WatchdogClient:
 
     def _conect_to_monitor(self):
         leader_id = self._leader_finder.look_for_leader()
-        logging.debug(f"[MONITOR] The leader is: {leader_id}")
 
         if leader_id is None:
             return
         
+        logging.debug(f"[MONITOR] The leader is: {leader_id}")
+
         monitor_ip = f"watchdog_{leader_id}"
         try:
             self._middleware.connect((monitor_ip,  self._monitor_port))
@@ -83,15 +82,15 @@ class WatchdogClient:
 
         while not self._stop: 
 
-            logging.debug("[MONITOR] Waiting for heartbeat")
+            #logging.debug("[MONITOR] Waiting for heartbeat")
             msg = self._middleware.receive_message()
 
             if not self._check_node_general_functionality():
-                logging.debug("System status is abnormal, sending NACK")
+                logging.debug("[MONITOR] System status is abnormal, sending NACK")
                 self._middleware.send_message(NACK_MSG)
                 return False
 
-            logging.debug("System status is OK, sending ACK")
+            #logging.debug("[MONITOR] System status is OK, sending ACK")
             self._middleware.send_message(msg)
         
 

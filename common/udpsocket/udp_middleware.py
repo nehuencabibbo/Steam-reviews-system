@@ -9,11 +9,11 @@ class UDPMiddlewareTimeoutError(Exception):
 
 class UDPMiddleware:
 
-    def __init__(self, send_retries= 2):
+    def __init__(self, send_retries=3):
         self._stop = False
 
         self._sender_lock = threading.Lock() 
-        self._sender_socket = UDPSocket(timeout=0.5, amount_of_retries=send_retries)
+        self._sender_socket = UDPSocket(timeout=0.1, amount_of_retries=send_retries)
         self._receiver_socket = UDPSocket()
         self._addresses_to_broadcast = []
 

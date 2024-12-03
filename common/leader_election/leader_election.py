@@ -13,9 +13,9 @@ LEADER_COMMAND = "C"
 LEADER_QUERY_COMMAND = "L"
 LEADER_QUERY_RESPONSE = "R"
 
-LEADER_ELECTION_TIMEOUT = 7
-LEADER_QUERY_TIMEOUT = 3
-LEADER_ELECTED_TIMEOUT = 15
+LEADER_ELECTION_TIMEOUT = 3
+LEADER_QUERY_TIMEOUT = 2
+LEADER_ELECTED_TIMEOUT = 6
 MESSAGE_LENGTH = 3
 
 CHECK_STOP_TIMEOUT = 1
@@ -94,7 +94,7 @@ class LeaderElection:
                 if self._stop.is_set() or not self._got_ok.is_set():
                     continue
 
-                time_diff = self._got_ok_time - time()
+                time_diff = time() - self._got_ok_time
                 if time_diff > LEADER_ELECTED_TIMEOUT:
                     logging.info("No response from leader candidate.")
                     self._handle_no_candidate_response()

@@ -95,6 +95,8 @@ def add_watchdog(output, port, debug=False, num=1):
             f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "networks": ["net"],
+        "dns": ["127.0.0.1"],
+        "dns_opt": ["timeout:2", "rotate", "ndots:0"],
     }
 
 
