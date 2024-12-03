@@ -14,8 +14,8 @@ from leader_discovery_service import LeaderDiscoveryService
 NUMBER_OF_RETRIES = 5
 TIMEOUT_BEFORE_FALLEN_CHECK = 30
 REGISTRATION_CONFIRM = "K"
-MAX_MONITOR_TIMEOUT = 7
-TIME_BETWEEN_HEARTBEATS = 5
+MAX_MONITOR_TIMEOUT = 3
+TIME_BETWEEN_HEARTBEATS = 1 #si me envian cada 1 segundo, cada vez que recibo un heartbeat debo revisar si alguno esta caido
 HEARTBEAT_MESSAGE = "A"
 WATCHDOG_NAME_PREFIX = "watchdog_"
 
@@ -57,12 +57,13 @@ class Watchdog:
            
 
     def start(self):
-        logging.info("Starting watchdog")
+        logging.info("Looking for active leader")
 
         self._leader_election.look_for_leader()
   
         while not self._got_sigterm.is_set():
             if self._leader_election.get_leader_id() is None:
+                logging.info("There was no active leader, Starting election")
                 self._leader_election.start_leader_election()
 
             if self._leader_election.i_am_leader():
@@ -132,8 +133,7 @@ class Watchdog:
 
         middleware = UDPMiddleware(send_retries=NUMBER_OF_RETRIES)
         
-        while not self._got_sigterm.is_set():
-            self._got_sigterm.wait(TIME_BETWEEN_HEARTBEATS)
+        while not self._got_sigterm.is_set(): 
             if self._got_sigterm.is_set():
                 break
 
@@ -142,6 +142,9 @@ class Watchdog:
                 logging.info("The monitor is down")
                 self._leader_election.set_leader_death()
                 break
+            
+            logging.debug("Sending heartbeat")
+            self._got_sigterm.wait(TIME_BETWEEN_HEARTBEATS)
 
         middleware.close()
 
@@ -162,6 +165,8 @@ class Watchdog:
                 _, node_name = msg.split(",")
                 logging.debug(f"NODE {node_name} SENT HEARTBEAT")
                 self._peers[node_name] = time.time()
+                #i need to check here if TIME_BETWEEN_HEARTBEATS < middleware timeout
+                self._check_peer_status() 
 
             except UDPMiddlewareTimeoutError:
                 self._check_peer_status() 

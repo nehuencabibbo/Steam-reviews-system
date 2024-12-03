@@ -15,9 +15,9 @@ class UDPSocket:
     If you want to send messages, you cant receive them
     on the same socket because messages can get mixed while waiting for the sent message ACK
     """
-    def __init__(self, timeout = 1.0, amount_of_retries = 2):
+    def __init__(self, timeout = 0.5, amount_of_retries = 2):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._timeout = timeout
+        self._socket.settimeout(timeout)
         self._amount_of_retries = amount_of_retries
         self._stop = False
 
@@ -25,15 +25,13 @@ class UDPSocket:
         self._socket.bind(address)
 
     def send_message(self, message, address):
-
+            
         for i in range(1, self._amount_of_retries + 1):
             try:
                 if self._stop: return False
-
+                
                 self._sendall(message, address)
-                self._socket.settimeout(self._timeout)
                 msg, _ = self._safe_recv(len(ACK_MESSAGE))
-
                 if msg != ACK_MESSAGE: raise ConnectionError
                 
                 return True
@@ -45,11 +43,7 @@ class UDPSocket:
             except socket.gaierror as _:
                 raise ConnectionError
 
-            finally:
-                self._socket.settimeout(None)
-
         return True
-
 
     def recv_message(self, amount_of_bytes):
         
