@@ -56,10 +56,9 @@ class Percentile:
 
         self._middleware.create_queue(self._consume_queue)
         self._middleware.create_queue(self._publish_queue)
-
         callback = self._middleware.generate_callback(self._handle_message)
         self._middleware.attach_callback(self._consume_queue, callback)
-        # self.__resume_publish_if_necesary()
+        self.__resume_publish_if_necesary()
         try:
             logging.debug("Starting to consume...")
             self._middleware.start_consuming()
@@ -134,27 +133,18 @@ class Percentile:
     def _handle_end_transmission(self, client_id: str, msg_id: str):
         logging.debug(f"END FROM CLIENT: {client_id}")
 
-        client_dir = os.path.join(self._storage_dir, client_id)
-        if not os.path.exists(client_dir):
-            logging.debug(
-                "Recived END, but client directory was already deleted. Probably duplicate"
-            )
-
-            self._middleware.send_end(
-                self._publish_queue,
-                end_message=[client_id, self._node_id, END_TRANSMISSION_MESSAGE],
-            )
-            return
-
         was_duplicate = self._activity_log.log_end(client_id, msg_id)
         if was_duplicate:
             logging.debug(f"Filtered duplicate END {msg_id}")
 
             return
 
+        client_dir = os.path.join(self._storage_dir, client_id)
         self._recived_ends[client_id] = self._recived_ends.get(client_id, 0) + 1
 
-        logging.debug(f"GOT END NUMBER: {self._recived_ends[client_id]}")
+        logging.debug(
+            f"GOT END NUMBER: {self._recived_ends[client_id]} | expecting: {self._needed_ends_to_finish}"
+        )
 
         if self._recived_ends[client_id] == self._needed_ends_to_finish:
             self._send_results(client_id)
@@ -174,9 +164,14 @@ class Percentile:
 
             record_value = int(row[1])
             if record_value >= percentile:
-                logging.debug(f"Sending: {row}")
-                row.insert(0, client_id)
-                self._middleware.publish(row, forwarding_queue_name)
+                logging.debug(f"row: {row}")
+                # row.insert(0, client_id)
+                # TODO: fix the way this is being saved, as we now get: [game, amount, msg_id].
+                # It should be [game, msg_id, amount]
+                logging.debug(f"Sending: {[client_id, row[-1], row[0], row[1]]}")
+                self._middleware.publish(
+                    [client_id, row[-1], row[0], row[1]], forwarding_queue_name
+                )
 
         self._middleware.publish_batch(forwarding_queue_name)
         self._middleware.send_end(

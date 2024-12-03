@@ -79,6 +79,10 @@ class ClientHandler:
         # H: Heartbeat
         # C: Last message acked request
         # A: Acknowledge session id
+        # logging.debug(f"Received message of type: {msg_type} ")
+        # a = self._middleware.get_rows_from_message(message)
+        # for x in a:
+        #     logging.debug(f"row: {x}")
 
         logging.debug(f"Received message of type: {msg_type} | message: {message}")
 
@@ -306,6 +310,14 @@ class ClientHandler:
     def _get_batch_per_client_and_ends(
         self, records: list[list[str]]
     ) -> Tuple[dict[str, list[str]], set[str]]:
+        """Given a batch with query results that must contain [client_id, msg_id, result] where result can be and END too, returns every client with its associated data, and the client_id of the ends if found
+
+        Args:
+            records (list[list[str]]): batch with clients query results
+
+        Returns:
+            Tuple[dict[str, list[str]], set[str]]: client with its batch, the number of ENDs found per client (this maybe doesn't have too much sense)
+        """
         batch_per_client = {}
         clients_ends = set()
         # Get the batch for every client

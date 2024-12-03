@@ -171,26 +171,6 @@ class TopK:
         self.__middleware.ack(delivery_tag)
 
     def __handle_end_transmission(self, client_id: str, msg_id: str):
-        if not os.path.exists(os.path.join("tmp", client_id)):
-            # Si se borro la data del cliente, eso quiere decir que
-            # se le mando el top, se borro la data y este end esta duplicado
-            # o que esto es un END pelado del cliente
-            #
-            # Por el segundo caso no puedo descartar el END y tengo que mandarlo,
-            # asi que simplemente propago el END, y luego el client_handler va a filtrar
-            # para no mandar duplicados al cliente o mandarle ENDS pelados sin data sin sentido
-            logging.debug(
-                "Recived END, but client directory was already deleted. Propagating END"
-            )
-
-            end_message = [client_id, self._node_id, END_TRANSMISSION_MESSAGE]
-            self.__middleware.send_end(
-                queue=self._output_top_k_queue_name,
-                end_message=end_message,
-            )
-
-            return
-
         end_was_duplicated = self._activity_log.log_end(client_id, msg_id)
         if end_was_duplicated:
             return

@@ -19,7 +19,7 @@ docker-image:
 
 docker-run: docker-image
 	python3 generate_compose.py docker-compose-dev.yaml
-	docker compose -f docker-compose-dev.yaml up -d --build --force-recreate
+	docker compose -f docker-compose-dev.yaml up -d --build --force-recreate 
 .PHONY: docker-up
 
 docker-down:

@@ -1137,23 +1137,25 @@ def generate_output(node_names: list, monitor_names: list):
     #     debug=False,
     # )
     add_client_handler(
-        output=output, num=1, debug=False, port=CLIENTS_PORT, node_names=node_names
+        output=output, num=1, debug=True, port=CLIENTS_PORT, node_names=node_names
     )
     generate_drop_columns(
-        output, AMOUNT_OF_FILTER_COLUMNS, debug=True, node_names=node_names
+        output, AMOUNT_OF_FILTER_COLUMNS, debug=False, node_names=node_names
     )
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True, node_names=node_names)
+    generate_drop_nulls(
+        output, AMOUNT_OF_DROP_NULLS, debug=False, node_names=node_names
+    )
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=True, node_names=node_names)
+    generate_q1(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q2 -----------------------------------------
     generate_q2(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q3 -----------------------------------------
-    # generate_q3(output=output, debug=False, node_names=node_names)
+    generate_q3(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q4 -----------------------------------------
-    # generate_q4(output=output, debug=False, node_names=node_names)
+    generate_q4(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=True, node_names=node_names)
+    generate_q5(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

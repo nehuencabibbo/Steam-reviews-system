@@ -122,7 +122,9 @@ class CounterByPlatform:
             session_id = body[0][END_TRANSMISSION_CLIENT_ID]
             msg_id = body[0][END_TRANSMISSION_MSG_ID_INDEX]
 
-            self.__handle_end_transmssion(session_id, msg_id)
+            self.__send_results(session_id, msg_id)
+
+            # self.__handle_end_transmssion(session_id, msg_id)
 
             self._middleware.ack(delivery_tag)
 
@@ -140,18 +142,6 @@ class CounterByPlatform:
         )
 
         self._middleware.ack(delivery_tag)
-
-    def __handle_end_transmssion(self, session_id: str, msg_id: str):
-        if not os.path.exists(os.path.join(self.storage_dir, session_id)):
-            logging.debug(
-                "Recived END, but client directory was already deleted. Propagating END"
-            )
-            self._middleware.send_end(
-                queue=self.publish_queue,
-                end_message=[session_id, msg_id, END_TRANSMISSION_MESSAGE],
-            )
-
-        self.__send_results(session_id, msg_id)
 
     def __generate_unique_msg_id(self, platform: str, msg_id: str) -> str:
         """

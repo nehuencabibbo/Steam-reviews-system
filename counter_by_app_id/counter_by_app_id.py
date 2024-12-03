@@ -27,7 +27,13 @@ REGULAR_MESSAGE_APP_ID = 2
 
 class CounterByAppId:
 
-    def __init__(self, config, middleware: Middleware, monitor: WatchdogClient, activity_log: ActivityLog):
+    def __init__(
+        self,
+        config,
+        middleware: Middleware,
+        monitor: WatchdogClient,
+        activity_log: ActivityLog,
+    ):
         self._config = config
         self._middleware = middleware
         self._got_sigterm = False
@@ -53,7 +59,7 @@ class CounterByAppId:
 
     def _resume_publish_if_necesary(self):
         for client_id, amount in self._ends_received_per_client.items():
-            if amount == self._needed_ends: 
+            if amount == self._needed_ends:
                 # Internamente borra todo
                 self.__send_results(client_id)
 
@@ -94,9 +100,8 @@ class CounterByAppId:
 
         logging.debug(f"GOT MSG: {body}")
 
-
         if body[0][SESSION_TIMEOUT_MESSAGE_INDEX] == SESSION_TIMEOUT_MESSAGE:
-            session_id = body[0][0] #TODO: Mover a una constante 
+            session_id = body[0][0]  # TODO: Mover a una constante
             self.__total_timeouts_received_per_client[session_id] = (
                 self.__total_timeouts_received_per_client.get(session_id, 0) + 1
             )
@@ -127,7 +132,7 @@ class CounterByAppId:
         if body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
             client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
             msg_id = body[0][END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
-            
+
             self.__handle_end_transmssion(client_id, msg_id)
 
             self._middleware.ack(delivery_tag)
@@ -137,40 +142,22 @@ class CounterByAppId:
         body = self.__purge_duplicates(body)
 
         storage.sum_batch_to_records_per_client(
-            self._storage_dir,  
+            self._storage_dir,
             body,
             self._activity_log,
             range_for_partition=self._range_for_partition,
-            save_first_msg_id=True
+            save_first_msg_id=True,
         )
 
         self._middleware.ack(delivery_tag)
 
     def __handle_end_transmssion(self, client_id: str, msg_id: str):
-        client_dir = os.path.join(self._storage_dir, client_id)
-        if not os.path.exists(client_dir):
-            # Los resultados ya fueron mandados, el END tiene que ser 
-            # propagado igual, ya que en el caso, por ejemplo de que 
-            # se manden 5 filas y se filtren todas, entonces me va a 
-            # llegar un END solo, el cual voy a tener que propagar  
-
-            # OBS: Enviar resultados vacios === Mandar solo el END
-            logging.debug('Recived END, but client directory was already deleted. Propagating END')
-            self.__send_end_to_forwarding_queues(
-                prefix_queue_name=self._publish_queue, 
-                client_id=client_id
-            )
-
-            return
-        
         was_duplicate = self._activity_log.log_end(client_id, msg_id)
         if was_duplicate:
-            logging.debug((
-                f'END {msg_id} was duplicate, filtering it out'
-            ))
+            logging.debug((f"END {msg_id} was duplicate, filtering it out"))
 
             return
-        
+
         self._ends_received_per_client[client_id] = (
             self._ends_received_per_client.get(client_id, 0) + 1
         )
@@ -181,32 +168,33 @@ class CounterByAppId:
         if self._ends_received_per_client[client_id] == self._needed_ends:
             self.__send_results(client_id)
 
-
     def __recover_state(self):
         full_file_path, file_state = self._activity_log.recover()
-        if not full_file_path or not file_state: 
-            logging.debug('General log was corrupted, not recovering any state.')
-            return 
-        
-        logging.debug(f'Recovering state, overriding {full_file_path} with: ')
+        if not full_file_path or not file_state:
+            logging.debug("General log was corrupted, not recovering any state.")
+            return
+
+        logging.debug(f"Recovering state, overriding {full_file_path} with: ")
         for line in file_state:
             logging.debug(line)
 
-        dir, file_name = full_file_path.rsplit('/', maxsplit=1)
+        dir, file_name = full_file_path.rsplit("/", maxsplit=1)
         if not os.path.exists(dir):
-            logging.debug((
-                f'Ended up aborting state recovery, as {dir} '
-                f'was cleaned up after receiving END'
-            ))
-            return 
+            logging.debug(
+                (
+                    f"Ended up aborting state recovery, as {dir} "
+                    f"was cleaned up after receiving END"
+                )
+            )
+            return
 
         # TODO: Encapsular en el storage esto para que no haga falta
         # saber de aca que s eusa csv
         temp_file = os.path.join(dir, f"temp_{file_name}")
-        with open(temp_file, mode='w', newline='') as temp:
+        with open(temp_file, mode="w", newline="") as temp:
             writer = csv.writer(temp)
             for line in file_state:
-                writer.writerow(line.split(','))
+                writer.writerow(line.split(","))
 
         os.replace(temp_file, full_file_path)
 
@@ -216,39 +204,39 @@ class CounterByAppId:
         for msg in batch:
             # Add a custom msg id based on plaftorm
             client_id = msg[REGULAR_MESSAGE_CLIENT_ID]
-            msg_id = msg[REGULAR_MESSAGE_MSG_ID] 
+            msg_id = msg[REGULAR_MESSAGE_MSG_ID]
             app_id = msg[REGULAR_MESSAGE_APP_ID]
 
-            if not self._activity_log.is_msg_id_already_processed(client_id, msg_id) and not msg_id in batch_msg_ids: 
+            if (
+                not self._activity_log.is_msg_id_already_processed(client_id, msg_id)
+                and not msg_id in batch_msg_ids
+            ):
                 filtered_batch.append(msg)
                 batch_msg_ids.add(msg_id)
-            else: 
+            else:
                 if msg_id in batch_msg_ids:
-                    logging.debug(f'[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (inside batch)')
+                    logging.debug(
+                        f"[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (inside batch)"
+                    )
                 else:
-                    logging.debug(f'[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (previously processed)')
+                    logging.debug(
+                        f"[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (previously processed)"
+                    )
 
-        return filtered_batch   
-
+        return filtered_batch
 
     def __send_results(self, client_id: str):
         storage_dir = f"{self._storage_dir}/{client_id}"
         reader = storage.read_all_files(storage_dir)
 
         for app_id, msg_id, value in reader:
-            record = [
-                client_id,
-                msg_id,
-                app_id,
-                value
-            ]
+            record = [client_id, msg_id, app_id, value]
             self.__send_record_to_forwarding_queues(record)
 
         self.__send_last_batch_to_forwarding_queues()
 
         self.__send_end_to_forwarding_queues(
-            prefix_queue_name=self._publish_queue, 
-            client_id=client_id
+            prefix_queue_name=self._publish_queue, client_id=client_id
         )
         self._clear_client_data(client_id, storage_dir)
         self._activity_log.remove_client_logs(client_id)
@@ -292,7 +280,6 @@ class CounterByAppId:
             logging.debug(f"Couldn't delete directory: {storage_dir}")
         else:
             logging.debug(f"Deleted directory: {storage_dir}")
-
 
         if client_id in self._ends_received_per_client:
             del self._ends_received_per_client[client_id]

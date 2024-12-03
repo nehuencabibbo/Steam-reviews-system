@@ -88,7 +88,10 @@ class Join:
                     self._amount_of_reviews_ends_recived.get(client_id, 0)
                     == self._needed_reviews_ends
                 ):
-                    self.__send_end_to_forward_queues(client_id)
+                    # self.__send_end_to_forward_queues(client_id)
+                    self.__send_to_forward_queues(
+                        client_id, [self._node_id, END_TRANSMISSION_MESSAGE]
+                    )
                     client_ids_to_remove.append(client_id)
 
         for client_id in client_ids_to_remove:
@@ -138,6 +141,7 @@ class Join:
         try:
             self.__middleware.start_consuming()
         except MiddlewareError as e:
+            logging.info(f"Error: {e}")
             # TODO: If got_sigterm is showing any error needed?
             if not self._got_sigterm:
                 logging.error(e)
@@ -149,6 +153,7 @@ class Join:
         # logging.debug(f'[CHECK] {message_type}')
         # logging.debug(f'[CHECK] {forwarding_queue_name}')
         body = self.__middleware.get_rows_from_message(body)
+        logging.debug(f"Received games: {body}")
 
         if len(body) == 1 and body[0][1] == SESSION_TIMEOUT_MESSAGE:
             session_id = body[0][0]
@@ -180,6 +185,7 @@ class Join:
             len(body) == 1
             and body[0][END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE
         ):
+            logging.debug(f"Received games END: {body}")
             client_id = body[0][END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
             msg_id = body[0][END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
 
@@ -211,14 +217,18 @@ class Join:
         self, client_id: str, msg_id: str, forwarding_queue_name: str
     ):
         # TODO: VERIFICAR QUE ESTO ESTE BIEN
-        client_dir = os.path.join("tmp", client_id)
-        if not os.path.exists(client_dir):
-            logging.debug(
-                "Recived GAMES END, but client directory was already deleted. Propagating END"
-            )
-            self.__send_end_to_forward_queues(client_id)
+        # client_dir = os.path.join("tmp", client_id)
+        # if not os.path.exists(client_dir):
+        #     # Case: client sent no data
+        #     logging.debug(
+        #         f"Recived GAMES END, but client directory: {client_dir} was already deleted. Propagating END"
+        #     )
+        #     # self.__send_end_to_forward_queues(client_id)
+        #     self.__send_to_forward_queues(
+        #         client_id, [self._node_id, END_TRANSMISSION_MESSAGE]
+        #     )
 
-            return
+        #     return
 
         was_duplicate = self._activity_log.log_end(
             client_id, msg_id, end_logging=GAMES_END_LOGGING
@@ -249,7 +259,12 @@ class Join:
                 and self._amount_of_reviews_ends_recived[client_id]
                 == self._needed_reviews_ends
             ):
-                self.__send_end_to_forward_queues(client_id)
+                logging.debug("handle_games sending stuff")
+                # self.__send_end_to_forward_queues(client_id)
+                self.__send_to_forward_queues(
+                    client_id, [self._node_id, END_TRANSMISSION_MESSAGE]
+                )
+
                 self.__clear_client_data(client_id)
 
     def __reviews_callback(
@@ -257,6 +272,7 @@ class Join:
     ):
         # TODO: Hacer que quede consistente lo del client_id
         body = self.__middleware.get_rows_from_message(body)
+
         for review in body:
             logging.debug(f"Recived review: {review}")
             # TODO: Fix both constants
@@ -289,6 +305,7 @@ class Join:
 
             msg_id = review[END_TRANSMISSION_MESSAGE_MSG_ID_INDEX]
             if review[END_TRANSMISSION_MESSAGE_END_INDEX] == END_TRANSMISSION_MESSAGE:
+                logging.debug(f"Received reviews END: {body}")
 
                 self.__handle_reviews_end_transmission(client_id, msg_id)
 
@@ -299,7 +316,7 @@ class Join:
             client_id = review.pop(REGULAR_MESSAGE_CLIENT_ID_INDEX)
             # TODO: Sacar este pop, pasar la review completa y usar las ctes
             # Here we check for games ENDs, NOT for reviews
-            if not (
+            if not client_id in self._amount_of_games_ends_recived or not (
                 self._amount_of_games_ends_recived[client_id] == self._needed_games_ends
             ):
                 # Havent received all ends, save in disk
@@ -313,15 +330,6 @@ class Join:
 
     def __handle_reviews_end_transmission(self, client_id: str, msg_id: str):
         # TODO: VERIFICAR QUE ESTO ESTE BIEN
-        client_dir = os.path.join("tmp", client_id)
-        if not os.path.exists(client_dir):
-            logging.debug(
-                "Recived REVIEWS END, but client directory was already deleted. Propagating END"
-            )
-            self.__send_end_to_forward_queues(client_id)
-
-            return
-
         was_duplicate = self._activity_log.log_end(
             client_id, msg_id, end_logging=REVIEWS_END_LOGGING
         )
@@ -335,40 +343,37 @@ class Join:
             f"Amount of reviews ends received up to now: {self._amount_of_reviews_ends_recived[client_id]} | Expecting: {self._needed_reviews_ends}"
         )
 
-        if (
+        if (client_id in self._amount_of_games_ends_recived) and (
             self._amount_of_reviews_ends_recived[client_id] == self._needed_reviews_ends
             and self._amount_of_games_ends_recived[client_id] == self._needed_games_ends
         ):
-            self.__send_end_to_forward_queues(client_id)
+            # self.__send_end_to_forward_queues(client_id)
+            self.__send_to_forward_queues(
+                client_id, [self._node_id, END_TRANSMISSION_MESSAGE]
+            )
+
             self.__clear_client_data(client_id)
 
-    def __send_end_to_forward_queues(self, client_id: str):
+    def __send_to_forward_queues(self, client_id: str, message: list[str]):
         forwarding_queue_name = self._output_queue_name
+        message.insert(0, client_id)
 
         if (
             "Q" in forwarding_queue_name
         ):  # gotta check this as it could be the last node, then a prefix shouldn't be used
             self.__middleware.publish_batch(forwarding_queue_name)
-
-            # TODO: Si hay mas de un agregador hay un problema? por el self._instances_of_myself
-            end_message = [
-                client_id,
-                self._node_id,
-                "END",
-                f"{self._instances_of_myself}",
-            ]
-            self.__middleware.send_end(forwarding_queue_name, end_message=end_message)
-            logging.debug(f"Sent end to: {forwarding_queue_name}")
-
+            end_message = message + [f"{self._instances_of_myself}"]
+            self.__middleware.publish_message(end_message, forwarding_queue_name)
+            logging.debug(f"Sent {message} to: {forwarding_queue_name}")
             return
 
         for i in range(self._amount_of_forwarding_queues):
             self.__middleware.publish_batch(f"{i}_{forwarding_queue_name}")
-            self.__middleware.send_end(
+            self.__middleware.publish_message(
+                message,
                 f"{i}_{forwarding_queue_name}",
-                end_message=[client_id, self._node_id, END_TRANSMISSION_MESSAGE],
             )
-            logging.debug(f"Sent end to: {i}_{forwarding_queue_name}")
+            logging.debug(f"Sent {message} to: {i}_{forwarding_queue_name}")
 
     def __games_columns_to_keep(self, games_record: list[str]):
         return [games_record[i] for i in self._games_columns_to_keep]
