@@ -424,6 +424,8 @@ class Join:
                     # both previous ids
                     Join.__generate_unique_msg_id(record_msg_id, str(review_msg_id)),
                 ]
+                logging.debug(f"record: {record}")
+                logging.debug(f"review: {review}")
 
                 joined_message += self.__games_columns_to_keep(record)
                 joined_message += self.__reviews_columns_to_keep(review)

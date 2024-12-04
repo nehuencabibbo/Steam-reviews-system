@@ -95,8 +95,6 @@ def add_watchdog(output, port, debug=False, num=1):
             f"LEADER_DISCOVERY_PORT={LEADER_DISCOVERY_PORT}",
         ],
         "networks": ["net"],
-        "dns": ["127.0.0.1"],
-        "dns_opt": ["timeout:2", "rotate", "ndots:0"],
     }
 
 
@@ -678,10 +676,10 @@ def generate_q3(node_names: list, output: Dict, debug=False):
         "input_queue_name": "q3_games",
         "output_queue_name": "q3_indie_games",
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_JOINS,
-        "column_number_to_use": 3,  # genre
+        "column_number_to_use": 4,  # genre
         "value_to_filter_by": "indie",
         "criteria": "CONTAINS",
-        "columns_to_keep": "0,1,2",  # client_id, app_id, name
+        "columns_to_keep": "0,1,2,3",  # client_id, msg_id, app_id, name
         "instances_of_myself": Q3_AMOUNT_OF_INDIE_GAMES_FILTERS,
     }
 
@@ -699,10 +697,10 @@ def generate_q3(node_names: list, output: Dict, debug=False):
         "input_queue_name": "q3_reviews",
         "output_queue_name": "q3_positive_reviews",
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
-        "column_number_to_use": 2,  # review_score
+        "column_number_to_use": 3,  # review_score
         "value_to_filter_by": 1.0,  # positive_review
         "criteria": "EQUAL_FLOAT",
-        "columns_to_keep": "0,1",  # client_id, app_id ,
+        "columns_to_keep": "0,1,2",  # client_id, app_id, msg_id
         "instances_of_myself": Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS,
     }
     generate_filters_by_value(
@@ -733,8 +731,8 @@ def generate_q3(node_names: list, output: Dict, debug=False):
         "input_games_queue_name": "q3_indie_games",
         "input_reviews_queue_name": "q3_positive_review_count",
         "output_queue_name": "q3_join_by_app_id_result",
-        "games_columns_to_keep": "1",  # name
-        "reviews_columns_to_keep": "1",  # positive_review_count
+        "games_columns_to_keep": "2",  # name
+        "reviews_columns_to_keep": "2",  # positive_review_count
         "needed_games_ends": 1,
         "needed_reviews_ends": Q3_AMOUNT_OF_COUNTERS_BY_APP_ID,
         "amount_of_forwarding_queues": Q3_AMOUNT_OF_TOP_K_NODES,
@@ -1127,19 +1125,19 @@ def generate_output(node_names: list, monitor_names: list):
         # reviews_file_path="data/reviews_sample.csv",
         games_file_path="data/games_sample.csv",
         reviews_file_path="data/reviews_sample.csv",
-        debug=True,
+        debug=False,
     )
-    # add_client(
-    #     output,
-    #     num=2,
-    #     # games_file_path="data/games_sample.csv",
-    #     # reviews_file_path="data/reviews_sample.csv",
-    #     games_file_path="data/games.csv",
-    #     reviews_file_path="data/filtered_reviews.csv",
-    #     debug=False,
-    # )
+    add_client(
+        output,
+        num=2,
+        # games_file_path="data/games_sample.csv",
+        # reviews_file_path="data/reviews_sample.csv",
+        games_file_path="data/games.csv",
+        reviews_file_path="data/filtered_reviews.csv",
+        debug=False,
+    )
     add_client_handler(
-        output=output, num=1, debug=True, port=CLIENTS_PORT, node_names=node_names
+        output=output, num=1, debug=False, port=CLIENTS_PORT, node_names=node_names
     )
     generate_drop_columns(
         output, AMOUNT_OF_FILTER_COLUMNS, debug=False, node_names=node_names
@@ -1153,10 +1151,10 @@ def generate_output(node_names: list, monitor_names: list):
     # -------------------------------------------- Q2 -----------------------------------------
     generate_q2(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=False, node_names=node_names)
+    generate_q3(output=output, debug=True, node_names=node_names)
     # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=False, node_names=node_names)
-    # -------------------------------------------- Q5 -----------------------------------------
+    # generate_q4(output=output, debug=False, node_names=node_names)
+    # # -------------------------------------------- Q5 -----------------------------------------
     generate_q5(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
