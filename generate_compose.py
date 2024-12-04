@@ -789,10 +789,10 @@ def generate_q4(node_names: list, output: Dict, debug=False):
                 f"{Q4_AMOUNT_OF_THIRD_JOINS}",
             ]
         ),
-        "column_number_to_use": 3,  # genre
+        "column_number_to_use": 4,  # genre
         "value_to_filter_by": "action",
         "criteria": "CONTAINS",
-        "columns_to_keep": "0,1,2",  # client_id, app_id, name
+        "columns_to_keep": "0,1,2,3",  # client_id, msg_id, app_id, name
         "instances_of_myself": Q4_AMOUNT_OF_ACTION_GAMES_FILTERS,
     }
 
@@ -817,10 +817,10 @@ def generate_q4(node_names: list, output: Dict, debug=False):
                 f"{Q4_AMOUNT_OF_SECOND_JOINS}",
             ]
         ),
-        "column_number_to_use": 3,  # review_score
+        "column_number_to_use": 4,  # review_score
         "value_to_filter_by": -1.0,
         "criteria": "EQUAL_FLOAT",
-        "columns_to_keep": "0,1,2",  # client_id, app_id, review
+        "columns_to_keep": "0,1,2,3",  # client_id, msg_id, app_id, review
         "instances_of_myself": Q4_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS,
         # "batch_size": ,
     }
@@ -854,10 +854,10 @@ def generate_q4(node_names: list, output: Dict, debug=False):
         "input_queue_name": "0_q4_negative_reviews_count",
         "output_queue_name": "q4_filter_first_more_than_5000_reviews",
         "amount_of_forwarding_queues": f"{Q4_AMOUNT_OF_FIRST_JOINS}",
-        "column_number_to_use": 2,  # positive_review_count
+        "column_number_to_use": 3,  # positive_review_count
         "value_to_filter_by": 5000,
         "criteria": "GREATER_THAN",
-        "columns_to_keep": "0,1",  # client_id, app_id
+        "columns_to_keep": "0,1,2",  # client_id, msg_id, app_id
         "instances_of_myself": Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS,
     }
     generate_filters_by_value(
@@ -876,7 +876,7 @@ def generate_q4(node_names: list, output: Dict, debug=False):
         "needed_games_ends": 1,  # It recives from a filter that doesn't have a counter behind
         "needed_reviews_ends": Q4_AMOUNT_OF_FIRST_COUNTER_BY_APP_ID,  # Q4_AMOUNT_OF_FIRST_MORE_THAN_5000_FILTERS,
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_SECOND_JOINS,
-        "games_columns_to_keep": "0,1",  # app_id, name
+        "games_columns_to_keep": "1,2",  # app_id, name
         "reviews_columns_to_keep": "",
     }
 
@@ -909,8 +909,8 @@ def generate_q4(node_names: list, output: Dict, debug=False):
         "needed_games_ends": Q4_AMOUNT_OF_FIRST_JOINS,
         "needed_reviews_ends": 1,  # Filter that is not precceded by a counter -> They agree to send only one END
         "amount_of_forwarding_queues": 1,  # Filters recive from a single queue
-        "games_columns_to_keep": "0",  # app_id
-        "reviews_columns_to_keep": "1",  # review
+        "games_columns_to_keep": "1",  # app_id
+        "reviews_columns_to_keep": "2",  # review
     }
 
     generate_joins(
@@ -929,7 +929,7 @@ def generate_q4(node_names: list, output: Dict, debug=False):
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_SECOND_COUNTER_BY_APP_ID,
         "column_number_to_use": 2,  # review
         "language": "en",
-        "columns_to_keep": "0,1",  # client_id, app_id
+        "columns_to_keep": "0,1,2",  # client_id, msg_id, app_id
         "instances_of_myself": Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS,
         "prefetch_count": 1,
     }
@@ -963,10 +963,10 @@ def generate_q4(node_names: list, output: Dict, debug=False):
         "input_queue_name": "0_q4_english_review_count",
         "output_queue_name": "q4_second_filter_more_than_5000",
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_THIRD_JOINS,
-        "column_number_to_use": 2,  # negative_english_review_count
+        "column_number_to_use": 3,  # negative_english_review_count
         "value_to_filter_by": 5000,
         "criteria": "GREATER_THAN",
-        "columns_to_keep": "0,1,2",  # client_id, app_id, positive_review_count
+        "columns_to_keep": "0,1,2,3",  # client_id, msg_id, app_id, positive_review_count
         "instances_of_myself": Q4_AMOUNT_OF_SECOND_MORE_THAN_5000_FILTERS,
     }
     generate_filters_by_value(
@@ -987,7 +987,7 @@ def generate_q4(node_names: list, output: Dict, debug=False):
         "needed_games_ends": 1,  # Q4_AMOUNT_OF_ACTION_GAMES_FILTERS,
         "needed_reviews_ends": Q4_AMOUNT_OF_SECOND_COUNTER_BY_APP_ID,
         "amount_of_forwarding_queues": 1,  # 1 as the filters work as a group (will receive only one end from them)
-        "games_columns_to_keep": "1",  # app_id(0), name(1)
+        "games_columns_to_keep": "2",  # app_id(0), name(1)
         "reviews_columns_to_keep": "",  # count(index: 1)
     }
 
@@ -1118,15 +1118,15 @@ def generate_output(node_names: list, monitor_names: list):
     # ; GAME_FILE_PATH=data/filtered_games.csv
     # ; REVIEWS_FILE_PATH=data/filtered_reviews.csv
 
-    add_client(
-        output,
-        num=1,
-        # games_file_path="data/games.csv",
-        # reviews_file_path="data/reviews_sample.csv",
-        games_file_path="data/games_sample.csv",
-        reviews_file_path="data/reviews_sample.csv",
-        debug=False,
-    )
+    # add_client(
+    #     output,
+    #     num=1,
+    #     # games_file_path="data/games.csv",
+    #     # reviews_file_path="data/reviews_sample.csv",
+    #     games_file_path="data/games_sample.csv",
+    #     reviews_file_path="data/reviews_sample.csv",
+    #     debug=False,
+    # )
     add_client(
         output,
         num=2,
@@ -1147,15 +1147,15 @@ def generate_output(node_names: list, monitor_names: list):
     )
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=False, node_names=node_names)
-    # -------------------------------------------- Q2 -----------------------------------------
-    generate_q2(output=output, debug=False, node_names=node_names)
-    # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=True, node_names=node_names)
-    # -------------------------------------------- Q4 -----------------------------------------
-    # generate_q4(output=output, debug=False, node_names=node_names)
+    # generate_q1(output=output, debug=False, node_names=node_names)
+    # # -------------------------------------------- Q2 -----------------------------------------
+    # generate_q2(output=output, debug=False, node_names=node_names)
+    # # -------------------------------------------- Q3 -----------------------------------------
+    # generate_q3(output=output, debug=False, node_names=node_names)
+    # # -------------------------------------------- Q4 -----------------------------------------
+    generate_q4(output=output, debug=True, node_names=node_names)
     # # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=False, node_names=node_names)
+    # generate_q5(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
