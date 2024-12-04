@@ -82,9 +82,8 @@ class Watchdog:
 
             
     def _monitor_nodes(self):
-
-        thread = threading.Thread(target=self._listen_for_peers, daemon=True)
-        thread.start()
+        peer_listener_thread = threading.Thread(target=self._listen_for_peers, daemon=True)
+        peer_listener_thread.start()
 
         try:
             self._middleware.bind(("", self._monitor_access_port))
@@ -93,6 +92,8 @@ class Watchdog:
                 logging.error(f"[LEADER] GOT ERROR WHILE BINDING PORT: {e}")
             return
 
+        handlers = {} #save the handlers here to allow reconnections
+
         self._middleware.set_timeout(1)
         _last_node_check_time = time.time()
         while not self._got_sigterm.is_set():
@@ -100,33 +101,36 @@ class Watchdog:
             
                 conn, _ = self._middleware.accept_connection()
                 node_name = conn.recv()
+                
+                if not node_name in handlers:
+                    logging.info(f"[LEADER] Node {node_name} connected.")
+                    
+                    handler = NodeHandler(conn, node_name, self._got_sigterm, self._wait_between_heartbeats)
+                    handlers[node_name] = handler
 
-                #Change to info if needed
-                logging.debug(f"[LEADER] Node {node_name} connected.")
+                    conn.send(REGISTRATION_CONFIRM)
 
-                conn.send(REGISTRATION_CONFIRM)
-
-                handler = NodeHandler(conn, node_name, self._got_sigterm, self._wait_between_heartbeats)
-                node_thread = threading.Thread(target=handler.start, daemon=True)
-                node_thread.start()
-
-                if node_name in self._nodes and self._nodes[node_name] is not None:
-                    self._nodes[node_name].join()
-
-                self._nodes[node_name] = node_thread
-
+                    node_thread = threading.Thread(target=handler.start, daemon=True)
+                    node_thread.start()
+                    self._nodes[node_name] = node_thread
+                
+                else:
+                    logging.info(f"[LEADER] Node {node_name} re-connected.")
+                    conn.send(REGISTRATION_CONFIRM)
+                    handlers[node_name].set_new_connection(conn)
+                    
                 _last_node_check_time = self._check_and_reconnect_nodes(_last_node_check_time)
                     
             except TCPMiddlewareTimeoutError:
                 _last_node_check_time = self._check_and_reconnect_nodes(_last_node_check_time)
-                continue
+
             except (OSError, ConnectionError) as e:
                 if not self._got_sigterm.is_set():
                     logging.error(f"ERROR: {e}")
                     break
             
-        self._release_threads()
-        thread.join()
+        self._release_nodes_threads()
+        peer_listener_thread.join()
         
 
     def _listen_to_leader(self):
@@ -208,7 +212,7 @@ class Watchdog:
                 self._restart_fallen_node(node)
                 
 
-    def _release_threads(self):
+    def _release_nodes_threads(self):
         for thread in self._nodes.values():
             if thread is not None:
                 thread.join()
