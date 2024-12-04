@@ -12,7 +12,7 @@ from common.leader_election.leader_election import LeaderElection
 from leader_discovery_service import LeaderDiscoveryService
 
 NUMBER_OF_RETRIES = 5
-TIMEOUT_BEFORE_FALLEN_CHECK = 30
+TIMEOUT_BEFORE_FALLEN_CHECK = 10
 REGISTRATION_CONFIRM = "K"
 MAX_MONITOR_TIMEOUT = 3
 TIME_BETWEEN_HEARTBEATS = 1 #si me envian cada 1 segundo, cada vez que recibo un heartbeat debo revisar si alguno esta caido
@@ -93,7 +93,8 @@ class Watchdog:
                 logging.error(f"[LEADER] GOT ERROR WHILE BINDING PORT: {e}")
             return
 
-        self._middleware.set_timeout(TIMEOUT_BEFORE_FALLEN_CHECK)
+        self._middleware.set_timeout(1)
+        _last_node_check_time = time.time()
         while not self._got_sigterm.is_set():
             try:
             
@@ -113,9 +114,11 @@ class Watchdog:
                     self._nodes[node_name].join()
 
                 self._nodes[node_name] = node_thread
+
+                _last_node_check_time = self._check_and_reconnect_nodes(_last_node_check_time)
+                    
             except TCPMiddlewareTimeoutError:
-                logging.debug("Checking for nodes that never connected")
-                self._reconnect_fallen_nodes()
+                _last_node_check_time = self._check_and_reconnect_nodes(_last_node_check_time)
                 continue
             except (OSError, ConnectionError) as e:
                 if not self._got_sigterm.is_set():
@@ -183,6 +186,15 @@ class Watchdog:
                 self._peers[peer_name] = time.time()       
 
 
+    def _check_and_reconnect_nodes(self, _last_node_check_time):
+        current_time = time.time()
+        if current_time - _last_node_check_time > TIMEOUT_BEFORE_FALLEN_CHECK: 
+            self._reconnect_fallen_nodes()
+            return current_time
+        
+        return _last_node_check_time
+
+
     def _restart_fallen_node(self, node_name):
         logging.info(f"Node {node_name} never reconnected. Starting it...")
         subprocess.run(['docker', 'stop', node_name], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -190,6 +202,7 @@ class Watchdog:
 
 
     def _reconnect_fallen_nodes(self):
+        logging.debug("Checking for nodes that never connected")
         for node, conn in self._nodes.items():
             if not conn:
                 self._restart_fallen_node(node)
