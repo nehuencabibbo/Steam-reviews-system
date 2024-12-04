@@ -929,7 +929,7 @@ def generate_q4(node_names: list, output: Dict, debug=False):
         "input_queue_name": "0_q4_second_join",
         "output_queue_name": "q4_english_reviews",
         "amount_of_forwarding_queues": Q4_AMOUNT_OF_SECOND_COUNTER_BY_APP_ID,
-        "column_number_to_use": 2,  # review
+        "column_number_to_use": 3,  # review
         "language": "en",
         "columns_to_keep": "0,1,2",  # client_id, msg_id, app_id
         "instances_of_myself": Q4_AMOUNT_OF_ENGLISH_REVIEWS_FILTERS,
