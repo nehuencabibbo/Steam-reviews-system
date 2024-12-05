@@ -45,7 +45,7 @@ class ClientHandler:
         self._client_monitor = client_monitor
         self._clients_info = self._activity_log.recover_client_handler_state()
 
-        for k, v in self._clients_info:
+        for k, v in self._clients_info.items():
             logging.debug(f"Recovered: {k} | {v}")
             t = threading.Timer(30.0, self.handle_client_timeout, args=[k])
 

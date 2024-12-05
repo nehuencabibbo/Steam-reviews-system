@@ -1130,15 +1130,15 @@ def generate_output(node_names: list, monitor_names: list):
         reviews_file_path="data/reviews_sample.csv",
         debug=True,
     )
-    # add_client(
-    #     output,
-    #     num=2,
-    #     # games_file_path="data/games.csv",
-    #     # reviews_file_path="data/reviews_sample.csv",
-    #     games_file_path="data/games.csv",
-    #     reviews_file_path="data/filtered_reviews.csv",
-    #     debug=False,
-    # )
+    add_client(
+        output,
+        num=2,
+        # games_file_path="data/games.csv",
+        # reviews_file_path="data/reviews_sample.csv",
+        games_file_path="data/games.csv",
+        reviews_file_path="data/filtered_reviews.csv",
+        debug=False,
+    )
 
     # for i in range(5):
     #     add_client(
