@@ -7,7 +7,7 @@ from server_socket.tcp_middleware import TCPMiddleware
 
 WAIT_BETWEEN_TRIES = 2
 MAX_RETRIES = 10
-WAIT_LEADER_ELECTION_RUNNING = 5
+WAIT_LEADER_ELECTION_RUNNING = 3
 LEADER_ELECTION_RUNNING_MESSAGE = "F"
 
 class LeaderFinder:
@@ -19,7 +19,6 @@ class LeaderFinder:
 
     def look_for_leader(self):
         for _ in range(MAX_RETRIES):
-            sleep(WAIT_BETWEEN_TRIES) 
             if self._stop:
                 return
 
@@ -34,6 +33,8 @@ class LeaderFinder:
                 except (OSError, ConnectionError):
                     logging.debug(f"[LEADER FINDER] Error connecting to monitor {monitor_ip}.")
                     continue
+                
+            sleep(WAIT_BETWEEN_TRIES) 
         
         logging.debug("[LEADER FINDER] Reached max retries and couldnt connect to the monitor")
         return None
