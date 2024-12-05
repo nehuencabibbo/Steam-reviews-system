@@ -74,7 +74,9 @@ class ClientMiddleware:
     ):
         batch = b""
         for res in results:
-            batch = self.__protocol.add_to_batch(batch, res)
+            batch = self.__protocol.add_to_batch(
+                batch, res[1:]
+            )  # [1:] in order to ignore the message id
 
         message = self.__protocol.add_to_batch(batch, [query])
         logging.info(f"sending multipart to: {client_id}")

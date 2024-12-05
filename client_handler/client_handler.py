@@ -184,12 +184,12 @@ class ClientHandler:
         t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
 
         self._clients_info[session_id] = [
-            self._games_queue_name, # No es fijo, pero cambia una vez nomas
-            t, # No
-            connection_id, # Fijo
-            set(), # Variable
-            threading.Lock(), # No
-            0, # Last ack'd messageid
+            self._games_queue_name,  # No es fijo, pero cambia una vez nomas
+            t,  # No
+            connection_id,  # Fijo
+            set(),  # Variable
+            threading.Lock(),  # No
+            0,  # Last ack'd messageid
         ]
 
         self._client_middleware.send_multipart(
@@ -304,7 +304,9 @@ class ClientHandler:
 
         self._add_finished_query_to_clients(clients=client_ends, query=query)
 
-        channel.basic_ack(delivery_tag=method_frame.delivery_tag) # TODO: Mover al middleware?
+        channel.basic_ack(
+            delivery_tag=method_frame.delivery_tag
+        )  # TODO: Mover al middleware?
 
     def __sigterm_handler(self, sig, frame):
         logging.info("Shutting down Client Handler")
@@ -331,9 +333,11 @@ class ClientHandler:
         # Get the batch for every client
         for record in records:
             client_id = record[0]
-            record = record[1:] 
+            record = record[1:]
 
-            if record[0] == "END":
+            if record[1] == "END":
+
+                record = [record[0] + record[1], record[1]]  # msg_idEND
                 clients_ends.add(client_id)
             if not client_id in batch_per_client:
                 batch_per_client[client_id] = []
