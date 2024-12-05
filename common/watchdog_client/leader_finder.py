@@ -7,7 +7,7 @@ from server_socket.tcp_middleware import TCPMiddleware
 
 WAIT_BETWEEN_TRIES = 2
 MAX_RETRIES = 10
-WAIT_LEADER_ELECTION_RUNNING = 3
+WAIT_LEADER_ELECTION_RUNNING = 5
 LEADER_ELECTION_RUNNING_MESSAGE = "F"
 
 class LeaderFinder:
@@ -43,13 +43,13 @@ class LeaderFinder:
     def _get_leader_id(self, monitor_ip: str):
 
         self._middleware.connect((monitor_ip, self._leader_discovery_port))
-        logging.debug(f"[LEADER FINDER] Connected to {monitor_ip}")
+        logging.debug(f"[LEADER FINDER] Connected to {monitor_ip}. Asking for leader id")
 
         msg = self._middleware.receive_message()
         logging.debug(f"[LEADER FINDER] Got message: {msg}")
 
         if msg == LEADER_ELECTION_RUNNING_MESSAGE:
-            logging.debug("[LEADER FINDER] Leader election in progress, waiting...")
+            logging.debug("[LEADER FINDER] Leader election in progress, waiting before retrying...")
             sleep(WAIT_LEADER_ELECTION_RUNNING) 
             self._middleware.close_connection()
             return

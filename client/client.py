@@ -290,13 +290,13 @@ class Client:
         logging.info("Waiting for results...")
 
         while len(self._queries_results_left) > 0:
-            logging.info("Pollin results")
+            logging.debug("Pollin results")
             if self._middleware.has_message():
                 res = self._middleware.recv_batch()
                 self.__handle_query_result(res)
                 continue
 
-            logging.info("Requesting results")
+            logging.debug("Requesting results")
             for q in self._queries_results_left:
                 self._middleware.send(
                     [q], message_type="Q", session_id=self._session_id
