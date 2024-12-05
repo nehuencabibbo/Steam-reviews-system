@@ -14,3 +14,4 @@ join_sender.py
 watchdog_status
 log.txt
 testing/
+*.txt
