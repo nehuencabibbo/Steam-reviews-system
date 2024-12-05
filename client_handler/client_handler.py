@@ -63,8 +63,6 @@ class ClientHandler:
         self.results_middleware.create_queue(name=self._q3_result_queue)
         self.results_middleware.create_queue(name=self._q4_result_queue)
         self.results_middleware.create_queue(name=self._q5_result_queue)
-        self.results_middleware.create_queue(name="games")
-        self.results_middleware.create_queue(name="reviews")
         self.results_middleware.attach_callback(self._q1_result_queue, self.on_message)
         self.results_middleware.attach_callback(self._q2_result_queue, self.on_message)
         self.results_middleware.attach_callback(self._q3_result_queue, self.on_message)
@@ -207,6 +205,8 @@ class ClientHandler:
             logging.info(f"Message type: {msg_type} not recognized")
 
     def handle_clients(self):
+        self.results_middleware.create_queue(name="games")
+        self.results_middleware.create_queue(name="reviews")
         self._client_middleware.create_socket(zmq.ROUTER)
         try:
             self._client_middleware.bind(self._port)
