@@ -128,6 +128,9 @@ class Watchdog:
                 if not self._got_sigterm.is_set():
                     logging.error(f"ERROR: {e}")
                     break
+        
+        for handler in handlers.values():
+            handler.close()
             
         self._release_nodes_threads()
         peer_listener_thread.join()

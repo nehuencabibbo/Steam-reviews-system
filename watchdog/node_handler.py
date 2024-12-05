@@ -7,8 +7,8 @@ class AbnormalNodeStatus(Exception):
 
 HEARTBEAT_MESSAGE = "A"
 NACK_MESSAGE = "N"
-RECV_TIMEOUT = 3
-RECONNECTION_TIMEOUT = 5
+RECV_TIMEOUT = 5
+RECONNECTION_TIMEOUT = 10
 
 class NodeHandler:
 
@@ -76,3 +76,7 @@ class NodeHandler:
                     break
                 
             logging.info(f"Node {self._node_name} did not reconnect. Restarting it...")
+
+
+    def close(self):
+        self._got_new_connection.set()

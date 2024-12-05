@@ -79,12 +79,12 @@ class ClientMiddleware:
             )  # [1:] in order to ignore the message id
 
         message = self.__protocol.add_to_batch(batch, [query])
-        logging.info(f"sending multipart to: {client_id}")
+        logging.debug(f"sending multipart to: {client_id}")
         self.send_multipart(client_id, message)
 
     def send_message(self, message: list[str]):
         batch = self.__protocol.add_to_batch(b"", message)
-        logging.info(f"Sending: {batch}")
+        logging.debug(f"Sending: {batch}")
         self.__socket.send(batch)
 
     # D: Data
@@ -93,7 +93,7 @@ class ClientMiddleware:
         new_batch = self.__protocol.add_to_batch(current_batch, message)
 
         if ammount_of_messages + 1 == self.__batch_size:
-            logging.info(f"SEND | Session id: {session_id}")
+            logging.debug(f"SEND | Session id: {session_id}")
             message_with_session_id = self.__protocol.insert_before_batch(
                 new_batch, [session_id]
             )
@@ -116,7 +116,7 @@ class ClientMiddleware:
         new_batch = self.__protocol.add_to_batch(current_batch, message)
 
         if ammount_of_messages + 1 == self.__batch_size:
-            logging.info(f"SEND | Session id: {session_id}")
+            logging.debug(f"SEND | Session id: {session_id}")
             message_with_session_id = self.__protocol.insert_before_batch(
                 new_batch, [session_id]
             )

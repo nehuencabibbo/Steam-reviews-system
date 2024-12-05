@@ -284,7 +284,7 @@ class ActivityLog:
     def log_for_client_handler(self, client_id: str, queue_name: str, connection_id: str, last_ack_message: str, finished_querys: Set[str]):
         file_path = os.path.join(self._dir, f'{client_id}.csv')
         create_file_if_unexistent(file_path)
-        temp_file_path = os.path.join(self._dir, 'tmp.csv')
+        temp_file_path = os.path.join(self._dir, f'tmp.csv')
         with open(temp_file_path, mode='w', newline='') as temp:
             writer = csv.writer(temp)
 

@@ -289,12 +289,12 @@ class Client:
         t.start()
 
         while not self._restart_session_timeout.is_set():
-            logging.info("Pollin")
+            logging.debug("Pollin")
             if not self._middleware.has_message():
                 continue
 
             res = self._middleware.recv_batch()
-            logging.info(f"Restart session received: {res}")
+            logging.debug(f"Restart session received: {res}")
 
             if res[0][0] == "C" and res[0][1] == restart_session_id:
                 t.cancel()

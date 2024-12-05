@@ -4,7 +4,7 @@ from common.leader_election.leader_election import LeaderElection
 import logging
 
 LEADER_ELECTION_RUNNING = "F"
-BACKLOG = 30
+BACKLOG = 100
 
 class LeaderDiscoveryService:
 
