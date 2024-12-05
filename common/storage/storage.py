@@ -320,7 +320,6 @@ def sum_batch_to_records_per_client(
     batch: List[str],
     logger,
     range_for_partition: int = -1,
-    save_first_msg_id: bool = False,
 ):
     CLIENT_ID_INDEX = 0
     MSG_ID_INDEX = 1
@@ -357,7 +356,9 @@ def sum_batch_to_records_per_client(
             # logging.debug(f"RECORDS PER FILE (not partitioned): {records_per_file}")
 
         sum_batch_to_records(
-            client_dir, records_per_file, logger, save_first_msg_id=save_first_msg_id
+            client_dir, 
+            records_per_file, 
+            logger
         )
 
 
@@ -380,16 +381,24 @@ def _group_by_file_dict(
     return records_per_file
 
 
-def create_file_if_unexistent(full_path: str):
+def create_file_if_unexistent(full_path: str) -> bool:
+    '''
+    Returns True if file existed, else False
+    '''
     if not os.path.exists(full_path):
         open(full_path, "w").close()
 
+        return False
+    
+    return True
 
-def sum_batch_to_records(dir: str, records_per_file: dict[str, list[str]], logger, save_first_msg_id: bool = False):
+
+def sum_batch_to_records(dir: str, records_per_file: dict[str, list[str]], logger):
     KEY_INDEX = 0
     MSG_ID_INDEX = 1
     COUNT_INDEX = 2
     
+    client_id = dir.rsplit('/', maxsplit=1)[-1]
     os.makedirs(dir, exist_ok=True)
     for file_name, records_to_count in records_per_file.items():
         # records_to_count:
@@ -398,35 +407,38 @@ def sum_batch_to_records(dir: str, records_per_file: dict[str, list[str]], logge
         #   ['MAC', ['771121', '771122', '771126']]
         # ]
         file_path = os.path.join(dir, file_name)
-        # logging.debug(f'PATH: {file_path}')
-        file_didnt_exist = True if not os.path.exists(file_path) else False
-        create_file_if_unexistent(file_path)
+        file_existed = create_file_if_unexistent(file_path)
         temp_file_path = os.path.join(dir, f"temp_{file_name}")
 
+        used_msg_ids = []
+        new_file_lines = []
         with open(file_path, mode="r", newline="") as infile, open(
             temp_file_path, mode="w", newline=""
         ) as outfile:
             reader = csv.reader(infile)
             writer = csv.writer(outfile)
 
-            used_msg_ids = []
-            if file_didnt_exist:
-                # First write ever
+            if not file_existed:
+                # Si el archivo no existia, directamente escribo los registros que me llegan
                 for key, msg_ids in records_to_count:
                     line_to_write = [key, msg_ids[0], str(len(msg_ids))]
                     writer.writerow(line_to_write)
-
+                    
+                    new_file_lines.append(','.join(line_to_write))
                     used_msg_ids.extend(msg_ids)
 
+                logger.log(client_id, [file_path] + new_file_lines, used_msg_ids)
                 os.replace(temp_file_path, file_path)
 
                 continue
 
-            # WINDOWS 
+            # Para cada record de disco leido, me fijo si coincide en key con 
+            # los nuevos que tengo que contar 
             added_records = set()
             for read_key, read_msg_id, read_count in reader:    
                 updated_key = False        
                 for index, (key, msg_ids) in enumerate(records_to_count):
+                    # Si coincido, updateo con el nuevo valor del count
                     if key == read_key:
                         new_count = str(int(read_count) + len(msg_ids))
 
@@ -437,18 +449,26 @@ def sum_batch_to_records(dir: str, records_per_file: dict[str, list[str]], logge
                         updated_key = True
                         added_records.add(index)
 
+                # Si no se updateo el valor, tengo que volver a escribir el original
                 if not updated_key: 
                     line_to_write = [read_key, read_msg_id, read_count]
                     writer.writerow(line_to_write)
+                    
+                    new_file_lines.append(','.join(line_to_write))
             
-            # Write remaining records
-            for index, (key, msg_ids) in enumerate(records_to_count):
-                if not index in added_records:
-                    line_to_write = [key, msg_ids[0], str(len(msg_ids))]
-                    writer.writerow(line_to_write)  
+            # Optimizacion para ahorrarse iteraciones
+            if len(records_to_count) != len(added_records):
+                # Si hay registros que no se usaron para actualizar, y no matchearon
+                # con ninguna key, es la primera vez que aparecen, tengo que escribirlos
+                for index, (key, msg_ids) in enumerate(records_to_count):
+                    if not index in added_records:
+                        line_to_write = [key, msg_ids[0], str(len(msg_ids))]
+                        writer.writerow(line_to_write)  
 
-                    used_msg_ids.extend(msg_ids)
-                 
+                        new_file_lines.append(','.join(line_to_write))
+                        used_msg_ids.extend(msg_ids)
+
+            logger.log(client_id, [file_path] + new_file_lines, used_msg_ids)
             os.replace(temp_file_path, file_path)
             
 

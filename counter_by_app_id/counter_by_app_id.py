@@ -145,8 +145,7 @@ class CounterByAppId:
             self._storage_dir,
             body,
             self._activity_log,
-            range_for_partition=self._range_for_partition,
-            save_first_msg_id=True,
+            range_for_partition=self._range_for_partition
         )
 
         self._middleware.ack(delivery_tag)

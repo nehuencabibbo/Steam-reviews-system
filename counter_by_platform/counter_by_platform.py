@@ -109,7 +109,6 @@ class CounterByPlatform:
         logging.debug(  '-----------------------')
         for msg in body:
             logging.debug(f'{msg[0]}, {msg[1]}, {msg[2]}')
-        # logging.debug(f"GOT BATCH: {body}")
         if body[0][SESSION_TIMEOUT_MESSAGE_INDEX] == SESSION_TIMEOUT_MESSAGE:
             session_id = body[0][TIMEOUT_TRANSMISSION_SESSION_ID]
             logging.info(f"Received timeout for client: {session_id}")
@@ -121,13 +120,11 @@ class CounterByPlatform:
             return
 
         if body[0][END_TRANSMISSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
-            logging.debug("Recived END transmssion")
+            logging.debug(f"Recived END transmssion from client: {body[0][END_TRANSMISSION_CLIENT_ID]}")
             session_id = body[0][END_TRANSMISSION_CLIENT_ID]
             msg_id = body[0][END_TRANSMISSION_MSG_ID_INDEX]
 
             self.__send_results(session_id, msg_id)
-
-            # self.__handle_end_transmssion(session_id, msg_id)
 
             self._middleware.ack(delivery_tag)
 
@@ -141,7 +138,9 @@ class CounterByPlatform:
         body = self.__purge_duplicates_and_add_unique_msg_id(body)
 
         storage.sum_batch_to_records_per_client(
-            self.storage_dir, body, self._activity_log, save_first_msg_id=True
+            self.storage_dir, 
+            body, 
+            self._activity_log
         )
 
         self._middleware.ack(delivery_tag)
@@ -178,11 +177,11 @@ class CounterByPlatform:
             else:
                 if msg_id in batch_msg_ids:
                     logging.debug(
-                        f"[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (inside batch)"
+                        f"Filtered {msg_id} beacause it was duplicated (inside batch)"
                     )
                 else:
                     logging.debug(
-                        f"[DUPLICATE FILTER] Filtered {msg_id} beacause it was repeated (previously processed)"
+                        f"Filtered {msg_id} beacause it was duplicated (previously processed)"
                     )
 
         return filtered_batch
@@ -216,7 +215,7 @@ class CounterByPlatform:
         )
         logging.debug(f"Sent results to queue {self.publish_queue}")
 
-        # storage.delete_directory(client_dir)
+        storage.delete_directory(client_dir)
 
     def __sigterm_handler(self, signal, frame):
         logging.debug("Got SIGTERM")
