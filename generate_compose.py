@@ -1152,7 +1152,7 @@ def generate_output(node_names: list, monitor_names: list):
     #     )
 
     add_client_handler(
-        output=output, num=1, debug=True, port=CLIENTS_PORT, node_names=node_names
+        output=output, num=1, debug=False, port=CLIENTS_PORT, node_names=node_names
     )
     generate_drop_columns(
         output, AMOUNT_OF_FILTER_COLUMNS, debug=False, node_names=node_names
@@ -1160,7 +1160,7 @@ def generate_output(node_names: list, monitor_names: list):
     generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False, node_names=node_names)
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=True, node_names=node_names)
+    generate_q1(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q2 -----------------------------------------
     generate_q2(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q3 -----------------------------------------

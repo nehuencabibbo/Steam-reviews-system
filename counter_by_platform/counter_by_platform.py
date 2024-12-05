@@ -114,7 +114,7 @@ class CounterByPlatform:
             logging.info(f"Received timeout for client: {session_id}")
 
             client_dir = f"{self.storage_dir}/{session_id}"
-            # storage.delete_directory(client_dir)
+            storage.delete_directory(client_dir)
             self._middleware.ack(delivery_tag)
 
             return
