@@ -102,8 +102,33 @@ class ClientMiddleware:
             )
             logging.debug("Sent batch")
             self.__batch = [b"", 0]
+
         else:
             self.__batch = [new_batch, ammount_of_messages + 1]
+
+    # D: Data
+    def send_and_wait_for_ack(
+        self, message: list[str], expected, message_type="D", session_id=None
+    ):
+        current_batch, ammount_of_messages = self.__batch
+        new_batch = self.__protocol.add_to_batch(current_batch, message)
+
+        if ammount_of_messages + 1 == self.__batch_size:
+            logging.info(f"SEND | Session id: {session_id}")
+            message_with_session_id = self.__protocol.insert_before_batch(
+                new_batch, [session_id]
+            )
+            self.__socket.send(
+                self.__protocol.insert_before_batch(
+                    message_with_session_id, [message_type]
+                )
+            )
+            logging.debug("Sent batch")
+            self.__batch = [b"", 0]
+            return self.get_ack(expected)
+        else:
+            self.__batch = [new_batch, ammount_of_messages + 1]
+            return True  # "ACK"
 
     def send_batch(self, message_type=None, session_id=None):
         batch, amount_of_messages = self.__batch
@@ -175,3 +200,24 @@ class ClientMiddleware:
 
     def get_row_from_message(self, message: bytes) -> list[str]:
         return self.__protocol.decode(message)
+
+    def get_ack(self, expected: str, timeout_after: float = 0.5, max_retires: int = 3):
+        stop_event = threading.Event()
+        t = threading.Timer(timeout_after, self.set_event, args=(stop_event,))
+        t.start()
+
+        while not stop_event.is_set():
+            logging.debug(f"Waiting for message: {expected}...")
+            if not self.has_message():
+                continue
+
+            res = self.recv_batch()
+            logging.debug(f"[CLIENT MIDDLEWARE] received: {res}")
+            if res[0][0] == "A" and res[0][1] == expected:
+                t.cancel()
+                return True
+
+        return False
+
+    def set_event(self, event):
+        event.set()

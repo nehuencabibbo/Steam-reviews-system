@@ -94,6 +94,19 @@ class ClientHandler:
 
         t = threading.Timer(100000.0, self.handle_client_timeout, args=[session_id])
         client_info[CLIENT_INFO_TIMER_INDEX] = t
+
+        # if random.randint(0, 9) > 8:
+        #     logging.info(f"Bad luck, message dropped")
+        #     return
+
+        self._client_middleware.send_multipart(
+            connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+            message=[
+                "A",
+                str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
+            ],
+            needs_encoding=True,
+        )
         t.start()
 
     def process_query_results_request_message(self, message: bytes):
