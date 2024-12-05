@@ -197,14 +197,15 @@ class CounterByPlatform:
         reader = storage.read_all_files(client_dir)
 
         for record in reader:
-            logging.debug(f"sending record: {record}")
             if self._got_sigterm:
                 # should send everything so i can ack before closing
                 # or return false so end is not acked and i dont send the results?
                 return
 
+            record_to_send = [session_id, record[MSG_ID], record[PLATFORM], record[COUNT]]
+            logging.debug(f"sending record: {record_to_send} to {self.publish_queue}")
             self._middleware.publish(
-                [session_id, record[MSG_ID], record[PLATFORM], record[COUNT]],
+                record_to_send,
                 queue_name=self.publish_queue,
             )
 

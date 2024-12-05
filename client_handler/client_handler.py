@@ -172,18 +172,24 @@ class ClientHandler:
         #     logging.error(f"Bad luck, message of type: {msg_type} dropped")
         #     return
 
+        # END
+        # logging(self._reviews_queue)
+        # Se cae
+        # Recuperas estado -> self._reviews_queue
+        # END
+        # self._reviews_queue -> manda mal?
         rows = self._client_middleware.get_row_from_message(message)
         session_id = rows[0]
         logging.info(f"Session: {session_id} successfully connected")
         t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
 
         self._clients_info[session_id] = [
-            self._games_queue_name,
-            t,
-            connection_id,
-            set(),
-            threading.Lock(),
-            0,
+            self._games_queue_name, # No es fijo, pero cambia una vez nomas
+            t, # No
+            connection_id, # Fijo
+            set(), # Variable
+            threading.Lock(), # No
+            0, # Last ack'd messageid
         ]
 
         self._client_middleware.send_multipart(
@@ -247,7 +253,7 @@ class ClientHandler:
 
         # remove all client data
         client_info = self._clients_info[client_id]
-        storage.delete_files_from_directory(f"/tmp/{client_id}")
+        # storage.delete_files_from_directory(f"/tmp/{client_id}")
 
         client_info[CLIENT_INFO_TIMER_INDEX].cancel()
         # TODO: Ver que onda si se cae por aca
@@ -298,7 +304,7 @@ class ClientHandler:
 
         self._add_finished_query_to_clients(clients=client_ends, query=query)
 
-        channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+        channel.basic_ack(delivery_tag=method_frame.delivery_tag) # TODO: Mover al middleware?
 
     def __sigterm_handler(self, sig, frame):
         logging.info("Shutting down Client Handler")
@@ -325,7 +331,7 @@ class ClientHandler:
         # Get the batch for every client
         for record in records:
             client_id = record[0]
-            record = record[2:]  # TODO: Stop ignoring msg_id
+            record = record[1:] 
 
             if record[0] == "END":
                 clients_ends.add(client_id)
