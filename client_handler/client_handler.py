@@ -5,6 +5,7 @@ import signal
 import threading
 from typing import *
 import uuid
+from common.activity_log.activity_log import ActivityLog
 from common.storage import storage
 import zmq
 import pika
@@ -23,6 +24,7 @@ class ClientHandler:
         middleware: Middleware,
         client_middleware: ClientMiddleware,
         client_monitor: WatchdogClient,
+        logger: ActivityLog,
         **kwargs,
     ):
         self._middleware = middleware
@@ -30,7 +32,9 @@ class ClientHandler:
         self._port = kwargs["CLIENTS_PORT"]
         self._games_queue_name = kwargs["GAMES_QUEUE_NAME"]
         self._reviews_queue_name = kwargs["REVIEWS_QUEUE_NAME"]
-        self._clients_info = {}
+        self._activity_log = logger
+        # self._clients_info = {}
+
         self._rabbit_ip = kwargs["RABBIT_IP"]
         self._q1_result_queue = kwargs["Q1_RESULT_QUEUE"]
         self._q2_result_queue = kwargs["Q2_RESULT_QUEUE"]
@@ -39,8 +43,20 @@ class ClientHandler:
         self._q5_result_queue = kwargs["Q5_RESULT_QUEUE"]
         self._got_sigterm = threading.Event()
         self._client_monitor = client_monitor
+        self._clients_info = self._activity_log.recover_client_handler_state()
 
-        logging.info(f"_reviews_queue_name: {self._reviews_queue_name}")
+        for k, v in self._clients_info:
+            logging.debug(f"Recovered: {k} | {v}")
+            t = threading.Timer(30.0, self.handle_client_timeout, args=[k])
+
+            v.extend(
+                [
+                    t,
+                    threading.Lock(),
+                ]
+            )
+
+            t.start()
 
         signal.signal(signal.SIGTERM, self.__sigterm_handler)
 
@@ -92,7 +108,15 @@ class ClientHandler:
 
             client_info[CLIENT_INFO_QUEUE_NAME_INDEX] = self._reviews_queue_name
 
-        t = threading.Timer(100000.0, self.handle_client_timeout, args=[session_id])
+        self._activity_log.log_for_client_handler(
+            client_id=session_id,
+            queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
+            connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+            last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
+            finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
+        )
+
+        t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
         client_info[CLIENT_INFO_TIMER_INDEX] = t
 
         # if random.randint(0, 9) > 8:
@@ -115,24 +139,24 @@ class ClientHandler:
 
         self._send_query_results_if_there_are(session_id=rows[0][0], query=rows[1][0])
 
-    def process_heartbeat_message(self, message: bytes):
-        # if random.randint(0, 9) > 8:
-        #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
-        #     return
-        rows = self._client_middleware.get_row_from_message(message)
-        session_id = rows[0]
+    # def process_heartbeat_message(self, message: bytes):
+    #     # if random.randint(0, 9) > 8:
+    #     #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
+    #     #     return
+    #     rows = self._client_middleware.get_row_from_message(message)
+    #     session_id = rows[0]
 
-        logging.debug(f"Received heartbeat from {session_id}")
-        self._client_middleware.send_multipart(
-            connection_id=self._clients_info[session_id][
-                CLIENT_INFO_CONNECTION_ID_INDEX
-            ],
-            message=[
-                HEARTBEAT_MESSAGE_TYPE,
-                rows[1],
-            ],  # rows[1] contains heartbeat id, its used for detecting duplicates
-            needs_encoding=True,
-        )
+    #     logging.debug(f"Received heartbeat from {session_id}")
+    #     self._client_middleware.send_multipart(
+    #         connection_id=self._clients_info[session_id][
+    #             CLIENT_INFO_CONNECTION_ID_INDEX
+    #         ],
+    #         message=[
+    #             HEARTBEAT_MESSAGE_TYPE,
+    #             rows[1],
+    #         ],  # rows[1] contains heartbeat id, its used for detecting duplicates
+    #         needs_encoding=True,
+    #     )
 
     def process_session_restart_message(self, message: bytes):
         # if random.randint(0, 9) > 8:
@@ -172,12 +196,6 @@ class ClientHandler:
         #     logging.error(f"Bad luck, message of type: {msg_type} dropped")
         #     return
 
-        # END
-        # logging(self._reviews_queue)
-        # Se cae
-        # Recuperas estado -> self._reviews_queue
-        # END
-        # self._reviews_queue -> manda mal?
         rows = self._client_middleware.get_row_from_message(message)
         session_id = rows[0]
         logging.info(f"Session: {session_id} successfully connected")
@@ -185,12 +203,16 @@ class ClientHandler:
 
         self._clients_info[session_id] = [
             self._games_queue_name,  # No es fijo, pero cambia una vez nomas
-            t,  # No
             connection_id,  # Fijo
-            set(),  # Variable
-            threading.Lock(),  # No
             0,  # Last ack'd messageid
+            set(),  # Variable
+            t,  # No
+            threading.Lock(),  # No
         ]
+
+        self._activity_log.log_for_client_handler(
+            session_id, self._games_queue_name, connection_id, 0, set()
+        )
 
         self._client_middleware.send_multipart(
             connection_id, ["A", session_id], needs_encoding=True
@@ -353,6 +375,13 @@ class ClientHandler:
 
             with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
                 client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX].add(query)
+                self._activity_log.log_for_client_handler(
+                    client_id=client_id,
+                    queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
+                    connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+                    last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
+                    finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
+                )
                 logging.info(
                     f"Client: {client_id} | {self._clients_info[client_id][CLIENT_INFO_FINISHED_QUERIES_INDEX]}"
                 )

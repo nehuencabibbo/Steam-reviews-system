@@ -1,11 +1,13 @@
 import os
 from client_handler import ClientHandler
+from common.activity_log.activity_log import ActivityLog
 from common.client_middleware.client_middleware import ClientMiddleware
 from configparser import ConfigParser
 import logging
 from common.middleware.middleware import Middleware
 from common.protocol.protocol import Protocol
 from common.watchdog_client.watchdog_client import WatchdogClient
+
 
 def get_config():
     config_params = {}
@@ -66,9 +68,9 @@ def get_config():
 
         config_params["LEADER_DISCOVERY_PORT"] = int(os.getenv("LEADER_DISCOVERY_PORT"))
 
-        #Testing
+        # Testing
         config_params["EXIT"] = int(os.getenv("EXIT", config["DEFAULT"]["EXIT"]))
-        
+
     except KeyError as e:
         raise KeyError(f"Key was not found. Error: {e}. Aborting")
     except ValueError as e:
@@ -99,18 +101,21 @@ def main():
     middleware = Middleware(broker_ip)
     client_middleware = ClientMiddleware()
     protocol = Protocol()
-    
+
     monitor_ip = config.pop("WATCHDOGS_IP")
     monitor_port = config.pop("WATCHDOG_PORT")
     node_name = config.pop("NODE_NAME")
     discovery_port = config.pop("LEADER_DISCOVERY_PORT")
-    monitor = WatchdogClient(monitor_ip, monitor_port, node_name, discovery_port, middleware)
-
+    monitor = WatchdogClient(
+        monitor_ip, monitor_port, node_name, discovery_port, middleware
+    )
+    logger = ActivityLog()
     counter = ClientHandler(
         client_middleware=client_middleware,
         middleware=middleware,
         protocol=protocol,
         client_monitor=monitor,
+        logger=logger,
         **config,
     )
 

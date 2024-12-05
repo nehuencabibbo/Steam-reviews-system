@@ -38,6 +38,7 @@ class ActivityLog:
         # un log por cliente, que solamente se guarda el numero de mensaje
         # para loggearlo
         self._general_log_path = f'{self._dir}/{GENERAL_LOG_FILE_NAME}'
+        create_file_if_unexistent(self._general_log_path)
 
     '''
     UTILITY
@@ -221,7 +222,6 @@ class ActivityLog:
         # denuevo una linea (llegue hasta esta funcion), eso quiere decir
         # que ya se termino de bajar a disco la linea anterior (es
         # secuencial), por lo tanto ya no necesito la linea anterior
-        create_file_if_unexistent(self._general_log_path)
         data_in_bytes = self.__get_line_for_general_log(data)
         msg_ids_in_bytes = self.__get_line_for_general_log(msg_ids, client_id=client_id)
         # logging.debug(f'EXPECTED DATA: {data_in_bytes}')
@@ -509,7 +509,10 @@ class ActivityLog:
     def recover_client_handler_state(self):
         result = {}
         for f in os.listdir(self._dir): 
-            client_id = f.rsplit('.', maxsplit=1)[0]
+            # client_id = f.rsplit('.', maxsplit=1)[0]
+            client_id, extension = f.rsplit('.', maxsplit=1)
+            if extension == 'bin': 
+                continue
 
             with open(os.path.join(self._dir, f)) as client_file:
                 reader = csv.reader(client_file)
@@ -518,7 +521,7 @@ class ActivityLog:
                     queue_name, connection_id, last_ack_message = line[:3]
                     variable_length_fields = set(line[3:])
 
-            result[client_id] = [queue_name, connection_id, last_ack_message, variable_length_fields]
+            result[client_id] = [queue_name, connection_id, int(last_ack_message), variable_length_fields]
 
-
+        
         return result

@@ -1121,25 +1121,35 @@ def generate_output(node_names: list, monitor_names: list):
     # ; GAME_FILE_PATH=data/filtered_games.csv
     # ; REVIEWS_FILE_PATH=data/filtered_reviews.csv
 
+    add_client(
+        output,
+        num=1,
+        # games_file_path="data/games.csv",
+        # reviews_file_path="data/reviews_sample.csv",
+        games_file_path="data/games_sample.csv",
+        reviews_file_path="data/reviews_sample.csv",
+        debug=True,
+    )
     # add_client(
     #     output,
-    #     num=1,
+    #     num=2,
     #     # games_file_path="data/games.csv",
     #     # reviews_file_path="data/reviews_sample.csv",
-    #     games_file_path="data/games_sample.csv",
-    #     reviews_file_path="data/reviews_sample.csv",
+    #     games_file_path="data/games.csv",
+    #     reviews_file_path="data/filtered_reviews.csv",
     #     debug=False,
     # )
-    for i in range(5):
-        add_client(
-            output,
-            num=i,
-            # games_file_path="data/games_sample.csv",
-            # reviews_file_path="data/reviews_sample.csv",
-            games_file_path="data/games_sample.csv",
-            reviews_file_path="data/reviews_sample.csv",
-            debug=False,
-        )
+
+    # for i in range(5):
+    #     add_client(
+    #         output,
+    #         num=i,
+    #         # games_file_path="data/games_sample.csv",
+    #         # reviews_file_path="data/reviews_sample.csv",
+    #         games_file_path="data/games_sample.csv",
+    #         reviews_file_path="data/reviews_sample.csv",
+    #         debug=False,
+    #     )
 
     add_client_handler(
         output=output, num=1, debug=True, port=CLIENTS_PORT, node_names=node_names
@@ -1147,20 +1157,18 @@ def generate_output(node_names: list, monitor_names: list):
     generate_drop_columns(
         output, AMOUNT_OF_FILTER_COLUMNS, debug=True, node_names=node_names
     )
-    generate_drop_nulls(
-        output, AMOUNT_OF_DROP_NULLS, debug=True, node_names=node_names
-    )
+    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=True, node_names=node_names)
 
     # -------------------------------------------- Q1 -----------------------------------------
     generate_q1(output=output, debug=True, node_names=node_names)
-    # # -------------------------------------------- Q2 -----------------------------------------
-    # generate_q2(output=output, debug=False, node_names=node_names)
-    # # -------------------------------------------- Q3 -----------------------------------------
-    # generate_q3(output=output, debug=False, node_names=node_names)
-    # # -------------------------------------------- Q4 -----------------------------------------
-    #  generate_q4(output=output, debug=True, node_names=node_names)
-    # # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output, debug=False, node_names=node_names)
+    # -------------------------------------------- Q2 -----------------------------------------
+    generate_q2(output=output, debug=False, node_names=node_names)
+    # -------------------------------------------- Q3 -----------------------------------------
+    generate_q3(output=output, debug=False, node_names=node_names)
+    # -------------------------------------------- Q4 -----------------------------------------
+    generate_q4(output=output, debug=False, node_names=node_names)
+    # -------------------------------------------- Q5 -----------------------------------------
+    generate_q5(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)

@@ -99,8 +99,7 @@ class DropNulls:
     ):
         client_id = body[END_TRANSMISSION_CLIENT_ID_INDEX]
         msg_id = body[END_TRANSMISSION_MSG_ID_INDEX]
-        peers_that_received_end = body[END_TRANSMISSION_END_INDEX + 1:]
-
+        peers_that_received_end = body[END_TRANSMISSION_END_INDEX + 1 :]
 
         if len(peers_that_received_end) == self.instances_of_myself:
             logging.debug(f"Sending real END. {message_type}")
@@ -119,12 +118,14 @@ class DropNulls:
             else:
                 raise Exception(f"Unknown message type: {message_type}")
 
-            message = [client_id,msg_id, END_TRANSMISSION_MESSAGE]
+            message = [client_id, msg_id, END_TRANSMISSION_MESSAGE]
             if self.node_id not in peers_that_received_end:
                 peers_that_received_end.append(self.node_id)
 
             message += peers_that_received_end
-            logging.debug(f"[END MESSAGE ALGORITHM] Publishing {message} in {reciving_queue_name}")
+            logging.debug(
+                f"[END MESSAGE ALGORITHM] Publishing {message} in {reciving_queue_name}"
+            )
             self._middleware.publish_message(message, reciving_queue_name)
 
     def __handle_timeout(
@@ -196,7 +197,7 @@ class DropNulls:
                 )
                 self._middleware.ack(delivery_tag)
                 return
-            
+
             if message[END_TRANSMISSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"Received games END: {message}")
                 self.__handle_end_transmission(
