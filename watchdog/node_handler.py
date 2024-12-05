@@ -7,8 +7,8 @@ class AbnormalNodeStatus(Exception):
 
 HEARTBEAT_MESSAGE = "A"
 NACK_MESSAGE = "N"
-RECV_TIMEOUT = 5
-RECONNECTION_TIMEOUT = 10
+RECV_TIMEOUT = 10
+RECONNECTION_TIMEOUT = 15
 
 class NodeHandler:
 

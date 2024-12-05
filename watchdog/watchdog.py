@@ -12,7 +12,7 @@ from common.leader_election.leader_election import LeaderElection
 from leader_discovery_service import LeaderDiscoveryService
 
 NUMBER_OF_RETRIES = 5
-TIMEOUT_BEFORE_FALLEN_CHECK = 10
+TIMEOUT_BEFORE_FALLEN_CHECK = 20
 REGISTRATION_CONFIRM = "K"
 MAX_MONITOR_TIMEOUT = 3
 TIME_BETWEEN_HEARTBEATS = 1 #si me envian cada 1 segundo, cada vez que recibo un heartbeat debo revisar si alguno esta caido

@@ -107,14 +107,14 @@ class ClientHandler:
             logging.debug("Setting forwarding queue to reviews")
 
             client_info[CLIENT_INFO_QUEUE_NAME_INDEX] = self._reviews_queue_name
-        with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
-            self._activity_log.log_for_client_handler(
-                client_id=session_id,
-                queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
-                connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
-                last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
-                finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
-            )
+        # with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
+        #     self._activity_log.log_for_client_handler(
+        #         client_id=session_id,
+        #         queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
+        #         connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+        #         last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
+        #         finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
+        #     )
 
         t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
         client_info[CLIENT_INFO_TIMER_INDEX] = t
@@ -210,10 +210,10 @@ class ClientHandler:
             threading.Lock(),  # No
         ]
 
-        with self._clients_info[session_id][CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
-            self._activity_log.log_for_client_handler(
-                session_id, self._games_queue_name, connection_id, 0, set()
-            )
+        # with self._clients_info[session_id][CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
+        #     self._activity_log.log_for_client_handler(
+        #         session_id, self._games_queue_name, connection_id, 0, set()
+        #     )
 
         self._client_middleware.send_multipart(
             connection_id, ["A", session_id], needs_encoding=True
@@ -376,13 +376,13 @@ class ClientHandler:
 
             with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
                 client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX].add(query)
-                self._activity_log.log_for_client_handler(
-                    client_id=client_id,
-                    queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
-                    connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
-                    last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
-                    finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
-                )
+                # self._activity_log.log_for_client_handler(
+                #     client_id=client_id,
+                #     queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
+                #     connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+                #     last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
+                #     finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
+                # )
                 logging.info(
                     f"Client: {client_id} | {self._clients_info[client_id][CLIENT_INFO_FINISHED_QUERIES_INDEX]}"
                 )
