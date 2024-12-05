@@ -1,8 +1,10 @@
+import ast
 import functools
 import logging
 import random
 import signal
 import threading
+import time
 from typing import *
 import uuid
 from common.activity_log.activity_log import ActivityLog
@@ -46,9 +48,11 @@ class ClientHandler:
         self._clients_info = self._activity_log.recover_client_handler_state()
 
         for k, v in self._clients_info.items():
-            logging.debug(f"Recovered: {k} | {v}")
+            logging.info(f"Recovered: {k} | {v}")
             t = threading.Timer(30.0, self.handle_client_timeout, args=[k])
-
+            v[CLIENT_INFO_CONNECTION_ID_INDEX] = ast.literal_eval(
+                v[CLIENT_INFO_CONNECTION_ID_INDEX]
+            )
             v.extend(
                 [
                     t,
@@ -214,7 +218,6 @@ class ClientHandler:
             self._activity_log.log_for_client_handler(
                 session_id, self._games_queue_name, connection_id, 0, set()
             )
-
         self._client_middleware.send_multipart(
             connection_id, ["A", session_id], needs_encoding=True
         )
@@ -222,7 +225,7 @@ class ClientHandler:
         t.start()
 
     def process_message(self, msg_type: str, connection_id, message: bytes):
-        logging.debug(f"Received message of type: {msg_type} | message: {message}")
+        # logging.debug(f"Received message of type: {msg_type} | message: {message}")
 
         if msg_type == DATA_MESSAGE_TYPE:
             self.process_data_message(message)
@@ -275,12 +278,15 @@ class ClientHandler:
         self._middleware.publish_message([client_id, "TIMEOUT"], self._games_queue_name)
 
         # remove all client data
+        storage.delete_director(f"/tmp/{client_id}")
+
         client_info = self._clients_info[client_id]
         # storage.delete_files_from_directory(f"/tmp/{client_id}")
 
         client_info[CLIENT_INFO_TIMER_INDEX].cancel()
         # TODO: Ver que onda si se cae por aca
         del client_info
+        logging.info(f"Removed all the data from client: {client_id}")
 
     def handle_client_timeout(self, client_id):
         self._middleware.execute_from_another_thread(
