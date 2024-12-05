@@ -8,21 +8,12 @@ import uuid
 from common.storage import storage
 import zmq
 import pika
+from constants import *
 
 from common.client_middleware.client_middleware import ClientMiddleware
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.protocol.protocol import Protocol
 from common.watchdog_client.watchdog_client import WatchdogClient
-
-END_TRANSMISSION_MESSAGE = "END"
-APP_ID = 0
-
-CLIENT_INFO_QUEUE_NAME_INDEX = 0
-CLIENT_INFO_TIMER_INDEX = 1
-CLIENT_INFO_CONNECTION_ID_INDEX = 2
-CLIENT_INFO_FINISHED_QUERIES_INDEX = 3
-CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX = 4
-CLIENT_INFO_LAST_MESSAGE_INDEX = 5
 
 
 class ClientHandler:
@@ -70,143 +61,145 @@ class ClientHandler:
         self.results_middleware.attach_callback(self._q5_result_queue, self.on_message)
         self.results_middleware.start_consuming()
 
-    def process_message(self, msg_type: str, connection_id, message: bytes):
-        # N: New session request
-        # D: Data
-        # Q: Query result request
-        # H: Heartbeat
-        # C: Last message acked request
-        # A: Acknowledge session id
-        # logging.debug(f"Received message of type: {msg_type} ")
-        # a = self._middleware.get_rows_from_message(message)
-        # for x in a:
-        #     logging.debug(f"row: {x}")
+    def process_data_message(self, message: bytes):
+        session_id, message = self._client_middleware.get_session_id(message)
+        # logging.info(f"Last message number: {message_number}")
+        client_info = self._clients_info[session_id]
 
+        # Cancel timer
+        client_info[CLIENT_INFO_TIMER_INDEX].cancel()
+
+        forwarding_queue_name = client_info[CLIENT_INFO_QUEUE_NAME_INDEX]
+
+        self._middleware.add_client_id_and_send_batch(
+            queue_name=forwarding_queue_name,
+            client_id=session_id,
+            batch=message,
+        )
+
+        client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] = (
+            self._client_middleware.get_last_message_id(message)
+        )
+
+        if message[-3:] == b"END":
+            logging.debug(f"Received  END from session: {session_id}")
+
+            if forwarding_queue_name == self._reviews_queue_name:
+                logging.info(f"Final end received from client: {session_id}.")
+                return
+
+            logging.debug("Setting forwarding queue to reviews")
+
+            client_info[CLIENT_INFO_QUEUE_NAME_INDEX] = self._reviews_queue_name
+
+        t = threading.Timer(100000.0, self.handle_client_timeout, args=[session_id])
+        client_info[CLIENT_INFO_TIMER_INDEX] = t
+        t.start()
+
+    def process_query_results_request_message(self, message: bytes):
+        rows = self._middleware.get_rows_from_message(message)
+        logging.debug(f"Req: {rows}")
+
+        self._send_query_results_if_there_are(session_id=rows[0][0], query=rows[1][0])
+
+    def process_heartbeat_message(self, message: bytes):
+        # if random.randint(0, 9) > 8:
+        #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
+        #     return
+        rows = self._client_middleware.get_row_from_message(message)
+        session_id = rows[0]
+
+        logging.debug(f"Received heartbeat from {session_id}")
+        self._client_middleware.send_multipart(
+            connection_id=self._clients_info[session_id][
+                CLIENT_INFO_CONNECTION_ID_INDEX
+            ],
+            message=[
+                HEARTBEAT_MESSAGE_TYPE,
+                rows[1],
+            ],  # rows[1] contains heartbeat id, its used for detecting duplicates
+            needs_encoding=True,
+        )
+
+    def process_session_restart_message(self, message: bytes):
+        # if random.randint(0, 9) > 8:
+        #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
+        #     return
+        rows = self._client_middleware.get_row_from_message(message)
+        session_id = rows[0]
+        logging.info(f"Received session restart from: {session_id} | {rows}")
+        client_info = self._clients_info[session_id]
+
+        self._client_middleware.send_multipart(
+            connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+            message=[
+                "C",
+                rows[
+                    1
+                ],  # contains restart session id, its used for detecting duplicates
+                str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
+            ],
+            needs_encoding=True,
+        )
+
+    def process_new_session_request_message(self, connection_id, message: bytes):
+        # if random.randint(0, 9) < 6:
+        #     logging.error(f"Bad luck, message of type: {msg_type} dropped")
+        #     return
+
+        session_id = str(uuid.uuid4())
+        logging.info(f"New session request, assigned session id: {session_id}")
+        self._client_middleware.send_multipart(
+            connection_id, ["N", session_id], needs_encoding=True
+        )
+        # logging.debug("Setting forwarding queue to games")
+
+    def process_session_ack_message(self, connection_id, message: bytes):
+        # if random.randint(0, 9) < 3:
+        #     logging.error(f"Bad luck, message of type: {msg_type} dropped")
+        #     return
+
+        rows = self._client_middleware.get_row_from_message(message)
+        session_id = rows[0]
+        logging.info(f"Session: {session_id} successfully connected")
+        t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
+
+        self._clients_info[session_id] = [
+            self._games_queue_name,
+            t,
+            connection_id,
+            set(),
+            threading.Lock(),
+            0,
+        ]
+
+        self._client_middleware.send_multipart(
+            connection_id, ["A", session_id], needs_encoding=True
+        )
+
+        t.start()
+
+    def process_message(self, msg_type: str, connection_id, message: bytes):
         logging.debug(f"Received message of type: {msg_type} | message: {message}")
 
-        if msg_type == "D":
-            session_id, message = self._client_middleware.get_session_id(message)
-            # logging.info(f"Last message number: {message_number}")
-            client_info = self._clients_info[session_id]
-
-            # Cancel timer
-            client_info[CLIENT_INFO_TIMER_INDEX].cancel()
-
-            forwarding_queue_name = client_info[CLIENT_INFO_QUEUE_NAME_INDEX]
-
-            self._middleware.add_client_id_and_send_batch(
-                queue_name=forwarding_queue_name,
-                client_id=session_id,
-                batch=message,
-            )
-
-            client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] = (
-                self._client_middleware.get_last_message_id(message)
-            )
-
-            if message[-3:] == b"END":
-                logging.debug(f"Received  END from session: {session_id}")
-
-                if forwarding_queue_name == self._reviews_queue_name:
-                    logging.info(f"Final end received from client: {session_id}.")
-                    return
-
-                logging.debug("Setting forwarding queue to reviews")
-
-                client_info[CLIENT_INFO_QUEUE_NAME_INDEX] = self._reviews_queue_name
-
-            t = threading.Timer(100000.0, self.handle_client_timeout, args=[session_id])
-            client_info[CLIENT_INFO_TIMER_INDEX] = t
-            t.start()
-
-        elif msg_type == "Q":
-            rows = self._middleware.get_rows_from_message(message)
-            logging.debug(f"Req: {rows}")
-
-            self._send_query_results_if_there_are(
-                session_id=rows[0][0], query=rows[1][0]
-            )
-        elif msg_type == "H":
-            # if random.randint(0, 9) > 8:
-            #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
-            #     return
-            rows = self._client_middleware.get_row_from_message(message)
-            session_id = rows[0]
-
-            logging.debug(f"Received heartbeat from {session_id}")
-            self._client_middleware.send_multipart(
-                connection_id=self._clients_info[session_id][
-                    CLIENT_INFO_CONNECTION_ID_INDEX
-                ],
-                message=[
-                    "H",
-                    rows[1],
-                ],  # rows[1] contains heartbeat id, its used for detecting duplicates
-                needs_encoding=True,
-            )
-        elif msg_type == "C":
-            # if random.randint(0, 9) > 8:
-            #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
-            #     return
-            rows = self._client_middleware.get_row_from_message(message)
-            session_id = rows[0]
-            logging.info(f"Received session restart from: {session_id} | {rows}")
-            client_info = self._clients_info[session_id]
-
-            self._client_middleware.send_multipart(
-                connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
-                message=[
-                    "C",
-                    rows[
-                        1
-                    ],  # contains restart session id, its used for detecting duplicates
-                    str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
-                ],
-                needs_encoding=True,
-            )
-
-        elif msg_type == "N":
-            # if random.randint(0, 9) < 6:
-            #     logging.error(f"Bad luck, message of type: {msg_type} dropped")
-            #     return
-
-            session_id = str(uuid.uuid4())
-            logging.info(f"New session request, assigned session id: {session_id}")
-            self._client_middleware.send_multipart(
-                connection_id, ["N", session_id], needs_encoding=True
-            )
-            # logging.debug("Setting forwarding queue to games")
-
-        elif msg_type == "A":
-            # if random.randint(0, 9) < 3:
-            #     logging.error(f"Bad luck, message of type: {msg_type} dropped")
-            #     return
-
-            rows = self._client_middleware.get_row_from_message(message)
-            session_id = rows[0]
-            logging.info(f"Session: {session_id} successfully connected")
-            t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
-
-            self._clients_info[session_id] = [
-                self._games_queue_name,
-                t,
-                connection_id,
-                set(),
-                threading.Lock(),
-                0,
-            ]
-
-            self._client_middleware.send_multipart(
-                connection_id, ["A", session_id], needs_encoding=True
-            )
-
-            t.start()
+        if msg_type == DATA_MESSAGE_TYPE:
+            self.process_data_message(message)
+        elif msg_type == QUERY_RESULTS_REQUEST_MESSAGE_TYPE:
+            self.process_query_results_request_message(message)
+        elif msg_type == HEARTBEAT_MESSAGE_TYPE:
+            self.process_heartbeat_message(message)
+        elif msg_type == SESSION_RESTART_MESSAGE_TYPE:
+            self.process_session_restart_message(message)
+        elif msg_type == NEW_SESSION_REQUEST_MESSAGE_TYPE:
+            self.process_new_session_request_message(connection_id, message)
+        elif msg_type == SESSION_ACK_MESSAGE_TYPE:
+            self.process_session_ack_message(connection_id, message)
         else:
             logging.info(f"Message type: {msg_type} not recognized")
 
     def handle_clients(self):
-        self.results_middleware.create_queue(name="games")
-        self.results_middleware.create_queue(name="reviews")
+        self._middleware.create_queue(name="games")
+        self._middleware.create_queue(name="reviews")
         self._client_middleware.create_socket(zmq.ROUTER)
         try:
             self._client_middleware.bind(self._port)
@@ -291,10 +284,6 @@ class ClientHandler:
         )
 
         self._add_finished_query_to_clients(clients=client_ends, query=query)
-
-        # self._client_middleware.send_query_results(
-        #     connection_id, message=body, query=query
-        # )
 
         channel.basic_ack(delivery_tag=method_frame.delivery_tag)
 
