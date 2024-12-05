@@ -21,11 +21,17 @@ class ActivityLogTests(unittest.TestCase):
         if Path(self._dir).exists():
             shutil.rmtree(self._dir)
 
+        if Path(self._middleware_dir).exists():
+            shutil.rmtree(self._middleware_dir)
+
         self._activity_log = ActivityLog()
 
     def tearDown(self):
         if Path(self._dir).exists():
             shutil.rmtree(self._dir)
+
+        if Path(self._middleware_dir).exists():
+            shutil.rmtree(self._middleware_dir)
     
     '''
     PROCESED LINES TESTS
@@ -355,7 +361,70 @@ class ActivityLogTests(unittest.TestCase):
         self.verify_for_queue(queue_name_1, [msg_1])
         self.verify_for_queue(queue_name_2, [msg_2])
                 
-            
+
+    '''
+    HANDLER LOGGING
+    '''
+    def test_01_con_recover_handler_state_correctly_for_empty_finished_queries(self):
+        client_id = '456'
+        queue_name = 'boca'
+        connection_id = '1'
+        last_ack_message = '4'
+
+        finished_queries = set()
+
+        expected = {
+            client_id:
+                [
+                    queue_name,
+                    connection_id,
+                    last_ack_message,
+                    finished_queries
+                ]
+        }
+
+        self._activity_log.log_for_client_handler(
+            client_id, 
+            queue_name,
+            connection_id,
+            last_ack_message,
+            finished_queries
+        )
+
+        recovered_state = self._activity_log.recover_client_handler_state()
+
+        self.assertEqual(recovered_state, expected)
+
+    def test_02_con_recover_handler_state_correctly_for_unempty_finished_queries(self):
+        client_id = '456'
+        queue_name = 'boca'
+        connection_id = '1'
+        last_ack_message = '4'
+
+        finished_queries = set()
+        [finished_queries.add(f'q{i}') for i in range(4)]
+
+        expected = {
+            client_id:
+                [
+                    queue_name,
+                    connection_id,
+                    last_ack_message,
+                    finished_queries
+                ]
+        }
+
+        self._activity_log.log_for_client_handler(
+            client_id, 
+            queue_name,
+            connection_id,
+            last_ack_message,
+            finished_queries
+        )
+
+        recovered_state = self._activity_log.recover_client_handler_state()
+
+        self.assertEqual(recovered_state, expected)
 
 if __name__ == "__main__":
     unittest.main()

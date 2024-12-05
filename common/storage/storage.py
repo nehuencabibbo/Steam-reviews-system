@@ -449,6 +449,7 @@ def sum_batch_to_records(dir: str, records_per_file: dict[str, list[str]], logge
                         used_msg_ids.extend(msg_ids)
                         updated_key = True
                         added_records.add(index)
+                        new_file_lines.append(','.join(line_to_write))
 
                 # Si no se updateo el valor, tengo que volver a escribir el original
                 if not updated_key: 

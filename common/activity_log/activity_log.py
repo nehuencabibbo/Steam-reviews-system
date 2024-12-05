@@ -1,3 +1,4 @@
+import csv
 import sys
 import os
 import shutil
@@ -37,7 +38,6 @@ class ActivityLog:
         # un log por cliente, que solamente se guarda el numero de mensaje
         # para loggearlo
         self._general_log_path = f'{self._dir}/{GENERAL_LOG_FILE_NAME}'
-        create_file_if_unexistent(self._general_log_path)
 
     '''
     UTILITY
@@ -221,6 +221,7 @@ class ActivityLog:
         # denuevo una linea (llegue hasta esta funcion), eso quiere decir
         # que ya se termino de bajar a disco la linea anterior (es
         # secuencial), por lo tanto ya no necesito la linea anterior
+        create_file_if_unexistent(self._general_log_path)
         data_in_bytes = self.__get_line_for_general_log(data)
         msg_ids_in_bytes = self.__get_line_for_general_log(msg_ids, client_id=client_id)
         # logging.debug(f'EXPECTED DATA: {data_in_bytes}')
@@ -279,6 +280,18 @@ class ActivityLog:
         msg_with_checksum = self.__add_checksum(msg)
         with open(full_path, 'ab') as log:
             log.write(msg_with_checksum)
+
+    def log_for_client_handler(self, client_id: str, queue_name: str, connection_id: str, last_ack_message: str, finished_querys: Set[str]):
+        file_path = os.path.join(self._dir, f'{client_id}.csv')
+        create_file_if_unexistent(file_path)
+        temp_file_path = os.path.join(self._dir, 'tmp.csv')
+        with open(temp_file_path, mode='w', newline='') as temp:
+            writer = csv.writer(temp)
+
+            line_to_write = [queue_name, connection_id, last_ack_message] + list(finished_querys)
+            writer.writerow(line_to_write)
+
+        os.replace(temp_file_path, file_path)
 
     '''
     READING LOG
@@ -491,4 +504,21 @@ class ActivityLog:
         if self._log_two_ends:
             return result, result2
         
+        return result
+    
+    def recover_client_handler_state(self):
+        result = {}
+        for f in os.listdir(self._dir): 
+            client_id = f.rsplit('.', maxsplit=1)[0]
+
+            with open(os.path.join(self._dir, f)) as client_file:
+                reader = csv.reader(client_file)
+                # Solo tiene una linea
+                for line in reader:
+                    queue_name, connection_id, last_ack_message = line[:3]
+                    variable_length_fields = set(line[3:])
+
+            result[client_id] = [queue_name, connection_id, last_ack_message, variable_length_fields]
+
+
         return result
