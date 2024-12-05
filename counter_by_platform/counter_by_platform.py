@@ -170,7 +170,7 @@ class CounterByPlatform:
             client_id = msg[REGULAR_MESSAGE_CLIENT_ID]
             if (
                 not self._activity_log.is_msg_id_already_processed(client_id, msg_id)
-                and not msg_id in batch_msg_ids
+                and not (client_id, msg_id) in batch_msg_ids
             ):
                 filtered_batch.append(msg)
                 batch_msg_ids.add((client_id, msg_id))
