@@ -2,6 +2,7 @@ import os
 import csv
 import logging
 import shutil
+import time
 from typing import *
 
 from utils.utils import group_batch_by_field, group_msg_ids_per_client_by_field
@@ -344,7 +345,7 @@ def sum_batch_to_records_per_client(
 
     need_to_partition_by_range = range_for_partition != -1
     for client_id, new_records in msg_ids_per_record_by_client_id.items():
-        logging.debug(f"NEW RECORDS: {new_records}")
+        logging.debug(f"NEW RECORDS: {new_records} for client: {client_id}")
 
         client_dir = os.path.join(dir, client_id)
 
@@ -384,86 +385,153 @@ def create_file_if_unexistent(full_path: str):
         open(full_path, "w").close()
 
 
-def sum_batch_to_records(
-    dir: str,
-    records_per_file: dict[str, list[(str, int)]],
-    logger,
-    save_first_msg_id: bool = False,
-):
-
+def sum_batch_to_records(dir: str, records_per_file: dict[str, list[str]], logger, save_first_msg_id: bool = False):
+    KEY_INDEX = 0
+    MSG_ID_INDEX = 1
+    COUNT_INDEX = 2
+    
     os.makedirs(dir, exist_ok=True)
-    for file_name, records in records_per_file.items():
-        # file_name = partition.csv
-        # records = [[WINDOWS, MSG_ID_LIST], [LINUX, MSG_ID_LIST]]
+    for file_name, records_to_count in records_per_file.items():
+        # records_to_count:
+        # [
+        #   ['WINDOWS', ['871121', '871122', '871123', '871125', '871126', '871127', '871128']], 
+        #   ['MAC', ['771121', '771122', '771126']]
+        # ]
         file_path = os.path.join(dir, file_name)
+        logging.debug(f'PATH: {file_path}')
+        file_didnt_exist = True if not os.path.exists(file_path) else False
         create_file_if_unexistent(file_path)
+        temp_file_path = os.path.join(dir, f"temp_{file_name}")
 
-        temp_file = os.path.join(dir, f"temp_{file_name}")
-
-        # De aca para abajo las operaciones son atomicas, o pasan o no pasan
-        msg_ids_used_in_file = []
-        new_file_lines = []
-        with open(file_path, mode="r") as infile, open(
-            temp_file, mode="w", newline=""
+        with open(file_path, mode="r", newline="") as infile, open(
+            temp_file_path, mode="w", newline=""
         ) as outfile:
             reader = csv.reader(infile)
             writer = csv.writer(outfile)
 
-            for row in reader:
-                record_was_updated = False
-                read_record_key = row[0]
-                if save_first_msg_id:
-                    read_msg_id = row[1]
-                    read_record_value = int(row[2])
-                else:
-                    read_record_value = int(row[1])
+            used_msg_ids = []
+            if file_didnt_exist:
+                # First write ever
+                for key, msg_ids in records_to_count:
+                    line_to_write = [key, msg_ids[0], str(len(msg_ids))]
+                    writer.writerow(line_to_write)
 
-                for i, record in enumerate(records):
-                    # cada record es: [WINDOWS, MSG_ID_LIST]
-                    # key = int(record[0]) #app_id
-                    key = record[0]
-                    msg_ids = record[1]
-                    msg_ids_used_in_file.extend(msg_ids)
-                    if read_record_key == key:
-                        if save_first_msg_id:
-                            new_state = [
-                                read_record_key,
-                                read_msg_id,
-                                str(read_record_value + len(msg_ids)),
-                            ]
-                        else:
-                            new_state = [
-                                read_record_key,
-                                str(read_record_value + len(msg_ids)),
-                            ]
-                        writer.writerow(new_state)
-                        new_file_lines.append(",".join(new_state))
-                        record_was_updated = True
-                        records.pop(i)
-                        break
+                    used_msg_ids.extend(msg_ids)
 
-                if not record_was_updated:
-                    writer.writerow(row)
-                    new_file_lines.append(",".join(row))
+                os.replace(temp_file_path, file_path)
 
-            for record in records:
-                key = record[0]
-                msg_ids = record[1]
-                if save_first_msg_id:
-                    line = [key, msg_ids[0], str(len(msg_ids))]
-                else:
-                    line = [key, str(len(msg_ids))]
+                continue
 
-                msg_ids_used_in_file.extend(msg_ids)
-                writer.writerow(line)
-                new_file_lines.append(",".join(line))
+            # WINDOWS 
+            added_records = set()
+            for read_key, read_msg_id, read_count in reader:    
+                updated_key = False        
+                for index, (key, msg_ids) in enumerate(records_to_count):
+                    if key == read_key:
+                        new_count = str(int(read_count) + len(msg_ids))
 
-        # TODO: esto lo deberia recibir por parametro y el path se deberia armar aca...
-        logging.debug(f"MSG IDS USED IN FILE: {msg_ids_used_in_file}")
-        client_id = dir.rsplit("/", maxsplit=1)[-1]
-        logger.log(client_id, [file_path] + new_file_lines, msg_ids_used_in_file)
+                        line_to_write = [read_key, read_msg_id, new_count]
+                        writer.writerow(line_to_write)
 
-        os.replace(temp_file, file_path)
+                        used_msg_ids.extend(msg_ids)
+                        updated_key = True
+                        added_records.add(index)
+
+                if not updated_key: 
+                    line_to_write = [read_key, read_msg_id, read_count]
+                    writer.writerow(line_to_write)
+            
+            # Write remaining records
+            for index, (key, msg_ids) in enumerate(records_to_count):
+                if not index in added_records:
+                    line_to_write = [key, msg_ids[0], str(len(msg_ids))]
+                    writer.writerow(line_to_write)  
+
+                    used_msg_ids.extend(msg_ids)
+                 
+            os.replace(temp_file_path, file_path)
+            
+
+# def sum_batch_to_records(
+#     dir: str,
+#     records_per_file: dict[str, list[(str, int)]],
+#     logger,
+#     save_first_msg_id: bool = False,
+# ):
+#     os.makedirs(dir, exist_ok=True)
+#     for file_name, records in records_per_file.items():
+#         logging.debug(f'AAAAAAAAAAAAAAAAA: {records}')
+#         # file_name = partition.csv
+#         # records = [[WINDOWS, MSG_ID_LIST], [LINUX, MSG_ID_LIST]]
+#         file_path = os.path.join(dir, file_name)
+#         create_file_if_unexistent(file_path)
+
+#         temp_file = os.path.join(dir, f"temp_{file_name}")
+
+#         # De aca para abajo las operaciones son atomicas, o pasan o no pasan
+#         msg_ids_used_in_file = []
+#         new_file_lines = []
+#         with open(file_path, mode="r") as infile, open(
+#             temp_file, mode="w", newline=""
+#         ) as outfile:
+#             reader = csv.reader(infile)
+#             writer = csv.writer(outfile)
+
+#             for row in reader:
+#                 record_was_updated = False
+#                 read_record_key = row[0]
+#                 if save_first_msg_id:
+#                     read_msg_id = row[1]
+#                     read_record_value = int(row[2])
+#                 else:
+#                     read_record_value = int(row[1])
+
+#                 for i, record in enumerate(records):
+#                     # cada record es: [WINDOWS, MSG_ID_LIST]
+#                     # key = int(record[0]) #app_id
+#                     key = record[0]
+#                     msg_ids = record[1]
+#                     if read_record_key == key:
+#                         msg_ids_used_in_file.extend(msg_ids)
+#                         if save_first_msg_id:
+#                             new_state = [
+#                                 read_record_key,
+#                                 read_msg_id,
+#                                 str(read_record_value + len(msg_ids)),
+#                             ]
+#                         else:
+#                             new_state = [
+#                                 read_record_key,
+#                                 str(read_record_value + len(msg_ids)),
+#                             ]
+#                         writer.writerow(new_state)
+#                         new_file_lines.append(",".join(new_state))
+#                         record_was_updated = True
+#                         records.pop(i)
+#                         break
+
+#                 if not record_was_updated:
+#                     writer.writerow(row)
+#                     new_file_lines.append(",".join(row))
+
+#             for record in records:
+#                 key = record[0]
+#                 msg_ids = record[1]
+#                 if save_first_msg_id:
+#                     line = [key, msg_ids[0], str(len(msg_ids))]
+#                 else:
+#                     line = [key, str(len(msg_ids))]
+
+#                 msg_ids_used_in_file.extend(msg_ids)
+#                 writer.writerow(line)
+#                 new_file_lines.append(",".join(line))
+
+#         # TODO: esto lo deberia recibir por parametro y el path se deberia armar aca...
+#         logging.debug(f"MSG IDS USED IN FILE: {msg_ids_used_in_file}")
+#         client_id = dir.rsplit("/", maxsplit=1)[-1]
+#         logger.log(client_id, [file_path] + new_file_lines, msg_ids_used_in_file)
+
+#         os.replace(temp_file, file_path)
 
 
 # Esta la usa el TOP K
