@@ -209,10 +209,10 @@ class CounterByAppId:
 
             if (
                 not self._activity_log.is_msg_id_already_processed(client_id, msg_id)
-                and not msg_id in batch_msg_ids
+                and not (client_id, msg_id) in batch_msg_ids
             ):
                 filtered_batch.append(msg)
-                batch_msg_ids.add(msg_id)
+                batch_msg_ids.add((client_id, msg_id))
             else:
                 if msg_id in batch_msg_ids:
                     logging.debug(

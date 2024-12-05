@@ -105,8 +105,11 @@ class CounterByPlatform:
 
     def __handle_message(self, delivery_tag: int, body: List[List[str]]):
         body = self._middleware.get_rows_from_message(body)
-
-        logging.debug(f"GOT BATCH: {body}")
+        
+        logging.debug(  '-----------------------')
+        for msg in body:
+            logging.debug(f'{msg[0]}, {msg[1]}, {msg[2]}')
+        # logging.debug(f"GOT BATCH: {body}")
         if body[0][SESSION_TIMEOUT_MESSAGE_INDEX] == SESSION_TIMEOUT_MESSAGE:
             session_id = body[0][TIMEOUT_TRANSMISSION_SESSION_ID]
             logging.info(f"Received timeout for client: {session_id}")
@@ -171,7 +174,7 @@ class CounterByPlatform:
                 and not msg_id in batch_msg_ids
             ):
                 filtered_batch.append(msg)
-                batch_msg_ids.add(msg_id)
+                batch_msg_ids.add((client_id, msg_id))
             else:
                 if msg_id in batch_msg_ids:
                     logging.debug(

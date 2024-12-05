@@ -345,16 +345,16 @@ def sum_batch_to_records_per_client(
 
     need_to_partition_by_range = range_for_partition != -1
     for client_id, new_records in msg_ids_per_record_by_client_id.items():
-        logging.debug(f"NEW RECORDS: {new_records} for client: {client_id}")
+        # logging.debug(f"NEW RECORDS: {new_records} for client: {client_id}")
 
         client_dir = os.path.join(dir, client_id)
 
         if need_to_partition_by_range:
             records_per_file = _group_by_file_dict(range_for_partition, new_records)
-            logging.debug(f"RECORDS PER FILE (partition): {records_per_file}")
+            # logging.debug(f"RECORDS PER FILE (partition): {records_per_file}")
         else:
             records_per_file = _group_records(new_records)
-            logging.debug(f"RECORDS PER FILE (not partitioned): {records_per_file}")
+            # logging.debug(f"RECORDS PER FILE (not partitioned): {records_per_file}")
 
         sum_batch_to_records(
             client_dir, records_per_file, logger, save_first_msg_id=save_first_msg_id
@@ -398,7 +398,7 @@ def sum_batch_to_records(dir: str, records_per_file: dict[str, list[str]], logge
         #   ['MAC', ['771121', '771122', '771126']]
         # ]
         file_path = os.path.join(dir, file_name)
-        logging.debug(f'PATH: {file_path}')
+        # logging.debug(f'PATH: {file_path}')
         file_didnt_exist = True if not os.path.exists(file_path) else False
         create_file_if_unexistent(file_path)
         temp_file_path = os.path.join(dir, f"temp_{file_name}")
