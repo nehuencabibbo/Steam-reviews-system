@@ -29,7 +29,7 @@ class Middleware:
         broker_ip,
         protocol: Protocol = Protocol(),
         prefetch_count: int = 100,
-        batch_size: int = 10,
+        batch_size: int = 100,
         is_async: bool = False,
         on_connected_callback=None,
         use_logging: bool = False,

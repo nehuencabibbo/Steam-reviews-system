@@ -3,6 +3,7 @@ tmp/
 data/*.csv
 rabbit.sh
 data/results
+data/results-filtered
 data/results-complete-dataset
 .venv/
 testing_basic_publish

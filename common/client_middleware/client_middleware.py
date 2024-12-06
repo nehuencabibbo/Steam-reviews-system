@@ -13,7 +13,7 @@ MAX_POLL_TIME = 2000  # in miliseconds
 
 
 class ClientMiddleware:
-    def __init__(self, batch_size=10, protocol: Protocol = Protocol()):
+    def __init__(self, batch_size=100, protocol: Protocol = Protocol()):
         # One I/O thread (for all sockets) is sufficient for all but the most extreme applications. When you
         # create a new context, it starts with one I/O thread. The general rule of thumb is to allow one
         # I/O thread per gigabyte of data in or out per second. To raise the number of I/O threads, use the

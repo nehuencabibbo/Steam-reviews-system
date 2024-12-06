@@ -119,6 +119,8 @@ class Join:
         if not "Q" in self._output_queue_name:
             for i in range(self._amount_of_forwarding_queues):
                 self.__middleware.create_queue(f"{i}_{self._output_queue_name}")
+        else:
+            self.__middleware.create_queue(self._output_queue_name)
 
         # callback, inputq, outputq
         games_callback = self.__middleware.generate_callback(
@@ -435,6 +437,7 @@ class Join:
                     logging.debug(
                         f"Q - Sending {joined_message} to queue {forwarding_queue_name}"
                     )
+
                     self.__middleware.publish(
                         joined_message,
                         forwarding_queue_name,
