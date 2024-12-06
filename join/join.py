@@ -147,7 +147,7 @@ class Join:
                 logging.error(e)
         finally:
             self.__middleware.shutdown()
-            monitor_thread.join()
+            # monitor_thread.join()
 
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
         # logging.debug(f'[CHECK] {message_type}')
@@ -278,7 +278,7 @@ class Join:
             # TODO: Fix both constants
             client_id = review[END_TRANSMISSION_MESSAGE_CLIENT_ID_INDEX]
 
-            if len(review) == 1 and review[1] == SESSION_TIMEOUT_MESSAGE:
+            if review[1] == SESSION_TIMEOUT_MESSAGE:
                 self._amount_of_timeouts_per_client_received[client_id] = (
                     self._amount_of_timeouts_per_client_received.get(client_id, 0) + 1
                 )

@@ -16,7 +16,7 @@ REVIEWS_MESSAGE_TYPE = "reviews"
 END_TRANSMISSION_MESSAGE = "END"
 SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 END_TRANSMSSION_MSG_ID_INDEX = 0
-END_TRANSMSSION_END_INDEX = 1 #SOLO PORQUE SE POPEA EL CLIENT ID ANTES ACA, sino seria 2 pq viene [cleint_id, msg_id, END_TRANSMISSION_MESSAGE]
+END_TRANSMSSION_END_INDEX = 1  # SOLO PORQUE SE POPEA EL CLIENT ID ANTES ACA, sino seria 2 pq viene [cleint_id, msg_id, END_TRANSMISSION_MESSAGE]
 
 
 class FilterColumns:
@@ -95,7 +95,7 @@ class FilterColumns:
             print(f"System exit")
         finally:
             self._middleware.shutdown()
-            monitor_thread.join()
+            # monitor_thread.join()
 
     def __handle_end_transmission(
         self,
@@ -115,11 +115,11 @@ class FilterColumns:
         # Have to check if it's a client end, in which case only "END" is received, otherwise, the client ID comes
         # first
         # peers_that_recived_end = body[1:] if len(body) == 1 else body[2:]
-        
-        # Recived message: 
-        # [msg_id, END, peer1, peer2, ..., peerN], where peer is a node that has already recived the 
+
+        # Recived message:
+        # [msg_id, END, peer1, peer2, ..., peerN], where peer is a node that has already recived the
         # end and added it's msg id to the msg
-        peers_that_recived_end = body[END_TRANSMSSION_END_INDEX + 1:]
+        peers_that_recived_end = body[END_TRANSMSSION_END_INDEX + 1 :]
         end_msg_id = body[END_TRANSMSSION_MSG_ID_INDEX]
 
         if len(peers_that_recived_end) == int(self._instances_of_myself):
@@ -139,7 +139,9 @@ class FilterColumns:
 
             message += peers_that_recived_end
             self._middleware.publish_message(message, reciving_queue_name)
-            logging.debug(f"[END MESSAGE ALGORITHM] Publishing {message} in {reciving_queue_name}")
+            logging.debug(
+                f"[END MESSAGE ALGORITHM] Publishing {message} in {reciving_queue_name}"
+            )
 
     def __handle_timeout(
         self,

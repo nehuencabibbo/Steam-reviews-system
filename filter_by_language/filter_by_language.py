@@ -79,7 +79,7 @@ class FilterByLanguage:
             logging.info("Exiting")
         finally:
             self._middleware.shutdown()
-            monitor_thread.join()
+            # monitor_thread.join()
 
     def __create_all_forwarding_queues(self):
         """

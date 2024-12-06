@@ -71,7 +71,7 @@ class CounterByPlatform:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
-            monitor_thread.join()
+            # monitor_thread.join()
 
     def __recover_state(self):
         full_file_path, file_state = self._activity_log.recover()
@@ -105,10 +105,10 @@ class CounterByPlatform:
 
     def __handle_message(self, delivery_tag: int, body: List[List[str]]):
         body = self._middleware.get_rows_from_message(body)
-        
-        logging.debug(  '-----------------------')
-        for msg in body:
-            logging.debug(f'{msg[0]}, {msg[1]}, {msg[2]}')
+
+        # logging.debug("-----------------------")
+        # for msg in body:
+        #     logging.debug(f"{msg[0]}, {msg[1]}, {msg[2]}")
         if body[0][SESSION_TIMEOUT_MESSAGE_INDEX] == SESSION_TIMEOUT_MESSAGE:
             session_id = body[0][TIMEOUT_TRANSMISSION_SESSION_ID]
             logging.info(f"Received timeout for client: {session_id}")
@@ -120,7 +120,9 @@ class CounterByPlatform:
             return
 
         if body[0][END_TRANSMISSION_END_INDEX] == END_TRANSMISSION_MESSAGE:
-            logging.debug(f"Recived END transmssion from client: {body[0][END_TRANSMISSION_CLIENT_ID]}")
+            logging.debug(
+                f"Recived END transmssion from client: {body[0][END_TRANSMISSION_CLIENT_ID]}"
+            )
             session_id = body[0][END_TRANSMISSION_CLIENT_ID]
             msg_id = body[0][END_TRANSMISSION_MSG_ID_INDEX]
 
@@ -138,9 +140,7 @@ class CounterByPlatform:
         body = self.__purge_duplicates_and_add_unique_msg_id(body)
 
         storage.sum_batch_to_records_per_client(
-            self.storage_dir, 
-            body, 
-            self._activity_log
+            self.storage_dir, body, self._activity_log
         )
 
         self._middleware.ack(delivery_tag)
@@ -202,7 +202,12 @@ class CounterByPlatform:
                 # or return false so end is not acked and i dont send the results?
                 return
 
-            record_to_send = [session_id, record[MSG_ID], record[PLATFORM], record[COUNT]]
+            record_to_send = [
+                session_id,
+                record[MSG_ID],
+                record[PLATFORM],
+                record[COUNT],
+            ]
             logging.debug(f"sending record: {record_to_send} to {self.publish_queue}")
             self._middleware.publish(
                 record_to_send,

@@ -67,7 +67,7 @@ class Percentile:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
-            monitor_thread.join()
+            # monitor_thread.join()
 
     def __resume_publish_if_necesary(self):
         client_ids_to_remove = []

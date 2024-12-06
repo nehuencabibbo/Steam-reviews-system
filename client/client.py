@@ -232,22 +232,8 @@ class Client:
                     session_id=self._session_id,
                 )
 
-                # if self._next_message_id % self._check_status_after_messages == 0:
-                # If we dont send_batch, the later comparison will be incorrect
-                # self._middleware.send_batch(
-                #     message_type="D", session_id=self._session_id
-                # )
-
-                # ack = self._middleware.get_ack(
-                #     str(self._next_message_id),
-                # )
                 if not ack:  # Not ack -> try to reset session
                     return self._restart_session()
-                # self._check_status(message_id_expected=self._next_message_id)
-
-                # if self._has_restarted:
-                #     self._has_restarted = False
-                #     return False
 
                 self._next_message_id += 1
 
@@ -258,10 +244,13 @@ class Client:
             self._last_acked_message
             and self._next_message_id >= self._last_acked_message
         ):
-            self._middleware.send_end(
+            ack = self._middleware.send_end_and_wait_for_ack(
                 session_id=self._session_id,
+                expected=str(self._next_message_id),
                 end_message=[str(self._next_message_id), FILE_END_MSG],
             )
+            if not ack:
+                return False
             # if must_check_status:
             #     self._check_status()
 

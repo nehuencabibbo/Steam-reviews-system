@@ -92,7 +92,7 @@ class DropNulls:
             logging.info("Exiting")
         finally:
             self._middleware.shutdown()
-            monitor_thread.join()
+            # monitor_thread.join()
 
     def __handle_end_transmission(
         self, body: List[str], reciving_queue_name: str, message_type: str
@@ -127,6 +127,27 @@ class DropNulls:
                 f"[END MESSAGE ALGORITHM] Publishing {message} in {reciving_queue_name}"
             )
             self._middleware.publish_message(message, reciving_queue_name)
+
+    def __forward_to_all_games_queues(self, client_id: str, message):
+        for i in range(self.count_by_platform_nodes):
+            logging.debug(f"SENDING_TO: {i}_{self.q1_platform}")
+            self._middleware.send_end(
+                queue=f"{i}_{self.q1_platform}",
+                end_message=[client_id, message],
+            )
+
+        for queue in [self.q2_games, self.q3_games, self.q4_games, self.q5_games]:
+            self._middleware.send_end(
+                queue=queue,
+                end_message=[client_id, message],
+            )
+
+    def __forward_to_all_reviews_queues(self, client_id: str, message):
+        for queue in [self.q3_reviews, self.q5_reviews, self.q4_reviews]:
+            self._middleware.send_end(
+                queue=queue,
+                end_message=[client_id, message],
+            )
 
     def __handle_timeout(
         self, body: List[str], reciving_queue_name: str, message_type: str

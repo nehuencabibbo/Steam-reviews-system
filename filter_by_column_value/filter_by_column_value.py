@@ -80,7 +80,7 @@ class FilterColumnByValue:
             logging.info("Exiting")
         finally:
             self._middleware.shutdown()
-            monitor_thread.join()
+            # monitor_thread.join()
 
     def __create_all_forwarding_queues(self):
         """
@@ -101,7 +101,7 @@ class FilterColumnByValue:
                 full_queue_name = f"{queue_number}_{queue_name}"
                 self._middleware.create_queue(full_queue_name)
 
-    def __handle_end_transmission(self, body: List[str]): 
+    def __handle_end_transmission(self, body: List[str]):
         # Si me llego un END...
         # 1) Me fijo si los la cantidad de ids que hay es igual a
         # la cantidad total de instancias de mi mismo que hay.
@@ -112,7 +112,7 @@ class FilterColumnByValue:
 
         client_id = body[END_TRANSMISSION_CLIENT_ID_INDEX]
         msg_id = body[END_TRANSMISSION_MSG_ID_INDEX]
-        peers_that_recived_end = body[END_TRANSMISSION_END_INDEX + 1:]
+        peers_that_recived_end = body[END_TRANSMISSION_END_INDEX + 1 :]
 
         if len(peers_that_recived_end) == int(self._instances_of_myself):
             self.__send_end_transmission_to_all_forwarding_queues(client_id, msg_id)
@@ -178,10 +178,12 @@ class FilterColumnByValue:
                     end_message=[client_id, message],
                 )
 
-    def __send_end_transmission_to_all_forwarding_queues(self, client_id: str, msg_id: str):
+    def __send_end_transmission_to_all_forwarding_queues(
+        self, client_id: str, msg_id: str
+    ):
         # TODO: Repeated code between this and send last batch, remove
         for i in range(len(self._amount_of_forwarding_queues)):
-            amount_of_current_queue = self._amount_of_forwarding_queues[i]  
+            amount_of_current_queue = self._amount_of_forwarding_queues[i]
             queue_name = self._forwarding_queue_names[i]
 
             for queue_number in range(amount_of_current_queue):

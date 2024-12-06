@@ -159,6 +159,20 @@ class ClientMiddleware:
         )  # In case the is a message, it has to be data
         self.__socket.send(end_message)
 
+    def send_end_and_wait_for_ack(
+        self, session_id, expected: str, end_message: str = [END_TRANSMISSION_MESSAGE]
+    ):
+        type_message = self.__protocol.add_to_batch(b"", ["D"])
+        session_id_message = self.__protocol.add_to_batch(type_message, [session_id])
+        end_message = self.__protocol.add_to_batch(session_id_message, end_message)
+
+        self.send_batch(
+            message_type="D", session_id=session_id
+        )  # In case the is a message, it has to be data
+        self.__socket.send(end_message)
+
+        return self.get_ack(expected)
+
     def register_for_pollin(self):
         self.__poller = zmq.Poller()
         self.__poller.register(self.__socket, zmq.POLLIN)

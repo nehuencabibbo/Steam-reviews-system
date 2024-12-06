@@ -87,7 +87,7 @@ class CounterByAppId:
                 logging.error(e)
         finally:
             self._middleware.shutdown()
-            monitor_thread.join()
+            # monitor_thread.join()
 
         logging.debug("Finished")
 
@@ -145,7 +145,7 @@ class CounterByAppId:
             self._storage_dir,
             body,
             self._activity_log,
-            range_for_partition=self._range_for_partition
+            range_for_partition=self._range_for_partition,
         )
 
         self._middleware.ack(delivery_tag)

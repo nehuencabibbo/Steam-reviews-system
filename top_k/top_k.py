@@ -83,7 +83,7 @@ class TopK:
                 logging.error(e)
         finally:
             self.__middleware.shutdown()
-            monitor_thread.join()
+            # monitor_thread.join()
 
     def __resume_publish_if_necesary(self):
         # Si me cai mientras estaba mandando los resultados (me llego el ultimo END)

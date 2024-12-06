@@ -1128,7 +1128,7 @@ def generate_output(node_names: list, monitor_names: list):
         # reviews_file_path="data/reviews_sample.csv",
         games_file_path="data/games_sample.csv",
         reviews_file_path="data/reviews_sample.csv",
-        debug=False,
+        debug=True,
     )
     add_client(
         output,
@@ -1157,14 +1157,16 @@ def generate_output(node_names: list, monitor_names: list):
     generate_drop_columns(
         output, AMOUNT_OF_FILTER_COLUMNS, debug=False, node_names=node_names
     )
-    generate_drop_nulls(output, AMOUNT_OF_DROP_NULLS, debug=False, node_names=node_names)
+    generate_drop_nulls(
+        output, AMOUNT_OF_DROP_NULLS, debug=False, node_names=node_names
+    )
 
     # -------------------------------------------- Q1 -----------------------------------------
     generate_q1(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q2 -----------------------------------------
     generate_q2(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q3 -----------------------------------------
-    generate_q3(output=output, debug=False, node_names=node_names)
+    generate_q3(output=output, debug=True, node_names=node_names)
     # -------------------------------------------- Q4 -----------------------------------------
     generate_q4(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q5 -----------------------------------------

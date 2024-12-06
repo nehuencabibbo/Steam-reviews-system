@@ -46,6 +46,7 @@ class ClientHandler:
         self._got_sigterm = threading.Event()
         self._client_monitor = client_monitor
         self._clients_info = self._activity_log.recover_client_handler_state()
+        self._activity_log_lock = threading.Lock()
 
         for k, v in self._clients_info.items():
             logging.info(f"Recovered: {k} | {v}")
@@ -106,19 +107,45 @@ class ClientHandler:
 
             if forwarding_queue_name == self._reviews_queue_name:
                 logging.info(f"Final end received from client: {session_id}.")
+                with self._activity_log_lock:
+                    self._activity_log.log_for_client_handler(
+                        client_id=session_id,
+                        queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
+                        connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+                        last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
+                        finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
+                    )
+
+                t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
+                client_info[CLIENT_INFO_TIMER_INDEX] = t
+
+                # if random.randint(0, 9) > 8:
+                #     logging.info(f"Bad luck, message dropped")
+                #     return
+
+                self._client_middleware.send_multipart(
+                    connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+                    message=[
+                        "A",
+                        str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
+                    ],
+                    needs_encoding=True,
+                )
+                t.start()
+
                 return
 
             logging.debug("Setting forwarding queue to reviews")
 
             client_info[CLIENT_INFO_QUEUE_NAME_INDEX] = self._reviews_queue_name
-        # with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
-        #     self._activity_log.log_for_client_handler(
-        #         client_id=session_id,
-        #         queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
-        #         connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
-        #         last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
-        #         finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
-        #     )
+        with self._activity_log_lock:
+            self._activity_log.log_for_client_handler(
+                client_id=session_id,
+                queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
+                connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+                last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
+                finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
+            )
 
         t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
         client_info[CLIENT_INFO_TIMER_INDEX] = t
@@ -139,28 +166,17 @@ class ClientHandler:
 
     def process_query_results_request_message(self, message: bytes):
         rows = self._middleware.get_rows_from_message(message)
+        session_id = rows[0][0]
+
+        self._clients_info[session_id][CLIENT_INFO_TIMER_INDEX].cancel()
+
         logging.debug(f"Req: {rows}")
 
-        self._send_query_results_if_there_are(session_id=rows[0][0], query=rows[1][0])
+        t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
+        self._clients_info[session_id][CLIENT_INFO_TIMER_INDEX] = t
 
-    # def process_heartbeat_message(self, message: bytes):
-    #     # if random.randint(0, 9) > 8:
-    #     #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
-    #     #     return
-    #     rows = self._client_middleware.get_row_from_message(message)
-    #     session_id = rows[0]
-
-    #     logging.debug(f"Received heartbeat from {session_id}")
-    #     self._client_middleware.send_multipart(
-    #         connection_id=self._clients_info[session_id][
-    #             CLIENT_INFO_CONNECTION_ID_INDEX
-    #         ],
-    #         message=[
-    #             HEARTBEAT_MESSAGE_TYPE,
-    #             rows[1],
-    #         ],  # rows[1] contains heartbeat id, its used for detecting duplicates
-    #         needs_encoding=True,
-    #     )
+        self._send_query_results_if_there_are(session_id, query=rows[1][0])
+        t.start()
 
     def process_session_restart_message(self, message: bytes):
         # if random.randint(0, 9) > 8:
@@ -168,6 +184,13 @@ class ClientHandler:
         #     return
         rows = self._client_middleware.get_row_from_message(message)
         session_id = rows[0]
+        self._clients_info[session_id][CLIENT_INFO_TIMER_INDEX].cancel()
+
+        logging.debug(f"Req: {rows}")
+
+        t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
+        self._clients_info[session_id][CLIENT_INFO_TIMER_INDEX] = t
+
         logging.info(f"Received session restart from: {session_id} | {rows}")
         client_info = self._clients_info[session_id]
 
@@ -182,6 +205,7 @@ class ClientHandler:
             ],
             needs_encoding=True,
         )
+        t.start()
 
     def process_new_session_request_message(self, connection_id, message: bytes):
         # if random.randint(0, 9) < 6:
@@ -213,11 +237,10 @@ class ClientHandler:
             t,  # No
             threading.Lock(),  # No
         ]
-
-        # with self._clients_info[session_id][CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
-        #     self._activity_log.log_for_client_handler(
-        #         session_id, self._games_queue_name, connection_id, 0, set()
-        #     )
+        with self._activity_log_lock:
+            self._activity_log.log_for_client_handler(
+                session_id, self._games_queue_name, connection_id, 0, set()
+            )
 
         self._client_middleware.send_multipart(
             connection_id, ["A", session_id], needs_encoding=True
@@ -279,7 +302,7 @@ class ClientHandler:
         self._middleware.publish_message([client_id, "TIMEOUT"], self._games_queue_name)
 
         # remove all client data
-        storage.delete_director(f"/tmp/{client_id}")
+        storage.delete_directory(f"/tmp/{client_id}")
 
         client_info = self._clients_info[client_id]
         # storage.delete_files_from_directory(f"/tmp/{client_id}")
@@ -309,7 +332,7 @@ class ClientHandler:
             logging.info("Shutting down results middleware...")
         finally:
             self.results_middleware.shutdown()
-            monitor_thread.join()
+            # monitor_thread.join()
 
     def on_message(self, channel, method_frame, header_frame, body):
         rows = self.results_middleware.get_rows_from_message(body)
@@ -383,15 +406,17 @@ class ClientHandler:
 
             with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
                 client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX].add(query)
-                # self._activity_log.log_for_client_handler(
-                #     client_id=client_id,
-                #     queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
-                #     connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
-                #     last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
-                #     finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
-                # )
+
                 logging.info(
                     f"Client: {client_id} | {self._clients_info[client_id][CLIENT_INFO_FINISHED_QUERIES_INDEX]}"
+                )
+            with self._activity_log_lock:
+                self._activity_log.log_for_client_handler(
+                    client_id=client_id,
+                    queue_name=client_info[CLIENT_INFO_QUEUE_NAME_INDEX],
+                    connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+                    last_ack_message=client_info[CLIENT_INFO_LAST_MESSAGE_INDEX],
+                    finished_querys=client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX],
                 )
 
     def _send_query_results_if_there_are(self, session_id: str, query: str):
