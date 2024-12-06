@@ -173,7 +173,7 @@ class Join:
                 == self._needed_timeouts
             ):
                 self.__send_to_forward_queues(
-                    session_id, message=SESSION_TIMEOUT_MESSAGE
+                    session_id, message=[SESSION_TIMEOUT_MESSAGE]
                 )
                 self.__clear_client_data(session_id)
 
@@ -295,7 +295,7 @@ class Join:
                     == self._needed_timeouts
                 ):
                     self.__send_to_forward_queues(
-                        client_id, message=SESSION_TIMEOUT_MESSAGE
+                        client_id, message=[SESSION_TIMEOUT_MESSAGE]
                     )
                     self.__clear_client_data(client_id)
 

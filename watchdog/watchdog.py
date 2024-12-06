@@ -11,11 +11,11 @@ from node_handler import NodeHandler
 from common.leader_election.leader_election import LeaderElection
 from leader_discovery_service import LeaderDiscoveryService
 
-NUMBER_OF_RETRIES = 5
+NUMBER_OF_RETRIES = 20
 TIMEOUT_BEFORE_FALLEN_CHECK = 20
 REGISTRATION_CONFIRM = "K"
-MAX_MONITOR_TIMEOUT = 3
-TIME_BETWEEN_HEARTBEATS = 1  # si me envian cada 1 segundo, cada vez que recibo un heartbeat debo revisar si alguno esta caido
+MAX_MONITOR_TIMEOUT = 8
+TIME_BETWEEN_HEARTBEATS = 2  # si me envian cada 1 segundo, cada vez que recibo un heartbeat debo revisar si alguno esta caido
 HEARTBEAT_MESSAGE = "A"
 WATCHDOG_NAME_PREFIX = "watchdog_"
 
@@ -165,6 +165,8 @@ class Watchdog:
         middleware = UDPMiddleware(send_retries=NUMBER_OF_RETRIES)
 
         while not self._got_sigterm.is_set():
+            self._got_sigterm.wait(TIME_BETWEEN_HEARTBEATS)
+            
             if self._got_sigterm.is_set():
                 break
 
@@ -174,8 +176,7 @@ class Watchdog:
                 self._leader_election.set_leader_death()
                 break
 
-            logging.debug("Sending heartbeat")
-            self._got_sigterm.wait(TIME_BETWEEN_HEARTBEATS)
+            logging.debug("Sending heartbeat")    
 
         middleware.close()
 

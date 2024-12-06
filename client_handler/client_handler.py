@@ -388,7 +388,8 @@ class ClientHandler:
             client_id = record[0]
             record = record[1:]
 
-            if record[1] == "END":
+            logging.info(f"Mensge: {record}")
+            if len(record) > 1 and record[1] == "END":
 
                 record = [record[0] + record[1], record[1]]  # msg_idEND
                 clients_ends.add(client_id)
