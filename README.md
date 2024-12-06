@@ -9,6 +9,12 @@ Para ejecutar los contenedores usar:
 make docker-run
 ```
 
+Si se quiere usar con el chaos monkey, ejecutar:
+
+```sh
+make docker-run && ./chaos_monkey.sh <probability_of_failure>
+```
+
 Para detener los contenedores usar:
 
 ```sh
