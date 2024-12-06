@@ -156,6 +156,21 @@ class FilterByLanguage:
                     end_message=[client_id, msg_id, END_TRANSMISSION_MESSAGE],
                 )
 
+    def __send_to_all_forwarding_queues(self, client_id: str, message):
+        # TODO: Repeated code between this and send last batch, remove
+        for i in range(len(self._amount_of_forwarding_queues)):
+            amount_of_current_queue = self._amount_of_forwarding_queues[i]
+            queue_name = self._forwarding_queue_names[i]
+
+            for queue_number in range(amount_of_current_queue):
+                full_queue_name = f"{queue_number}_{queue_name}"
+                logging.debug(f"Sending {message} to queue: {full_queue_name}")
+
+                self._middleware.send_end(
+                    queue=full_queue_name,
+                    end_message=[client_id, message],
+                )
+
     def __handle_consensus_tranmission(self, body: List[str], consensus_message):
         # Si me llego un END...
         # 1) Me fijo si los la cantidad de ids que hay es igual a
