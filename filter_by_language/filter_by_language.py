@@ -10,13 +10,15 @@ from common.middleware.middleware import Middleware, MiddlewareError
 from utils.utils import node_id_to_send_to
 from common.watchdog_client.watchdog_client import WatchdogClient
 
+END_TRANSMISSION_CLIENT_ID_INDEX = 0
+END_TRANSMISSION_END_INDEX = 2
+END_TRANSMISSION_MSG_ID_INDEX = 1
+SESSION_TIMEOUT_MESSAGE = "TIMEOUT"
 
 import signal
 import logging
 import langid
 import threading
-
-END_TRANSMISSION_MSG_ID_INDEX = 1
 
 
 class FilterByLanguage:
@@ -154,11 +156,43 @@ class FilterByLanguage:
                     end_message=[client_id, msg_id, END_TRANSMISSION_MESSAGE],
                 )
 
+    def __handle_consensus_tranmission(self, body: List[str], consensus_message):
+        # Si me llego un END...
+        # 1) Me fijo si los la cantidad de ids que hay es igual a
+        # la cantidad total de instancias de mi mismo que hay.
+        # Si es asi => Envio el END a la proxima cola
+        # Si no es asi => Checkeo si mi ID esta en la lista
+        #     Si es asi => No agrego nada y reencolo
+        #     Si no es asi => Agrego mi id a la lista y reencolo
+
+        peers_that_recived_end = body[2:]
+        client_id = body[0]
+
+        if len(peers_that_recived_end) == int(self._instances_of_myself):
+            self.__send_to_all_forwarding_queues(client_id, consensus_message)
+        else:
+
+            message = [client_id, consensus_message]
+            if not self._node_id in peers_that_recived_end:
+                peers_that_recived_end.append(self._node_id)
+
+            message += peers_that_recived_end
+
+            self._middleware.publish_message(message, self._receiving_queue_name)
+
     def __handle_message(self, delivery_tag: int, body: bytes):
         body = self._middleware.get_rows_from_message(body)
         for message in body:
             logging.debug(f"Recived message: {message}")
 
+            if message[1] == SESSION_TIMEOUT_MESSAGE:
+                session_id = body[0]
+                logging.info(f"Received TIMEOUT for client: {session_id}")
+                self.__send_last_batch_to_fowarding_queues()
+                self.__handle_consensus_tranmission(message, SESSION_TIMEOUT_MESSAGE)
+                self._middleware.ack(delivery_tag)
+
+                return
             if message[2] == END_TRANSMISSION_MESSAGE:
                 logging.debug(f"GOT END: {body}")
                 self.__send_last_batch_to_fowarding_queues()
