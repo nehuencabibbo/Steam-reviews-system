@@ -3,13 +3,13 @@ import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import threading
+import multiprocessing as mp
 from typing import *
 from common.protocol.protocol import Protocol
 from common.middleware.middleware import Middleware, MiddlewareError
 from utils.utils import node_id_to_send_to
 from constants import *
 from common.watchdog_client.watchdog_client import WatchdogClient
-import threading
 
 import signal
 import logging
@@ -49,7 +49,9 @@ class DropNulls:
 
     def start(self):
 
-        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread.start()
+        monitor_thread = mp.Process(target=self._client_monitor.start, daemon=True)
         monitor_thread.start()
 
         # Receiving queues

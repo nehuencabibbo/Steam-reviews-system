@@ -13,7 +13,7 @@ from common.leader_election.leader_election import LeaderElection
 from leader_discovery_service import LeaderDiscoveryService
 
 NUMBER_OF_RETRIES = 20
-TIMEOUT_BEFORE_FALLEN_CHECK = 20
+TIMEOUT_BEFORE_FALLEN_CHECK = 15
 REGISTRATION_CONFIRM = "K"
 MAX_MONITOR_TIMEOUT = 8
 TIME_BETWEEN_HEARTBEATS = 2  # si me envian cada 1 segundo, cada vez que recibo un heartbeat debo revisar si alguno esta caido
@@ -42,6 +42,7 @@ class Watchdog:
             self._leader_discovery_port, self._leader_election
         )
 
+        #TODO: use multiprocessing? i do not think its needed because it spends most of its time blocked
         self._discovery_thread = threading.Thread(target=self._leader_discovery.run)
         self._discovery_thread.start()
 

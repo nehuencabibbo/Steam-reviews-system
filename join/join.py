@@ -2,6 +2,7 @@ import logging
 import os
 import signal
 import threading
+import multiprocessing as mp
 
 from time import sleep
 from typing import *
@@ -109,7 +110,9 @@ class Join:
 
     def start(self):
 
-        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread.start()
+        monitor_thread = mp.Process(target=self._client_monitor.start, daemon=True)
         monitor_thread.start()
 
         # gotta check this as it could be the last node, then a prefix shouldn't be used

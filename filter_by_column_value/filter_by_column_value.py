@@ -2,7 +2,6 @@ import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import threading
 from typing import *
 from constants import *
 from common.protocol.protocol import Protocol
@@ -13,6 +12,7 @@ from common.watchdog_client.watchdog_client import WatchdogClient
 import signal
 import logging
 import threading
+import multiprocessing as mp
 
 END_TRANSMISSION_CLIENT_ID_INDEX = 0
 END_TRANSMISSION_MSG_ID_INDEX = 1
@@ -54,7 +54,10 @@ class FilterColumnByValue:
 
     def start(self):
 
-        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread.start()
+
+        monitor_thread = mp.Process(target=self._client_monitor.start, daemon=True)
         monitor_thread.start()
 
         # Reciving queues

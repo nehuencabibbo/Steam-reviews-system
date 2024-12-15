@@ -2,7 +2,6 @@ import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import threading
 from typing import *
 from constants import *
 from common.protocol.protocol import Protocol
@@ -19,7 +18,7 @@ import signal
 import logging
 import langid
 import threading
-
+import multiprocessing as mp
 
 class FilterByLanguage:
     def __init__(
@@ -56,7 +55,9 @@ class FilterByLanguage:
 
     def start(self):
 
-        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread.start()
+        monitor_thread = mp.Process(target=self._client_monitor.start, daemon=True)
         monitor_thread.start()
 
         # Reciving queues

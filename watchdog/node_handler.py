@@ -40,6 +40,10 @@ class NodeHandler:
                 
                 logging.debug(f"Got response from {self._node_name}, sleeping")
                 self._got_sigterm.wait(self._wait_between_heartbeats) 
+            
+            except ConnectionError:
+                logging.info(f"Node {self._node_name} shutdown. Wating sigterm")
+                self._got_sigterm.wait(5)
 
             except (OSError, TimeoutError, AbnormalNodeStatus) as _:
                 if not self._got_sigterm.is_set():

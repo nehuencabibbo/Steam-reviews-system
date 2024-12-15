@@ -460,7 +460,7 @@ def add_rabbit(output: Dict):
         "ports": ["15672:15672"],
         "networks": ["net"],
         "volumes": ["rabbitmq_data:/var/lib/rabbitmq"],
-        # "logging": {"driver": "none"},
+        "logging": {"driver": "none"},
         "healthcheck": {
             "test": "rabbitmq-diagnostics -q ping",
             "interval": "20s",

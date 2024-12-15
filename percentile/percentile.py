@@ -3,6 +3,7 @@ import signal
 import logging
 import math
 import threading
+import multiprocessing as mp
 
 from common.watchdog_client.watchdog_client import WatchdogClient
 
@@ -51,7 +52,9 @@ class Percentile:
 
     def run(self):
 
-        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread.start()
+        monitor_thread = mp.Process(target=self._client_monitor.start, daemon=True)
         monitor_thread.start()
 
         self._middleware.create_queue(self._consume_queue)

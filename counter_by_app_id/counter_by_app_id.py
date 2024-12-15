@@ -4,6 +4,7 @@ import signal
 import logging
 from typing import *
 import threading
+import multiprocessing as mp
 
 from common.activity_log.activity_log import ActivityLog
 from common.middleware.middleware import Middleware, MiddlewareError
@@ -65,7 +66,9 @@ class CounterByAppId:
 
     def run(self):
 
-        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread.start()
+        monitor_thread = mp.Process(target=self._client_monitor.start, daemon=True)
         monitor_thread.start()
 
         # Creating receiving queue

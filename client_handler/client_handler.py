@@ -4,6 +4,7 @@ import logging
 import random
 import signal
 import threading
+import multiprocessing as mp
 import time
 from typing import *
 import uuid
@@ -318,7 +319,9 @@ class ClientHandler:
         )
 
     def run(self):
-        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread.start()
+        monitor_thread = mp.Process(target=self._client_monitor.start, daemon=True)
         monitor_thread.start()
         thread = threading.Thread(target=self.handle_clients)
         thread.start()

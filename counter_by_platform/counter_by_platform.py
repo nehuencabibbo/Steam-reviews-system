@@ -6,7 +6,7 @@ from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage import storage
 from common.watchdog_client.watchdog_client import WatchdogClient
 import threading
-from common.protocol.protocol import Protocol
+import multiprocessing as mp
 from common.activity_log.activity_log import ActivityLog
 from typing import *
 from utils.utils import group_msg_ids_per_client_by_field
@@ -52,7 +52,9 @@ class CounterByPlatform:
 
     def run(self):
 
-        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread.start()
+        monitor_thread = mp.Process(target=self._client_monitor.start, daemon=True)
         monitor_thread.start()
 
         consume_queue_name = f"{self.node_id}_{self.consume_queue_suffix}"

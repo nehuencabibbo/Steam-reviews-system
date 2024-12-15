@@ -8,7 +8,7 @@ from common.watchdog_client.watchdog_client import WatchdogClient
 
 import signal
 import logging
-import threading
+import multiprocessing as mp
 
 GAMES_MESSAGE_TYPE = "games"
 REVIEWS_MESSAGE_TYPE = "reviews"
@@ -44,7 +44,9 @@ class FilterColumns:
 
     def start(self):
 
-        monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread = threading.Thread(target=self._client_monitor.start)
+        # monitor_thread.start()
+        monitor_thread = mp.Process(target=self._client_monitor.start, daemon=True)
         monitor_thread.start()
         # Queues that the client uses to send data
         # anonymous_queue_name = self._middleware.create_anonymous_queue()

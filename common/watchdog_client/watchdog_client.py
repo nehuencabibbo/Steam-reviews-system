@@ -2,6 +2,7 @@ import logging
 import sys
 import os
 import threading
+import multiprocessing as mp
 from shutil import disk_usage
 from time import sleep
 
@@ -19,7 +20,7 @@ MIN_MEMORY_SPACE = 1024
 class WatchdogClient:
 
     def __init__(self, monitors_ip: list[str], monitor_port: int, client_name: str, discovery_port: int, client_middleware: Middleware):
-        self._stop = False
+        self._stop = mp.Event() #False
         self._monitor_port = monitor_port
         self._client_name = client_name
         self._client_middleware = client_middleware
@@ -28,7 +29,7 @@ class WatchdogClient:
 
     def start(self):
 
-        while not self._stop:
+        while not self._stop.is_set():
             try:
                 self._conect_to_monitor()
                 
@@ -42,7 +43,7 @@ class WatchdogClient:
 
             except (OSError, TimeoutError) as e:
                 sleep(0.5)
-                if not self._stop:
+                if not self._stop.is_set():
                     logging.debug("[MONITOR]: monitor is down. waiting for reconnection")
             finally:
                 self._middleware.close_connection()
@@ -61,7 +62,7 @@ class WatchdogClient:
             self._middleware.connect((monitor_ip,  self._monitor_port))
         
         except OSError as _:
-            if not self._stop:
+            if not self._stop.is_set():
                 logging.debug("[MONITOR] Couldnt connect to leader. The leader is down or is preparing")
 
 
@@ -73,14 +74,14 @@ class WatchdogClient:
 
 
     def stop(self):
-        self._stop = True
+        self._stop.set() #= True
         self._leader_finder.stop()
         self._middleware.close()
 
 
     def _answer_heartbeats(self):
 
-        while not self._stop: 
+        while not self._stop.is_set(): 
 
             #logging.debug("[MONITOR] Waiting for heartbeat")
             msg = self._middleware.receive_message()
@@ -113,6 +114,7 @@ class WatchdogClient:
         if not self._client_middleware.check_connection():
             return False 
         
-        # Check if main thread is alive
-        return threading.main_thread().is_alive()
+        # Check if main thread/process is alive
+        # return threading.main_thread().is_alive()
+        return mp.parent_process().is_alive()
 
