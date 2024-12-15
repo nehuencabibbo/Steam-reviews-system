@@ -51,9 +51,11 @@ class ClientHandler:
         for k, v in self._clients_info.items():
             logging.info(f"Recovered: {k} | {v}")
             t = threading.Timer(30.0, self.handle_client_timeout, args=[k])
+            # Conversion from str to bytes
             v[CLIENT_INFO_CONNECTION_ID_INDEX] = ast.literal_eval(
                 v[CLIENT_INFO_CONNECTION_ID_INDEX]
             )
+
             v.extend(
                 [
                     t,
@@ -98,8 +100,55 @@ class ClientHandler:
             batch=message,
         )
 
-        client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] = (
-            self._client_middleware.get_last_message_id(message)
+        last_message_id_from_batch = self._client_middleware.get_last_message_id(
+            message
+        )
+        batch_size = (
+            last_message_id_from_batch - client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]
+        )
+
+        # this if is made in order not to check against the normal batch size
+        if (
+            message[-3:] == b"END"
+            and last_message_id_from_batch
+            != client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] + 1
+        ):
+            logging.error(
+                f"Missing messages. Expected: {client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]}, got: {last_message_id_from_batch}. Not updating last acked message for session: {session_id}"
+            )
+            return
+
+        if (
+            client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] != 0
+            and last_message_id_from_batch - client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]
+            > batch_size
+        ):
+            logging.error(
+                f"Missing messages. Expected: {client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]}, got: {last_message_id_from_batch}. Not updating last acked message for session: {session_id}"
+            )
+            return
+
+        logging.debug(
+            f"client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]: {client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]}"
+        )
+        client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX] = (
+            last_message_id_from_batch + batch_size
+            if message[-3:] != b"END"
+            else last_message_id_from_batch + 1
+        )
+
+        logging.debug(f"batch_size: {batch_size}")
+        logging.debug(f"batch_size: {batch_size}")
+        logging.debug(
+            f"UPDATED: client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]: {client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]}"
+        )
+        logging.debug(
+            f"client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]: {client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]}"
+        )
+
+        client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] = last_message_id_from_batch
+        logging.debug(
+            f"UPDATED: client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]: {client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]}"
         )
 
         if message[-3:] == b"END":
@@ -123,14 +172,14 @@ class ClientHandler:
                 #     logging.info(f"Bad luck, message dropped")
                 #     return
 
-                self._client_middleware.send_multipart(
-                    connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
-                    message=[
-                        "A",
-                        str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
-                    ],
-                    needs_encoding=True,
-                )
+                # self._client_middleware.send_multipart(
+                #     connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+                #     message=[
+                #         "A",
+                #         str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
+                #     ],
+                #     needs_encoding=True,
+                # )
                 t.start()
 
                 return
@@ -154,14 +203,14 @@ class ClientHandler:
         #     logging.info(f"Bad luck, message dropped")
         #     return
 
-        self._client_middleware.send_multipart(
-            connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
-            message=[
-                "A",
-                str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
-            ],
-            needs_encoding=True,
-        )
+        # self._client_middleware.send_multipart(
+        #     connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+        #     message=[
+        #         "A",
+        #         str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
+        #     ],
+        #     needs_encoding=True,
+        # )
         t.start()
 
     def process_query_results_request_message(self, message: bytes):
@@ -236,6 +285,7 @@ class ClientHandler:
             set(),  # Variable
             t,  # No
             threading.Lock(),  # No
+            0,  # last messageId from next batch expected
         ]
         with self._activity_log_lock:
             self._activity_log.log_for_client_handler(
@@ -247,6 +297,25 @@ class ClientHandler:
         )
 
         t.start()
+
+    def process_heartbeat_message(self, message: bytes):
+        # if random.randint(0, 9) > 8:
+        #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
+        #     return
+        rows = self._client_middleware.get_row_from_message(message)
+        session_id = rows[0]
+
+        logging.debug(f"Received heartbeat from {session_id}")
+        client_info = self._clients_info[session_id]
+        self._client_middleware.send_multipart(
+            connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+            message=[
+                HEARTBEAT_MESSAGE_TYPE,
+                rows[1],
+                str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
+            ],  # rows[1] contains heartbeat id, its used for detecting duplicates
+            needs_encoding=True,
+        )
 
     def process_message(self, msg_type: str, connection_id, message: bytes):
         # logging.debug(f"Received message of type: {msg_type} | message: {message}")

@@ -226,14 +226,19 @@ class Client:
                 logging.debug(f"Sending appID {row[0]}")
                 row.insert(0, str(self._next_message_id))
 
-                ack = self._middleware.send_and_wait_for_ack(
-                    row,
-                    expected=str(self._next_message_id),
-                    session_id=self._session_id,
-                )
+                self._middleware.send(row, session_id=self._session_id)
 
-                if not ack:  # Not ack -> try to reset session
-                    return self._restart_session()
+                if self._next_message_id % self._check_status_after_messages == 0:
+                    # If we dont send_batch, the later comparison will be incorrect
+                    self._middleware.send_batch(
+                        message_type="D", session_id=self._session_id
+                    )
+
+                    self._check_status()
+
+                    if self._has_restarted:
+                        self._has_restarted = False
+                        return False
 
                 self._next_message_id += 1
 
@@ -244,110 +249,16 @@ class Client:
             self._last_acked_message
             and self._next_message_id >= self._last_acked_message
         ):
-            ack = self._middleware.send_end_and_wait_for_ack(
+            self._middleware.send_end(
                 session_id=self._session_id,
-                expected=str(self._next_message_id),
                 end_message=[str(self._next_message_id), FILE_END_MSG],
             )
-            if not ack:
-                return False
-            # if must_check_status:
-            #     self._check_status()
+            if must_check_status:
+                self._check_status()
 
             self._next_message_id += 1
 
         return True
-
-    def _restart_session(self, timeout: float = 0.5, retry_number: int = 0):
-        """_summary_
-
-        Args:
-            timeout (float, optional): max time awaited for the timeout to take place. Defaults to 2.0.
-            retry_number (int, optional): number of previous retries. Defaults to 0.
-
-        Raises:
-            ConnectionError: if MAX_RESTART_SESSION_RETRIES has been reached. It represents that after multiple tries, the server is not working.
-        """
-        logging.info(f"Trying to restart session: {self._session_id}")
-        # C: Continue
-        restart_session_id = str(uuid.uuid4())
-
-        self._middleware.send_message(["C", self._session_id, restart_session_id])
-
-        t = threading.Timer(timeout, self._set_restart_session_timeout)
-        t.start()
-
-        while not self._restart_session_timeout.is_set():
-            logging.debug("Pollin")
-            if not self._middleware.has_message():
-                continue
-
-            res = self._middleware.recv_batch()
-            logging.debug(f"Restart session received: {res}")
-
-            if res[0][0] == "C" and res[0][1] == restart_session_id:
-                t.cancel()
-                self._last_acked_message = int(res[0][2])
-                # self._has_restarted = True
-                return False
-
-        # Retry logic
-        self._restart_session_timeout.clear()
-
-        retry_number += 1
-        if retry_number == MAX_RESTART_SESSION_RETRIES:
-            logging.info(
-                f"Max number of retries reached: {MAX_RESTART_SESSION_RETRIES}. Aborting."
-            )
-            raise ConnectionError()
-
-        logging.error(
-            f"Restar session timeout, retrying with timeout: {timeout * 2} | Retry number: {retry_number}"
-        )
-        self._restart_session(timeout=timeout * 2, retry_number=retry_number)
-
-    def _check_status(
-        self, message_id_expected, timeout: float = 0.5, retry_number: int = 0
-    ):
-        """_summary_
-
-        Args:
-            timeout (float, optional): max time awaited for the timeout to take place. Defaults to 2.0.
-            retry_number (int, optional): number of previous retries. Defaults to 0.
-        """
-        # H: Heartbeat
-        # heartbeat_id = str(uuid.uuid4())
-        # self._middleware.send_message(["H", self._session_id, heartbeat_id])
-        t = threading.Timer(timeout, self._set_heartbeat_timeout)
-        t.start()
-
-        while not self._heartbeat_timeout.is_set():
-            logging.debug(f"Waiting for message: {message_id_expected}...")
-            if not self._middleware.has_message():
-                continue
-
-            if self._heartbeat_timeout.is_set():
-                break
-
-            res = self._middleware.recv_batch()
-            logging.debug(f"Received: {res}")
-            if res[0][0] == "A" and res[0][1] == message_id_expected:
-                t.cancel()
-                return
-
-        self._heartbeat_timeout.clear()
-        retry_number += 1
-
-        if retry_number == MAX_HEARTBEAT_RETRIES:
-            self._restart_session()
-            return
-
-        logging.error(
-            f"Heartbeat timeout, retrying with timeout: {timeout * 2} | Retry number: {retry_number}"
-        )
-        self._check_status(
-            message_id_expected, timeout=timeout * 2, retry_number=retry_number
-        )
 
     def __print_results_for_query(self, query):
         for result in self._query_results[query]:
@@ -379,13 +290,13 @@ class Client:
         logging.info("Waiting for results...")
 
         while len(self._queries_results_left) > 0:
-            logging.debug("Pollin results")
+            logging.info("Pollin results")
             if self._middleware.has_message():
                 res = self._middleware.recv_batch()
                 self.__handle_query_result(res)
                 continue
 
-            logging.debug("Requesting results")
+            logging.info("Requesting results")
             for q in self._queries_results_left:
                 self._middleware.send(
                     [q], message_type="Q", session_id=self._session_id
@@ -402,6 +313,100 @@ class Client:
 
     def set_event(self, event):
         event.set()
+
+    def _restart_session(self, timeout: float = 0.5, retry_number: int = 0):
+        """_summary_
+
+        Args:
+            timeout (float, optional): max time awaited for the timeout to take place. Defaults to 2.0.
+            retry_number (int, optional): number of previous retries. Defaults to 0.
+
+        Raises:
+            ConnectionError: if MAX_RESTART_SESSION_RETRIES has been reached. It represents that after multiple tries, the server is not working.
+        """
+        logging.info(f"Trying to restart session: {self._session_id}")
+        # C: Continue
+        restart_session_id = str(uuid.uuid4())
+
+        self._middleware.send_message(["C", self._session_id, restart_session_id])
+
+        t = threading.Timer(timeout, self._set_restart_session_timeout)
+        t.start()
+
+        while not self._restart_session_timeout.is_set():
+            logging.info("Pollin")
+            if not self._middleware.has_message():
+                continue
+
+            # Its blocked polling, so the timeout could have happened in between
+            if self._restart_session_timeout.is_set():
+                break
+
+            res = self._middleware.recv_batch()
+            logging.info(f"Restar session received: {res}")
+
+            if res[0][0] == "C" and res[0][1] == restart_session_id:
+                t.cancel()
+                self._last_acked_message = int(res[0][2])
+                self._has_restarted = True
+                return
+
+        # Retry logic
+        self._restart_session_timeout.clear()
+
+        retry_number += 1
+        if retry_number == MAX_RESTART_SESSION_RETRIES:
+            logging.info(
+                f"Max number of retries reached: {MAX_RESTART_SESSION_RETRIES}. Aborting."
+            )
+            raise ConnectionError()
+
+        logging.error(
+            f"Restar session timeout, retrying with timeout: {timeout * 2} | Retry number: {retry_number}"
+        )
+        self._restart_session(timeout=timeout * 2, retry_number=retry_number)
+
+    def _check_status(self, timeout: float = 0.5, retry_number: int = 0):
+        """_summary_
+
+        Args:
+            timeout (float, optional): max time awaited for the timeout to take place. Defaults to 2.0.
+            retry_number (int, optional): number of previous retries. Defaults to 0.
+        """
+        # H: Heartbeat
+        heartbeat_id = str(uuid.uuid4())
+        self._middleware.send_message(["H", self._session_id, heartbeat_id])
+        t = threading.Timer(timeout, self._set_heartbeat_timeout)
+        t.start()
+
+        while not self._heartbeat_timeout.is_set():
+            logging.debug("Polling for heartbeat echo")
+            if not self._middleware.has_message():
+                continue
+
+            if self._heartbeat_timeout.is_set():
+                break
+
+            res = self._middleware.recv_batch()
+            logging.info(f"Heartbeat res: {res}")
+            if res[0][0] == "H" and res[0][1] == heartbeat_id:
+                t.cancel()
+                # Some messages have been lost, restart session
+                if res[0][2] == self._last_acked_message:
+                    self._restart_session()
+                return
+
+        self._heartbeat_timeout.clear()
+        retry_number += 1
+
+        if retry_number == MAX_HEARTBEAT_RETRIES:
+            self._restart_session()
+            return
+
+        logging.error(
+            f"Heartbeat timeout, retrying with timeout: {timeout * 2} | Retry number: {retry_number}"
+        )
+        self._check_status(timeout=timeout * 2, retry_number=retry_number)
 
     def __sigterm_handler(self, signal, frame):
         self._middleware.shutdown()
