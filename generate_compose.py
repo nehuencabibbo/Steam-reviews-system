@@ -17,8 +17,8 @@ AMOUNT_OF_WATCHDOGS = 3
 LEADER_DISCOVERY_PORT = 10015
 
 # ALL QUERIES
-AMOUNT_OF_FILTER_COLUMNS = 1
-AMOUNT_OF_DROP_NULLS = 1
+AMOUNT_OF_FILTER_COLUMNS = 3
+AMOUNT_OF_DROP_NULLS = 3
 # Q2
 Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
 Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
@@ -1121,15 +1121,15 @@ def generate_output(node_names: list, monitor_names: list):
     # ; GAME_FILE_PATH=data/filtered_games.csv
     # ; REVIEWS_FILE_PATH=data/filtered_reviews.csv
 
-    add_client(
-        output,
-        num=1,
-        # games_file_path="data/games.csv",
-        # reviews_file_path="data/reviews_sample.csv",
-        games_file_path="data/games.csv",
-        reviews_file_path="data/reviews.csv",
-        debug=False,
-    )
+    # add_client(
+    #     output,
+    #     num=1,
+    #     # games_file_path="data/games.csv",
+    #     # reviews_file_path="data/reviews_sample.csv",
+    #     games_file_path="data/games.csv",
+    #     reviews_file_path="data/reviews.csv",
+    #     debug=False,
+    # )
     # add_client(
     #     output,
     #     num=2,

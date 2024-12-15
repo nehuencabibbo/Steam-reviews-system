@@ -1,6 +1,7 @@
 import signal
 import logging
 import threading
+import multiprocessing
 import subprocess
 import json
 import time
@@ -118,20 +119,23 @@ class Watchdog:
                     handler = NodeHandler(
                         conn,
                         node_name,
-                        self._got_sigterm,
+                        # self._got_sigterm,
                         self._wait_between_heartbeats,
                     )
                     handlers[node_name] = handler
 
                     conn.send(REGISTRATION_CONFIRM)
 
-                    node_thread = threading.Thread(target=handler.start, daemon=True)
-                    node_thread.start()
-                    self._nodes[node_name] = node_thread
+                    # node_thread = threading.Thread(target=handler.start, daemon=True)
+                    # node_thread.start()
+                    node_proc = multiprocessing.Process(target=handler.start, daemon=True)
+                    node_proc.start()
+                    self._nodes[node_name] = node_proc
 
                 else:
                     logging.info(f"[LEADER] Node {node_name} re-connected.")
                     conn.send(REGISTRATION_CONFIRM)
+                    # how to make this support multiprocessing?
                     handlers[node_name].set_new_connection(conn)
 
                 _last_node_check_time = self._check_and_reconnect_nodes(
