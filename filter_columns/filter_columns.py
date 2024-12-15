@@ -161,7 +161,7 @@ class FilterColumns:
         # Have to check if it's a client end, in which case only "END" is received, otherwise, the client ID comes
         # first
         # peers_that_recived_end = body[1:] if len(body) == 1 else body[2:]
-        logging.info(f"Received: {body}")
+        logging.debug(f"Received: {body}")
         peers_that_recived_end = body[1:]
         if len(peers_that_recived_end) == int(self._instances_of_myself):
             logging.debug("Sending real TIMEOUT")

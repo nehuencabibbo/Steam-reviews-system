@@ -323,7 +323,7 @@ class DropNulls:
                     ],
                     queue,
                 )
-                logging.info(
+                logging.debug(
                     f"Sent: {[client_id, message[REVIEW_APP_ID], message[REVIEW_SCORE]]} to: {queue}"
                 )
 
