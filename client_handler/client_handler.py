@@ -48,6 +48,8 @@ class ClientHandler:
         self._clients_info = self._activity_log.recover_client_handler_state()
         self._activity_log_lock = threading.Lock()
 
+        self._starting_time = 0
+
         for k, v in self._clients_info.items():
             logging.info(f"Recovered: {k} | {v}")
             t = threading.Timer(30.0, self.handle_client_timeout, args=[k])
@@ -323,6 +325,7 @@ class ClientHandler:
         thread = threading.Thread(target=self.handle_clients)
         thread.start()
 
+        self._starting_time = time.time()
         try:
             self.start_results_middleware()
         except MiddlewareError as e:
@@ -406,6 +409,7 @@ class ClientHandler:
             logging.info(f"client_info: {client_info}")
 
             with client_info[CLIENT_INFO_FINISHED_QUERIES_LOCK_INDEX]:
+                logging.info(f"Query {query} finished in {abs(self._starting_time - time.time())}")
                 client_info[CLIENT_INFO_FINISHED_QUERIES_INDEX].add(query)
 
                 logging.info(
