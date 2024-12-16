@@ -17,17 +17,17 @@ AMOUNT_OF_WATCHDOGS = 3
 LEADER_DISCOVERY_PORT = 10015
 
 # ALL QUERIES
-AMOUNT_OF_FILTER_COLUMNS = 1
-AMOUNT_OF_DROP_NULLS = 1
+AMOUNT_OF_FILTER_COLUMNS = 5
+AMOUNT_OF_DROP_NULLS = 5
 # Q2
-Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
-Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 2
+Q2_AMOUNT_OF_INDIE_GAMES_FILTERS = 3
+Q2_AMOUNT_OF_GAMES_FROM_LAST_DECADE_FILTERS = 3
 Q2_AMOUNT_OF_TOP_K_NODES = 2
 # Q3
-Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 2
-Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 4
-Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 5
-Q3_AMOUNT_OF_TOP_K_NODES = 3
+Q3_AMOUNT_OF_INDIE_GAMES_FILTERS = 3
+Q3_AMOUNT_OF_POSITIVE_REVIEWS_FILTERS = 3
+Q3_AMOUNT_OF_COUNTERS_BY_APP_ID = 8
+Q3_AMOUNT_OF_TOP_K_NODES = 2
 Q3_AMOUNT_OF_JOINS = 2
 # Q4
 Q4_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
@@ -1162,15 +1162,15 @@ def generate_output(node_names: list, monitor_names: list):
     )
 
     # -------------------------------------------- Q1 -----------------------------------------
-    generate_q1(output=output, debug=False, node_names=node_names)
+    # generate_q1(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q2 -----------------------------------------
     generate_q2(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q3 -----------------------------------------
     generate_q3(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q4 -----------------------------------------
-    generate_q4(output=output, debug=False, node_names=node_names)
+    # generate_q4(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q5 -----------------------------------------
-    generate_q5(output=output, debug=False, node_names=node_names)
+    # generate_q5(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
