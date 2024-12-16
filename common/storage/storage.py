@@ -294,7 +294,7 @@ def group_by_file(
     for record in records:
         try:
             key = int(record[key_index])
-            file_name = f"{FILE_PREFIX}_{key//range}.csv"
+            file_name = f"{FILE_PREFIX}_{int(key)//range}.csv"
             records_per_file[file_name] = records_per_file.get(file_name, [])
             records_per_file[file_name].append(record)
         except ValueError as e:

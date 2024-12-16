@@ -7,18 +7,19 @@ from time import sleep
 from typing import *
 from common.middleware.middleware import Middleware, MiddlewareError
 from common.storage.storage import (
+    _write_batch_by_range,
     delete_directory,
     read,
+    read_all_files,
     read_by_range,
     write_batch_by_range_per_client,
-    atomically_append_to_file,
 )
 from common.activity_log.activity_log import ActivityLog
 from utils.utils import node_id_to_send_to
 from common.watchdog_client.watchdog_client import WatchdogClient
 
 
-REGULAR_MESSAGE_CLIENT_ID_INDEX = 0
+REGULAR_MESSAGE_CLIENT_ID_INDEX = 0 
 REGULAR_MESSAGE_APP_ID_INDEX = 1
 
 END_TRANSMISSION_MESSAGE = "END"
@@ -61,6 +62,8 @@ class Join:
         self._node_id = config["NODE_ID"]
 
         self._activity_log = activity_log
+        self._games_dir = "tmp_games/"
+        self._reviews_dir = "tmp_reviews/"
 
         self._amount_of_games_ends_recived, self._amount_of_reviews_ends_recived = (
             self._activity_log.recover_ends_state()
@@ -140,16 +143,17 @@ class Join:
         )
 
         self.__resume_publish_if_necesary()
-        try:
-            self.__middleware.start_consuming()
-        except MiddlewareError as e:
-            logging.info(f"Error: {e}")
-            # TODO: If got_sigterm is showing any error needed?
-            if not self._got_sigterm:
-                logging.error(e)
-        finally:
-            self.__middleware.shutdown()
-            # monitor_thread.join()
+        self.__middleware.start_consuming()
+        # try:
+        #     self.__middleware.start_consuming()
+        # except MiddlewareError as e:
+        #     logging.info(f"Error: {e}")
+        #     # TODO: If got_sigterm is showing any error needed?
+        #     if not self._got_sigterm:
+        #         logging.error(e)
+        # finally:
+        #     self.__middleware.shutdown()
+        #     # monitor_thread.join()
 
     def __games_callback(self, delivery_tag, body, message_type, forwarding_queue_name):
         # logging.debug(f'[CHECK] {message_type}')
@@ -204,8 +208,12 @@ class Join:
             # que ya fue procesado, eso quiere decir que todos los mensajes
             # de ese cliente ya fueron procesados, por lo tanto los descarto
             # y proceso los que me quedan
+            # logging.info(body)
             write_batch_by_range_per_client(
-                "tmp/", int(self._partition_range), body, REGULAR_MESSAGE_APP_ID_INDEX
+                self._games_dir, 
+                int(self._partition_range), 
+                body, 
+                REGULAR_MESSAGE_APP_ID_INDEX
             )
 
         except ValueError as e:
@@ -218,20 +226,6 @@ class Join:
     def __handle_games_end_transmission(
         self, client_id: str, msg_id: str, forwarding_queue_name: str
     ):
-        # TODO: VERIFICAR QUE ESTO ESTE BIEN
-        # client_dir = os.path.join("tmp", client_id)
-        # if not os.path.exists(client_dir):
-        #     # Case: client sent no data
-        #     logging.debug(
-        #         f"Recived GAMES END, but client directory: {client_dir} was already deleted. Propagating END"
-        #     )
-        #     # self.__send_end_to_forward_queues(client_id)
-        #     self.__send_to_forward_queues(
-        #         client_id, [self._node_id, END_TRANSMISSION_MESSAGE]
-        #     )
-
-        #     return
-
         was_duplicate = self._activity_log.log_end(
             client_id, msg_id, end_logging=GAMES_END_LOGGING
         )
@@ -322,9 +316,20 @@ class Join:
                 self._amount_of_games_ends_recived[client_id] == self._needed_games_ends
             ):
                 # Havent received all ends, save in disk
-                client_dir = os.path.join("tmp", client_id)
-                os.makedirs(client_dir, exist_ok=True)
-                atomically_append_to_file(client_dir, "reviews.csv", [review])
+                # TODO: Se puede hacer una funcion aparte para esto para no generarse la lista todo el rato
+                
+                # logging.info(f"{review}")
+                client_reviews_dir = os.path.join(self._reviews_dir, client_id)
+                _write_batch_by_range(
+                    client_reviews_dir, 
+                    int(self._partition_range),
+                    [review],
+                    REGULAR_MESSAGE_APP_ID_INDEX # Client was poped
+                )
+                # client_dir = os.path.join("tmp", client_id)
+                # os.makedirs(client_dir, exist_ok=True)
+                # # TODO: use write_batch_by_range  
+                # atomically_append_to_file(client_dir, "reviews.csv", [review])
             else:
                 self.__join_and_send(review, client_id, forwarding_queue_name)
 
@@ -384,7 +389,8 @@ class Join:
         return [reviews_record[i] for i in self._reviews_columns_to_keep]
 
     def __send_stored_reviews(self, client_id, forwarding_queue_name):
-        for record in read(f"tmp/{client_id}/reviews.csv"):
+        client_reviews_dir = os.path.join(self._reviews_dir, client_id)
+        for record in read_all_files(client_reviews_dir):
             self.__join_and_send(
                 review=record,
                 client_id=client_id,
@@ -408,7 +414,9 @@ class Join:
         review_msg_id = review[0]
         review_app_id = int(review[1])
         for record in read_by_range(
-            f"tmp/{client_id}", int(self._partition_range), review_app_id
+            f"{self._games_dir}/{client_id}", 
+            int(self._partition_range), 
+            review_app_id
         ):
             # record_splitted = record.split(",", maxsplit=1)
             record_msg_id = record[0]
@@ -461,13 +469,17 @@ class Join:
                     )
 
     def __clear_client_data(self, client_id: str):
-        # delete_directory(f"/tmp/{client_id}")
-        # delete_file(f"/tmp/reviews_{client_id}.csv")
-        client_dir = f"/tmp/{client_id}"
-        if not delete_directory(client_dir):
-            logging.debug(f"Couldn't delete directory: {client_dir}")
+        client_games_dir = f"{self._games_dir}/{client_id}"
+        if not delete_directory(client_games_dir):
+            logging.debug(f"Couldn't delete directory: {client_games_dir}")
         else:
-            logging.debug(f"Deleted directory: {client_dir}")
+            logging.debug(f"Deleted directory: {client_games_dir}")
+
+        client_reviews_dir = f"{self._reviews_dir}/{client_id}"
+        if not delete_directory(client_reviews_dir):
+            logging.debug(f"Couldn't delete directory: {client_reviews_dir}")
+        else:
+            logging.debug(f"Deleted directory: {client_reviews_dir}")
 
         if client_id in self._amount_of_games_ends_recived:
             del self._amount_of_games_ends_recived[client_id]
