@@ -82,7 +82,9 @@ class ClientMiddleware:
         logging.debug(f"sending multipart to: {client_id}")
         self.send_multipart(client_id, message)
 
-    def send_message(self, message: list[str]):
+    def send_message(self, message: list[str], append_batch_size=False):
+        if append_batch_size:
+            message.append(str(self.__batch_size))
         batch = self.__protocol.add_to_batch(b"", message)
         logging.debug(f"Sending: {batch}")
         self.__socket.send(batch)
@@ -216,6 +218,9 @@ class ClientMiddleware:
 
     def get_row_from_message(self, message: bytes) -> list[str]:
         return self.__protocol.decode(message)
+
+    def get_rows_from_message(self, message) -> list[list[str]]:
+        return self.__protocol.decode_batch(message)
 
     def get_ack(self, expected: str, timeout_after: float = 0.5, max_retires: int = 3):
         stop_event = threading.Event()

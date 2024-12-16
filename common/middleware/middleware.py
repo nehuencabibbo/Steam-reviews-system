@@ -61,7 +61,7 @@ class Middleware:
                     self._channel.basic_publish(
                         exchange="",
                         routing_key=queue_name,
-                        body=batch, 
+                        body=batch,
                     )
                     self._logger.remove_queue_state(queue_name)
 

@@ -85,6 +85,10 @@ class ClientHandler:
         self.results_middleware.start_consuming()
 
     def process_data_message(self, message: bytes):
+        if random.randint(0, 9) > 2:
+            logging.info(f"Bad luck, message dropped")
+            return
+
         session_id, message = self._client_middleware.get_session_id(message)
         # logging.info(f"Last message number: {message_number}")
         client_info = self._clients_info[session_id]
@@ -103,9 +107,6 @@ class ClientHandler:
         last_message_id_from_batch = self._client_middleware.get_last_message_id(
             message
         )
-        batch_size = (
-            last_message_id_from_batch - client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]
-        )
 
         # this if is made in order not to check against the normal batch size
         if (
@@ -114,42 +115,27 @@ class ClientHandler:
             != client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] + 1
         ):
             logging.error(
-                f"Missing messages. Expected: {client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]}, got: {last_message_id_from_batch}. Not updating last acked message for session: {session_id}"
+                f"Missing messages. Expected: {client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] + 1}, got: {last_message_id_from_batch}. Not updating last acked message for session: {session_id}"
             )
             return
 
         if (
             client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] != 0
             and last_message_id_from_batch - client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]
-            > batch_size
+            > client_info[CLIENT_INFO_BATCH_SIZE]
         ):
             logging.error(
-                f"Missing messages. Expected: {client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]}, got: {last_message_id_from_batch}. Not updating last acked message for session: {session_id}"
+                f"Missing messages. Expected: {client_info[CLIENT_INFO_BATCH_SIZE] + last_message_id_from_batch} or less, got: {last_message_id_from_batch}. Not updating last acked message for session: {session_id}. client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]: {client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]}"
             )
             return
 
-        logging.debug(
-            f"client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]: {client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]}"
-        )
-        client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX] = (
-            last_message_id_from_batch + batch_size
-            if message[-3:] != b"END"
-            else last_message_id_from_batch + 1
-        )
-
-        logging.debug(f"batch_size: {batch_size}")
-        logging.debug(f"batch_size: {batch_size}")
-        logging.debug(
-            f"UPDATED: client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]: {client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX]}"
-        )
-        logging.debug(
-            f"client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]: {client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]}"
-        )
+        # client_info[CLIENT_INFO_NEXT_BATCH_EXPECTED_INDEX] = (
+        #     last_message_id_from_batch + batch_size
+        #     if message[-3:] != b"END"
+        #     else last_message_id_from_batch + 1
+        # )
 
         client_info[CLIENT_INFO_LAST_MESSAGE_INDEX] = last_message_id_from_batch
-        logging.debug(
-            f"UPDATED: client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]: {client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]}"
-        )
 
         if message[-3:] == b"END":
             logging.debug(f"Received  END from session: {session_id}")
@@ -168,18 +154,6 @@ class ClientHandler:
                 t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
                 client_info[CLIENT_INFO_TIMER_INDEX] = t
 
-                # if random.randint(0, 9) > 8:
-                #     logging.info(f"Bad luck, message dropped")
-                #     return
-
-                # self._client_middleware.send_multipart(
-                #     connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
-                #     message=[
-                #         "A",
-                #         str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
-                #     ],
-                #     needs_encoding=True,
-                # )
                 t.start()
 
                 return
@@ -199,18 +173,6 @@ class ClientHandler:
         t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
         client_info[CLIENT_INFO_TIMER_INDEX] = t
 
-        # if random.randint(0, 9) > 8:
-        #     logging.info(f"Bad luck, message dropped")
-        #     return
-
-        # self._client_middleware.send_multipart(
-        #     connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
-        #     message=[
-        #         "A",
-        #         str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
-        #     ],
-        #     needs_encoding=True,
-        # )
         t.start()
 
     def process_query_results_request_message(self, message: bytes):
@@ -227,34 +189,34 @@ class ClientHandler:
         self._send_query_results_if_there_are(session_id, query=rows[1][0])
         t.start()
 
-    def process_session_restart_message(self, message: bytes):
-        # if random.randint(0, 9) > 8:
-        #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
-        #     return
-        rows = self._client_middleware.get_row_from_message(message)
-        session_id = rows[0]
-        self._clients_info[session_id][CLIENT_INFO_TIMER_INDEX].cancel()
+    # def process_session_restart_message(self, message: bytes):
+    #     # if random.randint(0, 9) > 8:
+    #     #     logging.info(f"Bad luck, message of type: {msg_type} dropped")
+    #     #     return
+    #     rows = self._client_middleware.get_row_from_message(message)
+    #     session_id = rows[0]
+    #     self._clients_info[session_id][CLIENT_INFO_TIMER_INDEX].cancel()
 
-        logging.debug(f"Req: {rows}")
+    #     # logging.debug(f"Req: {rows}")
 
-        t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
-        self._clients_info[session_id][CLIENT_INFO_TIMER_INDEX] = t
+    #     t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
+    #     self._clients_info[session_id][CLIENT_INFO_TIMER_INDEX] = t
 
-        logging.info(f"Received session restart from: {session_id} | {rows}")
-        client_info = self._clients_info[session_id]
+    #     logging.info(f"Received session restart from: {session_id} | {rows}")
+    #     client_info = self._clients_info[session_id]
 
-        self._client_middleware.send_multipart(
-            connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
-            message=[
-                "C",
-                rows[
-                    1
-                ],  # contains restart session id, its used for detecting duplicates
-                str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
-            ],
-            needs_encoding=True,
-        )
-        t.start()
+    #     self._client_middleware.send_multipart(
+    #         connection_id=client_info[CLIENT_INFO_CONNECTION_ID_INDEX],
+    #         message=[
+    #             "C",
+    #             rows[
+    #                 1
+    #             ],  # contains restart session id, its used for detecting duplicates
+    #             str(client_info[CLIENT_INFO_LAST_MESSAGE_INDEX]),
+    #         ],
+    #         needs_encoding=True,
+    #     )
+    #     t.start()
 
     def process_new_session_request_message(self, connection_id, message: bytes):
         # if random.randint(0, 9) < 6:
@@ -275,7 +237,7 @@ class ClientHandler:
 
         rows = self._client_middleware.get_row_from_message(message)
         session_id = rows[0]
-        logging.info(f"Session: {session_id} successfully connected")
+        logging.info(f"Session: {session_id} successfully connected | rows: {rows}")
         t = threading.Timer(30.0, self.handle_client_timeout, args=[session_id])
 
         self._clients_info[session_id] = [
@@ -285,7 +247,7 @@ class ClientHandler:
             set(),  # Variable
             t,  # No
             threading.Lock(),  # No
-            0,  # last messageId from next batch expected
+            int(rows[1]),  # client batch size
         ]
         with self._activity_log_lock:
             self._activity_log.log_for_client_handler(
@@ -326,8 +288,8 @@ class ClientHandler:
             self.process_query_results_request_message(message)
         elif msg_type == HEARTBEAT_MESSAGE_TYPE:
             self.process_heartbeat_message(message)
-        elif msg_type == SESSION_RESTART_MESSAGE_TYPE:
-            self.process_session_restart_message(message)
+        # elif msg_type == SESSION_RESTART_MESSAGE_TYPE:
+        #     self.process_session_restart_message(message)
         elif msg_type == NEW_SESSION_REQUEST_MESSAGE_TYPE:
             self.process_new_session_request_message(connection_id, message)
         elif msg_type == SESSION_ACK_MESSAGE_TYPE:
