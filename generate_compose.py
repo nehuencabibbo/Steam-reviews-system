@@ -41,10 +41,10 @@ Q4_AMOUNT_OF_FIRST_JOINS = 5
 Q4_AMOUNT_OF_SECOND_JOINS = 5
 Q4_AMOUNT_OF_THIRD_JOINS = 1  # TODO: NEEDS AGGREGATOR FOR SCALING THIS NODE
 # Q5
-Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 2
+Q5_AMOUNT_OF_ACTION_GAMES_FILTERS = 3
 Q5_AMOUNT_OF_NEGATIVE_REVIEWS_FILTERS = 3
-Q5_AMOUNT_OF_COUNTERS = 2
-Q5_AMOUNT_OF_JOINS = 2
+Q5_AMOUNT_OF_COUNTERS = 8
+Q5_AMOUNT_OF_JOINS = 3
 Q5_AMOUNT_OF_PERCENTILES = 1
 
 
@@ -1292,16 +1292,16 @@ def generate_output(node_names: list, monitor_names: list):
     )
 
     # -------------------------------------------- Q1 -----------------------------------------
-    # generate_q1(output=output, debug=False, node_names=node_names)
+    generate_q1(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q2 -----------------------------------------
-    # generate_q2(output=output, debug=False, node_names=node_names)
+    generate_q2(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q3 -----------------------------------------
-    # generate_q3(output=output, debug=False, node_names=node_names)
+    generate_q3(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q4 -----------------------------------------
-    generate_alternate_q4(output=output, debug=False, node_names=node_names)
-    # generate_q4(output=output, debug=False, node_names=node_names)
+    # generate_alternate_q4(output=output, debug=False, node_names=node_names)
+    generate_q4(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- Q5 -----------------------------------------
-    # generate_q5(output=output, debug=False, node_names=node_names)
+    generate_q5(output=output, debug=False, node_names=node_names)
     # -------------------------------------------- END OF QUERIES -----------------------------------------
 
     add_volumes(output=output)
